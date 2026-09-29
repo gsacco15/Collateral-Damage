@@ -79,6 +79,7 @@ function prayerNow(h: number, day: string): '' | 'dawn' | 'friday' | 'noon' | 'a
   return '';
 }
 let lastTrain = 0;
+let lastCloseCall = 0;
 type StepId = 'target' | 'weapon' | 'approach' | 'intel' | 'rules' | 'decide';
 
 interface GuideStep {
@@ -473,11 +474,13 @@ export default function App() {
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
       if (pick) pans[pick[0]] = pick[2];
       void sound.ambience(levels, pans);
-      // Come close to the mosque during a prayer, and you hear the call from there, once.
-      const pk = prayerNow(h, plan.day);
-      if (pk && !striking && close > 0.35 && near(zones.mosque)[0] < 150 && heardClose.current !== `${pk}|${plan.day}`) {
-        heardClose.current = `${pk}|${plan.day}`;
-        callToPrayer(pk);
+      // Come close to the mosque, at any hour, and you hear the call from there: once each time you come, at most once a minute.
+      const dMosque = near(zones.mosque)[0];
+      if (dMosque > 260 || close < 0.2) heardClose.current = '';
+      else if (!striking && close > 0.35 && dMosque < 150 && !heardClose.current && performance.now() - lastCloseCall > 60_000) {
+        heardClose.current = 'here';
+        lastCloseCall = performance.now();
+        callToPrayer(prayerNow(h, plan.day) || 'visit');
       }
       // Now and then, one small sound that fits where you are and the hour: about every twenty seconds.
       if (!striking && close > 0.15 && Math.random() < 0.02) {
@@ -545,7 +548,6 @@ export default function App() {
       const half = (canvasRef.current?.clientWidth ?? 800) / 2;
       pan = Math.max(-0.8, Math.min(0.8, ((min.cx - v.cx) * m.cam().s) / half));
     }
-    if (near > 0.5) heardClose.current = `${k}|${plan.day}`;
     // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
     sound.cue('amb-call-to-prayer', pan, (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1));
   };
