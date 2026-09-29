@@ -26,6 +26,11 @@ export type Cue =
   | 'ui-weapon'
   | 'ui-building'
   | 'hold-abort'
+  | 'after-0'
+  | 'after-few'
+  | 'after-some'
+  | 'after-many'
+  | 'after-mass'
   | 'jev-start'
   | 'jev-tick'
   | 'jev-read'
@@ -296,12 +301,21 @@ class SoundEngine {
 
   /** The narrator: one line at a time. */
   async voice(n: number) {
-    if (!this.enabled) return;
-    this.voiceNode?.stop();
+    return this.narrate(`voice/guide-${String(n).padStart(2, '0')}`);
+  }
+  /** Play one narration (a file under voice/), stopping any other. Resolves with its length in seconds, or 0. */
+  async narrate(name: string): Promise<number> {
+    if (!this.enabled) return 0;
+    try {
+      this.voiceNode?.stop();
+    } catch {
+      /* already stopped */
+    }
     this.voiceNode = null;
-    const name = `voice/guide-${String(n).padStart(2, '0')}`;
     const r = await this.start(name, 1);
-    if (r) this.voiceNode = r.src;
+    if (!r) return 0;
+    this.voiceNode = r.src;
+    return r.src.buffer?.duration ?? 0;
   }
   stopVoice() {
     try {

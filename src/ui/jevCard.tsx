@@ -6,7 +6,7 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
     <section className="card jevcard">
       <h3>Jev reads the intelligence</h3>
       <p className="sub">
-        The reports on who is inside disagree. Jev weighs them and answers with a probability for each head count. The simulator draws from those answers every time it replays the strike.
+        The harm falls on the people around the target, not only inside it. So Jev reads the reports on the target and on the places around it that matter most (protected sites within reach, the nearest homes). The reports disagree; Jev answers with a probability for each head count, and the simulator draws from those answers every time it replays the strike.
       </p>
       {!reading ? (
         <p className="hint mono">
@@ -35,7 +35,7 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
                   <span className="k">score</span>
                   <span className="q">
                     Inside {s.name}
-                    {s.role === 'protected' && <em className="protected"> protected</em>}
+                    <em className={`role ${s.role}`}>{s.role === 'target' ? 'the target' : s.role === 'protected' ? 'protected, within reach' : 'nearby homes'}</em>
                   </span>
                   <span className="dist" role="img" aria-label={LEVELS.map((l, i) => `${l.label}: ${Math.round(s.p[i] * 100)}%`).join(', ')}>
                     {s.p.map((v, i) => (

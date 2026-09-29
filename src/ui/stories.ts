@@ -72,3 +72,23 @@ function districtAt(w: World, x: number, y: number): string {
   for (const d of w.districts) if (Math.hypot(d.x - x, d.y - y) < Math.hypot(best.x - x, best.y - y)) best = d;
   return best.id;
 }
+
+/** The four briefed targets, told as the people around them. Narrated when you pick one from the top bar. */
+export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge', { title: string; text: string }> = {
+  warehouse: {
+    title: 'Warehouse 14',
+    text: "The report says there are weapons inside. Across the street, Mrs Haddad's class of seven-year-olds is learning to count to a hundred. Round the corner, Karim is filling the fuel tanker he drives out to the villages every morning. Whatever is decided here, they are the ones who will live with it.",
+  },
+  tower: {
+    title: 'Tower 7',
+    text: "Nine floors of families, and a report of a command post on the top floor. On the fourth, Samira is sewing a wedding dress for her niece; the wedding is on Friday. On the second, an old man keeps pigeons on his balcony and names every one. The children run the stairs, because the lift hasn't worked since spring. To reach the top floor, a bomb has to pass through all of them, or be small enough, and precise enough, not to.",
+  },
+  yard: {
+    title: 'The vehicle yard',
+    text: "Trucks said to carry weapons come and go at night. By day it's where Yusuf's father fixes engines, and where the boys from the Workshops play football between the lorries at lunchtime. The tea seller parks his cart by the gate at eleven, every single day. At three in the morning the yard is nearly empty. At noon it isn't. The same place, two very different numbers.",
+  },
+  bridge: {
+    title: 'The Boulevard Bridge',
+    text: "A supply route, the report says. It's also how people on Tin Hill reach the hospital. Twice a week, Amal pushes her mother across it in a wheelchair, for dialysis. Boys fish off the rail. At dusk, couples walk it, because it's the only place in the city that catches a breeze. Only a big bomb brings it down, and once it's gone, the hospital is an hour further away for everyone on the other side.",
+  },
+};

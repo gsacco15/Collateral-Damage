@@ -48,11 +48,12 @@ import {
 import { JevPool, type PoolStatus } from '../jev/pool';
 import type { JobOut } from '../jev/worker';
 import { MapView, type Layers, type MapFrame, type Outcome } from '../view/map';
+import { nightness } from '../view/paper';
 import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
-import { placeAt, storyFor, type PlaceStory } from './stories';
+import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
 import { sound, type Bed, type CityCue } from './sound';
@@ -152,6 +153,9 @@ export default function App() {
   // Explore: click a building to see who's inside. Target: click or drag the target onto any building.
   const [mapMode, setMapMode] = useState<'explore' | 'target'>('explore');
   const [strikeOpen, setStrikeOpen] = useState(false);
+  // A briefed target's story, shown (and narrated) when you pick it from the top bar.
+  const [story, setStory] = useState<keyof typeof TARGET_STORIES | null>(null);
+  const storyTimer = useRef(0);
   const [spotlight, setSpotlight] = useState<MapFrame['spotlight']>(null);
   const tourTimers = useRef<number[]>([]);
   const [place, setPlace] = useState<{ story: PlaceStory; x: number; y: number } | null>(null);
@@ -1059,7 +1063,26 @@ export default function App() {
     setLog([]);
     setTesting(null);
   };
+  // Picking one of the four briefed targets: go there, and tell its story (in the narrator's voice, if sound is on).
+  const pickPreset = (id: TargetId) => {
+    chooseTarget(id);
+    const c = targetCentre(targetOf(world, id));
+    flyTo(c.x, c.y, 3.6);
+    if (guide != null || !(id in TARGET_STORIES)) return;
+    const k = id as keyof typeof TARGET_STORIES;
+    setStory(k);
+    window.clearTimeout(storyTimer.current);
+    void sound.narrate(`voice/story-${k}`).then((secs) => {
+      storyTimer.current = window.setTimeout(() => setStory((s) => (s === k ? null : s)), Math.max(14, secs + 3) * 1000);
+    });
+  };
+  const closeStory = () => {
+    setStory(null);
+    window.clearTimeout(storyTimer.current);
+    sound.stopVoice();
+  };
   const goGuide = (i: number | null) => {
+    if (i != null) setStory(null);
     setGuide(i);
     stopDemo();
     stopTour();
@@ -1172,7 +1195,11 @@ export default function App() {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
       sound.play('impact');
-      sound.play('aftermath', 1.1);
+      // What you hear afterwards depends on how many were hurt, and is quieter at night (fewer people outside).
+      const hurt = o.count;
+      const after = hurt === 0 ? 'after-0' : hurt <= 3 ? 'after-few' : hurt <= 15 ? 'after-some' : hurt <= 50 ? 'after-many' : 'after-mass';
+      const dark = nightness(plan.hour);
+      sound.play(after, 1.1, 0.55 * (1 - dark * 0.35));
       sound.play('stamp', 0.55);
       // After the blast has settled: one call with the result, then a quiet "stand by".
       sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', 2.4);
@@ -1586,7 +1613,7 @@ export default function App() {
         </div>
         <nav className="targets" aria-label="Targets">
           {world.targets.map((t) => (
-            <button key={t.id} className={plan.target === t.id ? 'on' : ''} onClick={() => chooseTarget(t.id)} title={t.note}>
+            <button key={t.id} className={plan.target === t.id ? 'on' : ''} onClick={() => pickPreset(t.id)} title={t.note}>
               {t.short}
             </button>
           ))}
@@ -1986,6 +2013,20 @@ export default function App() {
               </div>
             )}
 
+            {story && guide == null && !striking && (
+              <div className="storycard" key={story} role="status">
+                <div className="pop-head">
+                  <div>
+                    <span className="kind">The people around it</span>
+                    <b>{TARGET_STORIES[story].title}</b>
+                  </div>
+                  <button className="x" onClick={closeStory} aria-label="Close">
+                    ×
+                  </button>
+                </div>
+                <p>{TARGET_STORIES[story].text}</p>
+              </div>
+            )}
             {place && !striking && (
               <div
                 className="placecard"
