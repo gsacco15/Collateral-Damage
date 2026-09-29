@@ -1129,9 +1129,30 @@ export default function App() {
   const candidateAim = (c: Candidate) => (c.aim === 'custom' ? { x: plan.aimX, y: plan.aimY } : aimPoint(target, c.aim));
   const applyCandidate = (c: Candidate) => {
     const a = candidateAim(c);
-    setPlan({ weapon: c.weapon, fuze: c.fuze, heading: c.heading, hour: c.hour, aimX: a.x, aimY: a.y });
+    useWithUndo({ weapon: c.weapon, fuze: c.fuze, heading: c.heading, hour: c.hour, aimX: a.x, aimY: a.y });
     pushLog(`You're now using: ${describe(c)}.`, 'step');
   };
+  // Using one of Jev's plans (or a cell of the weapon table): a short bar says what changed, with a way back to what
+  // you had, and fades on its own after a few seconds.
+  const [undo, setUndo] = useState<{ before: Partial<Plan>; text: string; id: number } | null>(null);
+  const useWithUndo = (next: Partial<Plan>) => {
+    const keys = Object.keys(next) as (keyof Plan)[];
+    const before = Object.fromEntries(keys.map((k) => [k, plan[k]])) as Partial<Plan>;
+    setPlan(next);
+    if (guide != null) return;
+    const after = { ...plan, ...next };
+    const text = `${weapon(after.weapon).short}, ${modeOf(after.weapon, after.fuze).name.toLowerCase()}, ${fmtHour(after.hour)}${next.hour != null && next.hour !== plan.hour ? ' (a different hour)' : ''}`;
+    barLeft.current = false;
+    setUndo({ before, text, id: Date.now() });
+  };
+  // Held while the pointer is over a bar; after you move off it, gone a couple of seconds later.
+  const [barHover, setBarHover] = useState<'undo' | 'preview' | null>(null);
+  const barLeft = useRef(false);
+  useEffect(() => {
+    if (!undo || barHover === 'undo') return;
+    const id = window.setTimeout(() => setUndo((u) => (u && u.id === undo.id ? null : u)), barLeft.current ? 2200 : 5500);
+    return () => window.clearTimeout(id);
+  }, [undo, barHover]);
 
   // ------------------------------------------------------------ the map
 
@@ -1152,12 +1173,18 @@ export default function App() {
   // The map shows Jev's plan instead of yours: while it searches (if you asked to watch), or while you inspect one.
   const following = !!ghostPlan && ((follow && status.running) || !!peek) && !outcome && !striking;
   const previewId = following && ghostPlan ? `${ghostPlan.weapon}|${ghostPlan.fuze}|${ghostPlan.heading}|${ghostPlan.hour}|${Math.round(ghostPlan.aimX)}|${Math.round(ghostPlan.aimY)}` : '';
+  const previewHeld = useRef(false);
+  const [previewHover, setPreviewHover] = useState(false);
   useEffect(() => {
     if (!previewId) return setBarUp(false);
     setBarUp(true);
-    const id = window.setTimeout(() => setBarUp(false), 4000);
-    return () => window.clearTimeout(id);
+    previewHeld.current = false;
   }, [previewId]);
+  useEffect(() => {
+    if (!barUp || previewHover) return;
+    const id = window.setTimeout(() => setBarUp(false), previewHeld.current ? 2200 : 4000);
+    return () => window.clearTimeout(id);
+  }, [barUp, previewHover, previewId]);
   const shownPlan = following ? ghostPlan! : plan;
   const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive, marks, behave) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive, marks, behave]);
 
@@ -2479,7 +2506,7 @@ export default function App() {
             fuzes={FUZES.map((f) => [f.id, f.name])}
             current={[plan.weapon, plan.fuze]}
             minPk={minPk}
-            onPick={(wid, fid) => setPlan({ weapon: wid as WeaponId, fuze: fid as typeof plan.fuze })}
+            onPick={(wid, fid) => useWithUndo({ weapon: wid as WeaponId, fuze: fid as typeof plan.fuze })}
           />
         ) : (
           <p className="hint">Working…</p>
@@ -2855,8 +2882,38 @@ export default function App() {
                 )}
               </div>
             )}
+            {undo && !following && !outcome && !striking && (
+              <div
+                className="preview-bar undo-bar"
+                role="status"
+                onMouseEnter={() => setBarHover('undo')}
+                onMouseLeave={() => {
+                  barLeft.current = true;
+                  setBarHover(null);
+                }}
+              >
+                <span>Now using Jev's plan: {undo.text}</span>
+                <button
+                  onClick={() => {
+                    setPlan(undo.before);
+                    setUndo(null);
+                    setBarHover(null);
+                  }}
+                >
+                  Back to my plan
+                </button>
+              </div>
+            )}
             {following && barUp && (
-              <div className="preview-bar" role="status">
+              <div
+                className="preview-bar"
+                role="status"
+                onMouseEnter={() => setPreviewHover(true)}
+                onMouseLeave={() => {
+                  previewHeld.current = true;
+                  setPreviewHover(false);
+                }}
+              >
                 <span>
                   <i aria-hidden /> Previewing Jev's plan: {weapon(shownPlan.weapon).short}, {modeOf(shownPlan.weapon, shownPlan.fuze).name.toLowerCase()}, {fmtHour(shownPlan.hour)}
                 </span>
@@ -2866,6 +2923,7 @@ export default function App() {
                     setFollow(false);
                     setPreviewReset((n) => n + 1);
                     setBarUp(false);
+                    setPreviewHover(false);
                   }}
                 >
                   Back to my setup
