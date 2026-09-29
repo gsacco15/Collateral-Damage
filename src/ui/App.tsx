@@ -51,6 +51,7 @@ import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
+import { placeAt, storyFor, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
 import { sound } from './sound';
@@ -82,7 +83,7 @@ interface GuideStep {
 const GUIDE: GuideStep[] = [
   { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target' },
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
-  { title: "Who's inside right now?", text: "Nobody knows exactly. Overhead images only see people outside, not everyone carries a phone, the census is years old. Jev reads these reports and says how likely each head count is. Its reading is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
+  { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
   { title: 'Where it would hurt', text: 'The red wash is the chance that someone standing in the open would be killed or badly hurt, over hundreds of replays of the strike. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
   { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, open: 'approach' },
@@ -148,10 +149,12 @@ export default function App() {
   // Explore: click a building to see who's inside. Target: click or drag the target onto any building.
   const [mapMode, setMapMode] = useState<'explore' | 'target'>('explore');
   const [strikeOpen, setStrikeOpen] = useState(false);
+  const [place, setPlace] = useState<{ story: PlaceStory; x: number; y: number } | null>(null);
   const [retarget, setRetarget] = useState<{ x: number; y: number; bid: number | null } | null>(null);
   const [explored, setExplored] = useState(0);
   const [toast, setToast] = useState<Place | null>(null);
   const [view, setView] = useState<'map' | 'model'>('map');
+  useEffect(() => setPlace(null), [mapMode, view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [modelReady, setModelReady] = useState(false);
   const [open, setOpen] = useState<Set<StepId>>(new Set(['target', 'weapon', 'approach']));
   const [tab, setTab] = useState<'estimate' | 'jev'>('estimate');
@@ -416,6 +419,7 @@ export default function App() {
         setLayersOpen(false);
         setIntro(false);
         setMixOpen(false);
+        setPlace(null);
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
@@ -754,7 +758,16 @@ export default function App() {
   };
   const openPeople = (wx: number, wy: number, px: number, py: number) => {
     const b = mapRef.current?.buildingAt(wx, wy);
-    if (!b || b.id === target.buildingId || !b.capacity) return setPop(null);
+    if (b?.id === target.buildingId) return setPop(null);
+    if (!b || !b.capacity) {
+      // Not a building anyone uses: tell the story of the place instead.
+      setPop(null);
+      const st = placeAt(world, wx, wy);
+      if (place && place.story.title === st.title) return setPlace(null); // a second click closes it
+      sound.play('ui-toggle', 0, 0.18);
+      return setPlace({ story: st, x: px, y: py });
+    }
+    setPlace(null);
     sound.play('ui-building');
     setPop({ bid: b.id, x: px, y: py, n: obs[b.id] ?? shownCount(popNow, b) });
   };
@@ -1829,6 +1842,28 @@ export default function App() {
               </div>
             )}
 
+            {place && !striking && (
+              <div
+                className="placecard"
+                key={place.story.title}
+                style={{
+                  left: Math.max(10, Math.min(place.x + 18, (canvasRef.current?.clientWidth ?? 400) - 290)),
+                  top: Math.max(56, Math.min(place.y - 30, (canvasRef.current?.clientHeight ?? 600) - 220)),
+                }}
+              >
+                <div className="pop-head">
+                  <div>
+                    <span className="kind">{place.story.kind}</span>
+                    <b>{place.story.title}</b>
+                  </div>
+                  <button className="x" onClick={() => setPlace(null)} aria-label="Close">
+                    ×
+                  </button>
+                </div>
+                <p>{place.story.line}</p>
+                {place.story.when && <p className="when">{place.story.when}</p>}
+              </div>
+            )}
             {pop && popB && (
               <div
                 className="popcard"
@@ -1850,6 +1885,7 @@ export default function App() {
                     ×
                   </button>
                 </div>
+                {storyFor(popB.name) && <p className="story">{storyFor(popB.name)!.line}</p>}
                 {ruins.includes(popB.id) ? (
                   <p className="hint">Destroyed in an earlier strike. Nobody is inside.</p>
                 ) : (

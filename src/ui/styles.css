@@ -633,3 +633,13 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .mix-pop label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--text-1); }
 .mix-pop small { display: block; font-weight: 400; font-size: 11px; color: var(--text-3); }
 .mix-pop input[type='range'] { width: 100%; accent-color: #2a6bc4; }
+
+/* A place's story: open ground, streets, districts. */
+.placecard { position: absolute; z-index: 5; width: 270px; padding: 12px 14px; border-radius: 12px; background: rgba(251, 250, 246, 0.86); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border: 1px solid var(--line); box-shadow: var(--float); display: flex; flex-direction: column; gap: 6px; animation: placein 0.22s ease; }
+.placecard:hover { background: rgba(251, 250, 246, 0.97); }
+.placecard .kind { display: block; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 2px; }
+.placecard b { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 17px; font-weight: 500; }
+.placecard p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.placecard .when { font-size: 11.5px; color: var(--text-3); }
+.popcard .story { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); font-style: italic; }
+@keyframes placein { from { opacity: 0; transform: translateY(4px) scale(0.98); } }
