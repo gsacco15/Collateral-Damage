@@ -25,20 +25,20 @@ export function streetLights(w: World): StreetLight[] {
     if (buildingAt(w, px, py)) return;
     out.push({ x, y, px, py, r, flood });
   };
-  for (let x = 12; x < w.w; x += 24) {
+  for (let x = 12; x < w.w; x += 36) {
     add(x, 350 - 10.5, 0, 1, 7);
     add(x, 350 + 10.5, 0, -1, 7);
   }
-  for (let y = 10; y < w.h; y += 26) {
+  for (let y = 10; y < w.h; y += 40) {
     add(riverX(y) - 24, y, 1, 0, 6);
     add(riverX(y) + 24, y, -1, 0, 6);
   }
   for (const rd of w.roads) {
-    if (rd.kind !== 'street' || rd.rect.x > 1006) continue;
+    if (rd.kind !== 'street' || rd.rect.x > 1006 || Math.max(rd.rect.w, rd.rect.h) < 60) continue;
     const q = rd.rect;
     const h = q.w > q.h;
     const len = h ? q.w : q.h;
-    for (let d = 16, k = 0; d < len; d += 34, k++) {
+    for (let d = 20, k = 0; d < len; d += 60, k++) {
       const side = k % 2 ? 1 : -1;
       if (h) add(q.x + d, q.y + q.h / 2 + side * (q.h / 2 - 1), 0, -side, 6);
       else add(q.x + q.w / 2 + side * (q.w / 2 - 1), q.y + d, -side, 0, 6);

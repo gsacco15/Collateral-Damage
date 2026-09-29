@@ -524,7 +524,8 @@ export default function App() {
         ['amb-camp', near(zones.camp), (0.45 + 0.55 * day) * 0.45],
         ['amb-groves', near(zones.groves), (0.3 + 0.7 * day) * 0.4],
         // The mosque courtyard: quiet most of the day, busier around prayers, fullest at Friday noon.
-        ['amb-mosque', near(zones.mosque), (prayerNow(h, plan.day) === 'friday' ? 0.75 : prayerNow(h, plan.day) ? 0.55 : 0.35) * (0.4 + 0.6 * day)],
+        // The mosque's own sounds (the courtyard water, the gathering) are for the day; at night it is quiet.
+        ['amb-mosque', near(zones.mosque), (h >= 21 || h < 5 ? 0 : 1) * (prayerNow(h, plan.day) === 'friday' ? 0.75 : prayerNow(h, plan.day) ? 0.55 : 0.35) * (0.4 + 0.6 * day)],
       ];
       let pick: [Bed, number, number] | null = null;
       if (close > 0.3)
@@ -548,7 +549,7 @@ export default function App() {
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
       if (pick) pans[pick[0]] = pick[2];
       void sound.ambience(levels, pans);
-      // Come close to the mosque, at any hour, in the map or in 3D, and you hear the call from there: once each time you come.
+      // Come close to the mosque by day, in the map or in 3D, and you hear the call from there: once each time you come.
       const look = view === 'model' ? modelRef.current?.lookingAt() : null;
       const lx = look ? look.x : v.cx;
       const ly = look ? look.y : v.cy;
@@ -556,7 +557,9 @@ export default function App() {
       let dMosque = Infinity;
       for (const q of zones.mosque) dMosque = Math.min(dMosque, Math.hypot(Math.max(q.x, Math.min(q.x + q.w, lx)) - lx, Math.max(q.y, Math.min(q.y + q.h, ly)) - ly));
       // Its level follows how close you are, and it fades away as you zoom out or move off (the timed calls don't).
-      const prox = dMosque >= 280 || lClose < 0.12 ? 0 : (1 - dMosque / 280) * Math.min(1, lClose / 0.5);
+      // Not at night: after the evening prayer the call close by stays silent (the timed city-wide calls still come).
+      const nightHere = h >= 21 || h < 5;
+      const prox = nightHere || dMosque >= 280 || lClose < 0.12 ? 0 : (1 - dMosque / 280) * Math.min(1, lClose / 0.5);
       const minaret = world.buildings.find((b) => b.kind === 'minaret');
       const callPan = look || !minaret ? 0 : panOf(minaret.cx);
       let begin = false;

@@ -388,7 +388,7 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
     };
     for (const l of streetLights(w)) {
       if (l.flood) continue; // the works' floodlights are drawn above, cold white
-      lamp(l.x, l.y, l.r, 0.4);
+      lamp(l.x, l.y, l.r, 0.32);
     }
     g.globalCompositeOperation = 'source-over';
   }

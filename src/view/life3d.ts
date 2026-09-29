@@ -127,10 +127,10 @@ export class Life3D {
     const lights = streetLights(world);
     this.poolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), color: '#ffd9a0', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
     this.pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), this.poolMat, lights.length);
-    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.12, 6, 5).translate(0, 3, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
-    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.08, 0.08).translate(0.5, 0, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
+    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.2, 6, 6).translate(0, 3, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
+    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.14, 0.14).translate(0.5, 0, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
     this.lampHeadMat = new THREE.MeshStandardMaterial({ color: '#e9e2cf', emissive: '#ffd79a', emissiveIntensity: 0, roughness: 0.5 });
-    const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(0.7, 0.18, 0.4), this.lampHeadMat, lights.length);
+    const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 0.26, 0.55), this.lampHeadMat, lights.length);
     lights.forEach((l, i) => {
       const len = Math.hypot(l.x - l.px, l.y - l.py);
       const yaw = Math.atan2(-(l.y - l.py), l.x - l.px);
@@ -303,7 +303,7 @@ export class Life3D {
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
     (this.meshes.busglass.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 1.4;
-    this.poolMat.opacity = night * 0.42;
+    this.poolMat.opacity = night * 0.26;
     this.dpoolMat.opacity = 0.55 * Math.max(0.3, night);
     this.lampHeadMat.emissiveIntensity = night * 2.4;
     this.pools.visible = night > 0.05;
