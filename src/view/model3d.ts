@@ -254,6 +254,10 @@ export class Model3D {
   private wraps: THREE.InstancedMesh; // scarves, turbans, keffiyehs, caps: what's on their heads
   private rings: THREE.InstancedMesh;
   private carBodies: THREE.InstancedMesh;
+  private carGlass: THREE.InstancedMesh;
+  private carWheels: THREE.InstancedMesh;
+  private carLights: THREE.InstancedMesh;
+  private lightMat = new THREE.MeshStandardMaterial({ color: '#f3ead2', emissive: '#ffd98a', emissiveIntensity: 0, roughness: 0.4 });
   private litMats: THREE.MeshStandardMaterial[] = [];
   private mats!: Record<string, THREE.Material>;
   private raf = 0;
@@ -305,9 +309,23 @@ export class Model3D {
     this.heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ roughness: 0.8 }), 1600);
     const wrapGeo = new THREE.SphereGeometry(0.3, 8, 6);
     this.wraps = new THREE.InstancedMesh(wrapGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), 1600);
-    const carGeo = mergeGeometries([boxGeo(0, 0.55, 0, 4.2, 1.1, 1.9), boxGeo(-0.3, 1.35, 0, 2.2, 0.6, 1.7)])!;
+    // Cars: a body and a roof in the car's colour, a band of dark glass, four wheels, lamps front and back.
+    const carGeo = mergeGeometries([boxGeo(0, 0.62, 0, 4.2, 0.85, 1.9), boxGeo(-0.35, 1.66, 0, 2.0, 0.1, 1.62)])!;
     this.carBodies = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ roughness: 0.6 }), 400);
-    for (const m of [this.people, this.heads, this.wraps, this.carBodies]) {
+    const glassGeo = mergeGeometries([boxGeo(-0.3, 1.33, 0, 2.3, 0.56, 1.72)])!;
+    this.carGlass = new THREE.InstancedMesh(glassGeo, new THREE.MeshStandardMaterial({ color: '#2b3440', roughness: 0.25, metalness: 0.4 }), 400);
+    const wheelGeo = mergeGeometries(
+      [
+        [1.3, 0.95],
+        [1.3, -0.95],
+        [-1.3, 0.95],
+        [-1.3, -0.95],
+      ].map(([x, z]) => new THREE.CylinderGeometry(0.36, 0.36, 0.28, 10).rotateX(Math.PI / 2).translate(x, 0.36, z).toNonIndexed()),
+    )!;
+    this.carWheels = new THREE.InstancedMesh(wheelGeo, new THREE.MeshStandardMaterial({ color: '#232120', roughness: 0.8 }), 400);
+    const lightGeo = mergeGeometries([boxGeo(2.11, 0.75, 0.6, 0.04, 0.22, 0.42), boxGeo(2.11, 0.75, -0.6, 0.04, 0.22, 0.42)])!;
+    this.carLights = new THREE.InstancedMesh(lightGeo, this.lightMat, 400);
+    for (const m of [this.people, this.heads, this.wraps, this.carBodies, this.carGlass, this.carWheels, this.carLights]) {
       m.castShadow = true;
       m.count = 0;
       m.frustumCulled = false;
@@ -741,6 +759,7 @@ export class Model3D {
     this.hemi.color.set(night > 0.5 ? '#6f7fb0' : '#e3e8ee');
     this.hemi.groundColor.set(night > 0.5 ? '#2a2c3a' : '#b59a74');
     for (const m of this.litMats) m.emissiveIntensity = night * 1.6;
+    this.lightMat.emissiveIntensity = night * 2.2; // headlights at night
     const sky = new THREE.Color('#e9dcc6').lerp(new THREE.Color('#1f2742'), night).lerp(tint, (1 - night) * gr.s * 0.5);
     this.scene.background = sky;
     (this.scene.fog as THREE.Fog).color.copy(sky);
@@ -963,13 +982,16 @@ export class Model3D {
       const ang = car.horizontal ? (car.dir > 0 ? 0 : Math.PI) : car.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
       m.compose(v.set(car.x, 0, car.y), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ang), new THREE.Vector3(1, 1, 1));
       this.carBodies.setMatrixAt(k, m);
+      this.carGlass.setMatrixAt(k, m);
+      this.carWheels.setMatrixAt(k, m);
+      this.carLights.setMatrixAt(k, m);
       this.carBodies.setColorAt(k, c.set(car.hurt ? '#3d3935' : car.color));
       if (car.hurt && rings < 800) this.rings.setMatrixAt(rings++, new THREE.Matrix4().compose(v.set(car.x, 0.08, car.y), q.identity(), new THREE.Vector3(2.4, 1, 2.4)));
       k++;
     }
-    this.carBodies.count = k;
+    this.carBodies.count = this.carGlass.count = this.carWheels.count = this.carLights.count = k;
     this.rings.count = rings;
-    for (const im of [this.people, this.heads, this.wraps, this.rings, this.carBodies]) {
+    for (const im of [this.people, this.heads, this.wraps, this.rings, this.carBodies, this.carGlass, this.carWheels, this.carLights]) {
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
