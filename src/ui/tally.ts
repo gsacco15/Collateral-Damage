@@ -34,7 +34,7 @@ const GROUP: Record<string, string> = {
   medic: 'Medics',
   security: 'Police',
   vendor: 'Street vendors',
-  unhoused: 'Sleeping rough',
+  unhoused: 'Homeless, sleeping outside',
   elderly: 'Elderly, sitting out',
   displaced: 'Displaced families',
   visitor: 'Visitors off the bus',

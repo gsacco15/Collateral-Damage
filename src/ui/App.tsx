@@ -2000,7 +2000,7 @@ export default function App() {
   };
   // The way in: tucked away at the very bottom of the page (the plan panel's foot on a desktop).
   // The city's numbers at this hour, for the Settings panel: who lives here, where they are now, and the groups.
-  const GROUP_NAME: Record<string, string> = { help: 'Came back to help at a ruin', gate: 'Parents at a school gate', hospital: 'Families at the hospital', medic: 'Medics', security: 'Police', vendor: 'Street vendors', unhoused: 'Sleeping rough', elderly: 'Elderly, sitting out', displaced: 'Displaced families (aid queue)', visitor: 'Visitors off the bus', aid: 'Aid workers' };
+  const GROUP_NAME: Record<string, string> = { help: 'Came back to help at a ruin', gate: 'Parents at a school gate', hospital: 'Families at the hospital', medic: 'Medics', security: 'Police', vendor: 'Street vendors', unhoused: 'Homeless, sleeping outside', elderly: 'Elderly, sitting out', displaced: 'Displaced families (aid queue)', visitor: 'Visitors off the bus', aid: 'Aid workers' };
   const census = () => {
     const HOMES = new Set(['home', 'apartment', 'villa', 'shack', 'tent', 'barracks']);
     const groups = new Map<string, number>();
@@ -2013,6 +2013,7 @@ export default function App() {
       streets: Math.round(popNow.streetQ * (world.streetPts.length / 2)),
       groups: [...groups].sort((a, b) => b[1] - a[1]),
       drawn: mapRef.current?.crowd.visible().length ?? 0,
+      dots: world.buildings.reduce((t, b) => t + shownCount(popNow, b), 0),
     };
   };
   // Switching the people model: Jev's last search was on the other model, so clear it rather than show numbers from

@@ -368,7 +368,7 @@ function groupsOf(w: World): Group[] {
   if (hit) return hit;
   const g: Group[] = [];
   const half = w.river.width / 2;
-  // Sleeping rough: on the canal banks under the bridges at night.
+  // Homeless, sleeping outside: on the canal banks under the bridges at night.
   for (const rd of w.roads) {
     if (rd.kind !== 'bridge' || rd.name === 'Camp footbridge') continue;
     const y = rd.rect.y + rd.rect.h / 2;

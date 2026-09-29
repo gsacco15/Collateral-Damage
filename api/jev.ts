@@ -24,7 +24,9 @@ const json = (body: JevReply, status: number, cache = false) =>
 export default async function handler(req: Request): Promise<Response> {
   const key = parseKey(new URL(req.url).searchParams);
   if (!key) return json({ ok: false, reason: 'bad-request' }, 400);
-  const apiKey = process.env.TYPESAFE_API_KEY ?? process.env.JEV_API_KEY;
+  // A visitor's own key (from Settings, sent for this request only, never stored) comes first; then the site's.
+  const own = req.headers.get('x-jev-key');
+  const apiKey = own && /^[\w.-]{8,200}$/.test(own) ? own : (process.env.TYPESAFE_API_KEY ?? process.env.JEV_API_KEY);
   if (!apiKey) return json({ ok: false, reason: 'no-key' }, 503);
 
   const id = `${key.target}|${key.hour}|${key.day}|${key.watched}${key.armed ? '|armed' : ''}`;

@@ -1,17 +1,18 @@
 // Ask the server for Jev's reading of the intelligence. Each reading is fetched once per page and shared by
 // everything that needs it; the server and CDN cache it across visitors.
 import { intelId, type IntelKey, type JevReply } from '../jev';
+import { jevHeaders, keyTag } from './jevKey';
 
 const cache = new Map<string, Promise<JevReply>>();
 
 export function readIntel(key: IntelKey): Promise<JevReply> {
   // A spot on open ground has no building for Jev to read, and could be any of thousands of points: no call.
   if (key.target.startsWith('g:')) return Promise.resolve({ ok: false, reason: 'open-ground' });
-  const id = intelId(key);
+  const id = `${intelId(key)}|${keyTag()}`;
   let p = cache.get(id);
   if (!p) {
     const q = new URLSearchParams({ target: key.target, hour: String(key.hour), day: key.day, watched: String(key.watched), ...(key.armed ? { armed: '1' } : {}) });
-    p = fetch(`/api/jev?${q}`, { signal: AbortSignal.timeout(12000) })
+    p = fetch(`/api/jev?${q}`, { signal: AbortSignal.timeout(12000), headers: jevHeaders() })
       .then(async (r) => {
         const ct = r.headers.get('content-type') ?? '';
         // No function here (e.g. the local dev server): Jev is offline, the built-in guess stands in.

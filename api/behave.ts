@@ -28,7 +28,9 @@ export default async function handler(req: Request): Promise<Response> {
   const city = kind === 'city' ? parseCity(q) : null;
   const after = kind === 'after' ? parseAfter(q) : null;
   if (!city && !after) return json({ ok: false, reason: 'bad-request' }, 400);
-  const apiKey = process.env.TYPESAFE_API_KEY ?? process.env.JEV_API_KEY;
+  // A visitor's own key (from Settings, sent for this request only, never stored) comes first; then the site's.
+  const own = req.headers.get('x-jev-key');
+  const apiKey = own && /^[\w.-]{8,200}$/.test(own) ? own : (process.env.TYPESAFE_API_KEY ?? process.env.JEV_API_KEY);
   if (!apiKey) return json({ ok: false, reason: 'no-key' }, 503);
 
   const id = city ? `city|${city.hour}|${city.day}|${city.events.join(',')}` : `after|${after!.district}|${after!.hour}|${after!.day}|${after!.sev}`;

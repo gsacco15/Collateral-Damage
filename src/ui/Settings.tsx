@@ -1,6 +1,7 @@
 // Settings and diagnostics, in one place: the look (light or dark), which people model runs (Classic or Living), and a
 // quick check that Jev's two server functions are there, have their key, and answer.
 import { Fragment, useState } from 'react';
+import { jevHeaders, ownKey, ownKeyOn, setOwnKey, setOwnKeyOn } from './jevKey';
 
 type Check = { state: 'idle' | 'running' | 'ok' | 'nokey' | 'offline' | 'error'; text: string; ms?: number };
 
@@ -8,13 +9,13 @@ type Check = { state: 'idle' | 'running' | 'ok' | 'nokey' | 'offline' | 'error';
 async function probe(url: string, describe: (j: Record<string, unknown>) => string): Promise<Check> {
   const t0 = performance.now();
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000), cache: 'no-store' });
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000), cache: 'no-store', headers: jevHeaders() });
     const ms = Math.round(performance.now() - t0);
     // No function behind the path (a static preview, the local dev server): the page itself comes back.
     if (!(r.headers.get('content-type') ?? '').includes('application/json')) return { state: 'offline', text: 'No server function here (local preview or static host). The built-in rules stand in.', ms };
     const j = (await r.json()) as Record<string, unknown>;
     if (j.ok) return { state: 'ok', text: describe(j), ms };
-    if (j.reason === 'no-key') return { state: 'nokey', text: 'The function is there, but no API key is set (TYPESAFE_API_KEY in Vercel).', ms };
+    if (j.reason === 'no-key') return { state: 'nokey', text: 'The function is there, but there is no key: set TYPESAFE_API_KEY in Vercel, or add your own below.', ms };
     return { state: 'error', text: `Answered with an error: ${String(j.reason ?? r.status)}${j.status ? ` (upstream ${j.status})` : ''}.`, ms };
   } catch {
     return { state: 'offline', text: 'No answer (network error or timed out after 20 s).', ms: Math.round(performance.now() - t0) };
@@ -31,6 +32,7 @@ export interface Census {
   streets: number;
   groups: [string, number][];
   drawn: number;
+  dots: number;
 }
 
 /** One strike, as the ledger keeps it. */
@@ -54,6 +56,9 @@ export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census,
   const [city, setCity] = useState<Check>({ state: 'idle', text: 'Judges how each district is behaving this hour (Living only).' });
   const [after, setAfter] = useState<Check>({ state: 'idle', text: 'Judges how the area round a strike responds (Living only).' });
   const running = [reads, city, after].some((c) => c.state === 'running');
+  const [key, setKey] = useState(ownKey());
+  const [useOwn, setUseOwn] = useState(ownKeyOn());
+  const [shown, setShown] = useState(false);
 
   const test = async () => {
     const wait: Check = { state: 'running', text: 'Asking…' };
@@ -143,10 +148,12 @@ export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census,
                 <b>{n}</b>
               </Fragment>
             ))}
-            <span>Drawn on the map right now</span>
+            <span>People drawn outside (a sample)</span>
             <b>{census.drawn.toLocaleString()}</b>
+            <span>Dots drawn inside buildings</span>
+            <b>{census.dots.toLocaleString()}</b>
           </div>
-          <p className="set-foot">{alive ? 'Living: groups listed separately. ' : 'Classic: no separate groups. '}The map draws a sample of those outside; the estimate counts them all.</p>
+          <p className="set-foot">{alive ? 'Living: groups listed separately. ' : 'Classic: no separate groups. '}The map draws only some of the people outside, to stay fast; the estimate counts everyone.</p>
         </div>
 
         <div className="set-sec">
@@ -194,6 +201,63 @@ export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census,
               <p className="set-foot">Each strike's own outcome, counted person by person. Rolling again replaces the last; Rebuild the city starts the count again.</p>
             </>
           )}
+        </div>
+
+        <div className="set-sec">
+          <div className="set-row" style={{ borderBottom: 0, paddingBottom: 2 }}>
+            <div>
+              <b>Use my own Jev key</b>
+              <span>{useOwn && key ? 'On: Jev runs on your TypeSafe key.' : "Off: Jev runs on the site's key."} Kept in this tab only, gone when you close it.</span>
+            </div>
+            <button
+              className={`set-switch ${useOwn && key ? 'on' : ''}`}
+              role="switch"
+              aria-checked={useOwn && !!key}
+              disabled={!key}
+              title={key ? '' : 'Paste a key first'}
+              onClick={() => {
+                const next = !(useOwn && key);
+                setOwnKeyOn(next);
+                setUseOwn(next);
+              }}
+            >
+              <i />
+            </button>
+          </div>
+          <div className="key-row">
+            <input
+              type={shown ? 'text' : 'password'}
+              value={key}
+              placeholder="Paste your TypeSafe API key"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => {
+                setKey(e.target.value);
+                setOwnKey(e.target.value);
+                if (!e.target.value.trim()) {
+                  setOwnKeyOn(false);
+                  setUseOwn(false);
+                }
+              }}
+            />
+            <button className="btn small" onClick={() => setShown(!shown)}>
+              {shown ? 'Hide' : 'Show'}
+            </button>
+            {key && (
+              <button
+                className="btn small"
+                onClick={() => {
+                  setKey('');
+                  setOwnKey('');
+                  setOwnKeyOn(false);
+                  setUseOwn(false);
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="set-foot">Sent with each Jev request to this site's own server function and passed straight to TypeSafe; never saved there. Answers already asked are cached and cost nothing either way.</p>
         </div>
 
         <div className="set-sec">
