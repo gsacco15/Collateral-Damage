@@ -13,7 +13,6 @@ import {
   lobe,
   occlusion,
   placeName,
-  riverX,
   rng,
   secondaries,
   shownCount,
@@ -30,6 +29,7 @@ import {
   type World,
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
+import { drawAnimals, drawRiverLife, type LifeCtx } from './riverlife';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
 import { C, hexA, mix, nightness, sun, type Sun } from './paper';
 
@@ -589,7 +589,22 @@ export class MapView {
     }
     if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
-    this.drawBoats(g, night);
+    // Life on the water and in the streets: boats, fishermen, strollers, ducks, swans, dogs, cats.
+    {
+      const wpn = weapon(plan.weapon);
+      const life: LifeCtx = {
+        world: this.world,
+        time: this.time,
+        hour: f.plan.hour,
+        night,
+        px,
+        away: shown ? { x: shown.ix, y: shown.iy, r: Math.max(70, wpn.blast * 4) } : null,
+        brokenBridge: f.ruins.includes(BRIDGE_RUIN) || (shown?.damaged.includes(BRIDGE_RUIN) ?? false) ? targetOf(this.world, 'bridge').rect : null,
+        figure: (w) => drawFigure(g, w, this.time, sh, night, px),
+      };
+      drawRiverLife(g, life);
+      if (s > 1.1) drawAnimals(g, life);
+    }
     if (fx) this.drawFx(g, fx, px);
     this.drawSmoke(g, night);
     this.drawChimneys(g, f.plan.hour, damaged, night);
@@ -912,71 +927,6 @@ export class MapView {
       g.beginPath();
       g.arc(x, y, rad, 0, Math.PI * 2);
       g.fill();
-    }
-  }
-
-  /** Boats on the canal: a few tied up along the quays, two or three drifting slowly past, slipping under the bridges. */
-  private drawBoats(g: CanvasRenderingContext2D, night: number) {
-    const half = this.world.river.width / 2;
-    const bridgesY = this.world.roads.filter((r) => r.kind === 'bridge').map((r) => r.rect.y + r.rect.h / 2);
-    const hull = ['#f2efe7', '#e9e2d0', '#f2efe7', '#dfe6e8'];
-    const trim = ['#2e6f73', '#b8574a', '#3a5f9a', '#c9a44c'];
-    const boat = (x: number, y: number, dir: number, len: number, i: number, moving: boolean) => {
-      if (bridgesY.some((by) => Math.abs(by - y) < 8)) return; // under a bridge
-      g.save();
-      g.translate(x, y);
-      g.rotate(dir);
-      if (moving) {
-        // A faint wake, opening out behind.
-        g.strokeStyle = `rgba(255,255,255,${0.35 - night * 0.2})`;
-        g.lineWidth = 0.25;
-        g.beginPath();
-        g.moveTo(-0.9, len * 0.45);
-        g.lineTo(-2.6, len * 1.6);
-        g.moveTo(0.9, len * 0.45);
-        g.lineTo(2.6, len * 1.6);
-        g.stroke();
-      }
-      g.fillStyle = 'rgba(20,30,35,0.25)';
-      g.beginPath();
-      g.ellipse(0.5, 0.6, 1.3, len / 2, 0, 0, Math.PI * 2);
-      g.fill();
-      // The hull: pointed at the bow, square at the stern.
-      g.fillStyle = hull[i % hull.length];
-      g.beginPath();
-      g.moveTo(0, -len / 2);
-      g.quadraticCurveTo(1.35, -len / 4, 1.2, len / 2);
-      g.lineTo(-1.2, len / 2);
-      g.quadraticCurveTo(-1.35, -len / 4, 0, -len / 2);
-      g.fill();
-      g.strokeStyle = trim[i % trim.length];
-      g.lineWidth = 0.3;
-      g.stroke();
-      // A seat or a little awning.
-      g.fillStyle = i % 3 === 0 ? trim[(i + 1) % trim.length] : 'rgba(120,90,60,0.7)';
-      g.fillRect(-0.9, i % 3 === 0 ? -0.6 : 0.4, 1.8, i % 3 === 0 ? 1.8 : 0.5);
-      if (night > 0.4) {
-        const grd = g.createRadialGradient(0, -len / 3, 0, 0, -len / 3, 3);
-        grd.addColorStop(0, `rgba(255,200,120,${0.5 * night})`);
-        grd.addColorStop(1, 'rgba(255,200,120,0)');
-        g.fillStyle = grd;
-        g.fillRect(-3, -len / 3 - 3, 6, 6);
-      }
-      g.restore();
-    };
-    // Tied up along the quays.
-    [60, 180, 262, 452, 520, 668, 750, 850].forEach((y, i) => {
-      const side = i % 2 ? 1 : -1;
-      boat(riverX(y) + side * (half - 2.2), y, (i % 3) * 0.06 - 0.03, 5.5 + (i % 3), i, false);
-    });
-    // Drifting past: one each way, slowly.
-    for (let i = 0; i < 3; i++) {
-      const span = this.world.h + 160;
-      const down = i % 2 === 0;
-      const u = ((this.time * (1.6 + i * 0.5) + i * 370) % span) - 80;
-      const y = down ? u : this.world.h - u;
-      const x = riverX(y) + (down ? -5 : 5);
-      boat(x, y, down ? Math.PI : 0, 6.5, i + 5, true);
     }
   }
 
