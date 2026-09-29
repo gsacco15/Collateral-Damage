@@ -428,12 +428,16 @@ export default function App() {
     const base = m0 ? m0.cam().s / m0.view.zoom : 1;
     const cw = canvasRef.current?.clientWidth ?? 1000;
     const ch = canvasRef.current?.clientHeight ?? 700;
-    const zoom = Math.max(1.2, Math.min(cw / 980, ch / 600) / base);
-    // Pulled back: the city around it, but never so far that the desert off to the east shows.
-    const out = Math.max(1, zoom * 0.72);
+    // The zoom that shows about w metres across (and 0.6 w down).
+    const fit = (w: number) => Math.max(1, Math.min(cw / w, ch / (w * 0.6)) / base);
+    // Home: close on Warehouse 14 and the school across the street, the depot at the bottom edge.
+    const zoom = fit(300);
+    // Pulled back: the district around it out to the canal, never so far that the desert shows.
+    const out = Math.min(zoom * 0.7, fit(1000));
     const hw = cw / 2 / (base * out);
-    return { cx: 454, cy: 528, zoom, back: { cx: Math.max(hw - 40, Math.min(470, world.city.w - hw + 10)), cy: 470, zoom: out } };
+    return { cx: 256, cy: 522, zoom, back: { cx: Math.max(hw - 40, Math.min(452, world.city.w - hw + 10)), cy: 550, zoom: out } };
   };
+
   // The guide's card opens over the city: pull back a little (not so far the desert shows), for a sense of scale.
   useEffect(() => {
     if (!intro) return;
@@ -540,11 +544,13 @@ export default function App() {
     let lastZoom = 0;
     const tick = () => {
       const m = mapRef.current;
-      const v = m?.view;
+      // In 3D, listen from where the camera looks, and how high it is (its distance, as a map zoom).
+      const at = view === 'model' ? modelRef.current?.lookingAt() : null;
+      const v = at ? { cx: at.x, cy: at.y, zoom: Math.max(0.5, Math.min(14, 600 / at.dist)) } : m?.view;
       if (!m || !v) return;
       const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4)); // 0 high above, 1 down at the roofs
       const hush = striking ? 0.3 : 1;
-      sound.setAltitude(view === 'model' ? 0.6 : close);
+      sound.setAltitude(close);
       // A soft rush of air when you zoom a long way quickly.
       if (lastZoom && Math.abs(Math.log(v.zoom / lastZoom)) > 0.45) sound.whoosh(v.zoom < lastZoom);
       lastZoom = v.zoom;
