@@ -716,7 +716,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .strike-dock.open { background: rgba(251, 250, 246, 0.68); }
 
 /* Phones: small, see-through cards; the narrator tells the stories and the guide. */
-@media (max-width: 760px), (max-height: 520px) {
+@media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px) {
   /* The guide on a phone: a small pill at the bottom. Step, title, and ‹ › ✕; the narrator does the telling. */
   .guide.compact { bottom: 10px; width: auto; max-width: calc(100% - 20px); padding: 4px 4px 4px 12px; gap: 6px; align-items: center; border-radius: 999px; background: rgba(251, 250, 246, 0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 10px rgba(40, 30, 20, 0.14); }
   .guide.compact .n { padding-top: 0; font-size: 10px; }
@@ -776,7 +776,15 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 @media (prefers-reduced-motion: reduce) { .act.strike.pulse { animation: none; } }
 
 /* Phones: the strike dock and the final decision, smaller and see-through so the city stays visible. */
-@media (max-width: 760px), (max-height: 520px) {
+@media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px) {
+  /* The opening card, if it shows on a small screen: the heading, the key line, the buttons. */
+  .intro { align-items: end; padding: 10px; }
+  .intro-card { width: 100%; max-height: 60vh; padding: 14px 16px 12px; gap: 6px; border-radius: 16px; }
+  .intro-card h1 { font-size: 24px; margin: 0; }
+  .intro-card .lede { font-size: 13.5px; line-height: 1.4; }
+  .intro-card p:not(.lede) { display: none; }
+  .intro-actions { gap: 6px; margin-top: 4px; }
+  .intro-actions .btn { padding: 7px 12px; font-size: 13px; }
   .strike-dock.open { right: auto; gap: 4px; padding: 4px; background: rgba(251, 250, 246, 0.5); }
   .strike-dock.open .act { flex: 0 0 auto; padding: 7px 12px; font-size: 12px; }
   .act.strike.tab { padding: 7px 12px; font-size: 12.5px; }

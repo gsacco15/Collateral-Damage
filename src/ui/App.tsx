@@ -67,7 +67,8 @@ const HEADING_NAMES: Record<number, string> = { 0: '↑ N', 45: '↗ NE', 90: '�
 const DISCOVERED_KEY = 'cd.discovered';
 const INTRO_KEY = 'cd.intro';
 const SESSION_START = performance.now();
-const PHONE = '(max-width: 760px), (max-height: 520px)';
+// A phone or tablet: narrow, short, or any touch screen up to tablet width (even when the browser asks for the desktop site).
+const PHONE = '(max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px)';
 /** Which prayer, if any, it is around now: loud ones (dawn, Friday noon) and softer ones through the day. */
 function prayerNow(h: number, day: string): '' | 'dawn' | 'friday' | 'noon' | 'afternoon' | 'sunset' | 'night' {
   if (h >= 5 && h < 6) return 'dawn';
