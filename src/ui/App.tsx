@@ -474,13 +474,18 @@ export default function App() {
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
       if (pick) pans[pick[0]] = pick[2];
       void sound.ambience(levels, pans);
-      // Come close to the mosque, at any hour, and you hear the call from there: once each time you come, at most once a minute.
-      const dMosque = near(zones.mosque)[0];
-      if (dMosque > 260 || close < 0.2) heardClose.current = '';
-      else if (!striking && close > 0.35 && dMosque < 150 && !heardClose.current && performance.now() - lastCloseCall > 60_000) {
+      // Come close to the mosque, at any hour, in the map or in 3D, and you hear the call from there: once each time you come.
+      const look = view === 'model' ? modelRef.current?.lookingAt() : null;
+      const lx = look ? look.x : v.cx;
+      const ly = look ? look.y : v.cy;
+      const lClose = look ? Math.max(0, Math.min(1, (900 / look.dist - 1.3) / 4)) : close;
+      let dMosque = Infinity;
+      for (const q of zones.mosque) dMosque = Math.min(dMosque, Math.hypot(Math.max(q.x, Math.min(q.x + q.w, lx)) - lx, Math.max(q.y, Math.min(q.y + q.h, ly)) - ly));
+      if (dMosque > 280 || lClose < 0.12) heardClose.current = '';
+      else if (!striking && lClose > 0.25 && dMosque < 180 && !heardClose.current && performance.now() - lastCloseCall > 45_000) {
         heardClose.current = 'here';
         lastCloseCall = performance.now();
-        callToPrayer('visit');
+        callToPrayer('visit', look ? { x: lx, y: ly, close: lClose } : undefined);
       }
       // Now and then, one small sound that fits where you are and the hour: about every twenty seconds.
       if (!striking && close > 0.15 && Math.random() < 0.02) {
@@ -535,13 +540,14 @@ export default function App() {
   // minaret: clear and close when you're near the mosque, faint and far off across the city, placed left or right.
   const prayerKey = useRef('');
   const heardClose = useRef(''); // the prayer already heard from close by, so coming near again doesn't repeat it
-  const callToPrayer = (k: string) => {
+  const callToPrayer = (k: string, at?: { x: number; y: number; close: number }) => {
     const loud = k === 'dawn' || k === 'friday';
     const m = mapRef.current;
     const min = world.buildings.find((b) => b.kind === 'minaret');
     let near = 0.3;
     let pan = 0;
-    if (m && min) {
+    if (at && min) near = Math.max(0, 1 - Math.hypot(min.cx - at.x, min.cy - at.y) / 450) * (0.45 + 0.55 * at.close); // in 3D: no left/right
+    else if (m && min) {
       const v = m.view;
       const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4));
       near = Math.max(0, 1 - Math.hypot(min.cx - v.cx, min.cy - v.cy) / 450) * (0.45 + 0.55 * close);
@@ -550,7 +556,7 @@ export default function App() {
     }
     // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
     // Coming close outside the timed calls ('visit'), it's lower still: just there in the background.
-    const vol = k === 'visit' ? 0.05 + near * 0.05 : (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1);
+    const vol = k === 'visit' ? 0.11 + near * 0.07 : (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1);
     sound.cue('amb-call-to-prayer', pan, vol);
   };
   useEffect(() => {
