@@ -949,8 +949,9 @@ export class Model3D {
     for (const sp of w.spaces) {
       if (sp.kind !== 'market') continue;
       const r = rng(sp.id + 3);
-      for (let y = sp.rect.y + 4; y < sp.rect.y + sp.rect.h - 6; y += 10)
-        for (let x = sp.rect.x + 4; x < sp.rect.x + sp.rect.w - 6; x += 8.5) {
+      // The same grid as the flat map's stalls (and the goods laid out in front of them: see souk.ts).
+      for (let y = sp.rect.y + 3; y < sp.rect.y + sp.rect.h - 6; y += 10)
+        for (let x = sp.rect.x + 3; x < sp.rect.x + sp.rect.w - 6; x += 8.5) {
           const aw = new THREE.Mesh(new THREE.PlaneGeometry(6, 5), awnings[Math.floor(r() * 3)]);
           aw.rotation.x = -Math.PI / 2 + 0.25;
           aw.position.set(x + 3, 2.4, y + 2.5);

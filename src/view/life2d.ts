@@ -1047,6 +1047,12 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       case 'mark':
         mark2d(g, e, t, d.px ?? 0.2);
         break;
+      case 'goods':
+        goods2d(g, e, d.animals, t);
+        break;
+      case 'bunting':
+        bunting2d(g, e, t);
+        break;
       case 'letter':
         break; // drawn over the smoke: see drawLetters2D
       case 'scooter':
@@ -1170,4 +1176,188 @@ function letter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'letter' }>)
   g.lineTo(0.5, -0.32);
   g.stroke();
   g.restore();
+}
+
+/** The souk's wares, from above: counters, piles, cones, bolts, rugs, pots, bread, sacks, a parasol, a grill, a cart. */
+function goods2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'goods' }>, close: boolean, t: number) {
+  const { x, y, w, h, col } = e;
+  switch (e.kind) {
+    case 'counter':
+    case 'cover':
+      g.fillStyle = 'rgba(40,30,20,0.18)';
+      g.fillRect(x - w / 2 + 0.25, y - h / 2 + 0.3, w, h);
+      g.fillStyle = col;
+      g.fillRect(x - w / 2, y - h / 2, w, h);
+      g.fillStyle = e.kind === 'cover' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.18)';
+      g.fillRect(x - w / 2, y - h / 2, w, h * 0.3);
+      if (e.kind === 'cover') {
+        // Roped down.
+        g.strokeStyle = 'rgba(40,30,20,0.35)';
+        g.lineWidth = 0.08;
+        for (let k = 1; k < 4; k++) {
+          g.beginPath();
+          g.moveTo(x - w / 2 + (w * k) / 4, y - h / 2);
+          g.lineTo(x - w / 2 + (w * k) / 4, y + h / 2);
+          g.stroke();
+        }
+      }
+      return;
+    case 'rug':
+    case 'mat': {
+      // Laid on the ground, or hanging from the stall's front (seen from above as a narrow strip).
+      const hh = e.hang ? 0.35 : h;
+      g.fillStyle = col;
+      g.fillRect(x - w / 2, y - hh / 2, w, hh);
+      if (!close) return;
+      g.strokeStyle = e.col2 ?? '#e0c46a';
+      g.lineWidth = 0.1;
+      g.strokeRect(x - w / 2 + 0.15, y - hh / 2 + 0.1, w - 0.3, Math.max(0.05, hh - 0.2));
+      if (!e.hang && e.kind === 'rug') {
+        g.fillStyle = e.col2 ?? '#e0c46a';
+        g.beginPath();
+        g.moveTo(x, y - h * 0.3);
+        g.lineTo(x + w * 0.2, y);
+        g.lineTo(x, y + h * 0.3);
+        g.lineTo(x - w * 0.2, y);
+        g.closePath();
+        g.fill();
+      }
+      return;
+    }
+    case 'umbrella': {
+      g.fillStyle = 'rgba(40,30,20,0.18)';
+      g.beginPath();
+      g.arc(x + 0.6, y + 0.8, w, 0, Math.PI * 2);
+      g.fill();
+      for (let k = 0; k < 8; k++) {
+        g.fillStyle = k % 2 ? col : '#f4efe4';
+        g.beginPath();
+        g.moveTo(x, y);
+        g.arc(x, y, w, (k / 8) * Math.PI * 2, ((k + 1) / 8) * Math.PI * 2);
+        g.closePath();
+        g.fill();
+      }
+      return;
+    }
+    case 'handcart': {
+      g.save();
+      g.translate(x, y);
+      g.rotate(e.a);
+      g.fillStyle = '#8a6a48';
+      g.fillRect(-w / 2, -h / 2, w, h);
+      g.fillStyle = col;
+      for (let k = 0; k < 6; k++) {
+        g.beginPath();
+        g.arc(-w / 2 + 0.25 + (k % 3) * 0.5, -0.2 + Math.floor(k / 3) * 0.4, 0.2, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#2b2b2e';
+      g.fillRect(-0.2, -h / 2 - 0.12, 0.4, 0.12);
+      g.fillRect(-0.2, h / 2, 0.4, 0.12);
+      g.restore();
+      return;
+    }
+    case 'grill':
+      g.fillStyle = col;
+      g.fillRect(x - w / 2, y - h / 2, w, h);
+      g.fillStyle = `rgba(255,${120 + Math.round(40 * Math.sin(t * 6))},50,0.8)`;
+      g.fillRect(x - w / 2 + 0.1, y - h / 2 + 0.1, w - 0.2, h - 0.2);
+      return;
+  }
+  if (!close) {
+    // From further off, only a dab of colour.
+    g.fillStyle = col;
+    g.fillRect(x - w / 2, y - w / 2, w, w);
+    return;
+  }
+  switch (e.kind) {
+    case 'pile':
+      // A heap of fruit: a round pile with a few highlights.
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(x, y, w, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      for (let k = 0; k < 3; k++) {
+        g.beginPath();
+        g.arc(x - w * 0.35 + k * w * 0.35, y - w * 0.2 + (k % 2) * w * 0.3, w * 0.13, 0, Math.PI * 2);
+        g.fill();
+      }
+      return;
+    case 'cone':
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(x, y, w, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.3)';
+      g.beginPath();
+      g.arc(x - w * 0.2, y - w * 0.2, w * 0.3, 0, Math.PI * 2);
+      g.fill();
+      return;
+    case 'bolt':
+      g.fillStyle = col;
+      g.fillRect(x - w / 2, y - h / 2, w, h);
+      g.fillStyle = 'rgba(255,255,255,0.25)';
+      g.fillRect(x - w / 2, y - h / 2, w * 0.35, h);
+      return;
+    case 'pot':
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(x, y, w, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(60,30,10,0.5)';
+      g.lineWidth = 0.05;
+      g.beginPath();
+      g.arc(x, y, w * 0.6, 0, Math.PI * 2);
+      g.stroke();
+      return;
+    case 'loaves':
+      g.fillStyle = '#8a6a48';
+      g.beginPath();
+      g.arc(x, y, w, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = col;
+      for (let k = 0; k < 3; k++) {
+        g.beginPath();
+        g.arc(x - w * 0.35 + k * w * 0.35, y, w * 0.32, 0, Math.PI * 2);
+        g.fill();
+      }
+      return;
+    case 'sack':
+      g.fillStyle = '#d8c8a8';
+      g.beginPath();
+      g.arc(x, y, w, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(x, y, w * 0.7, 0, Math.PI * 2);
+      g.fill();
+      return;
+  }
+}
+
+export const BUNTING = ['#c9372b', '#e0a526', '#2f5f8a', '#5f8a4a', '#f4efe4', '#b8483a', '#7d4a8a'];
+/** Paper flags on a string, seen from above: a thin line and a small triangle every metre and a bit, stirring. */
+function bunting2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'bunting' }>, t: number) {
+  const len = Math.hypot(e.x1 - e.x0, e.y1 - e.y0);
+  const ux = (e.x1 - e.x0) / len;
+  const uy = (e.y1 - e.y0) / len;
+  g.strokeStyle = 'rgba(60,50,40,0.45)';
+  g.lineWidth = 0.06;
+  g.beginPath();
+  g.moveTo(e.x0, e.y0 - e.z * 0.2);
+  g.lineTo(e.x1, e.y1 - e.z * 0.2);
+  g.stroke();
+  for (let d = 0.5, k = 0; d < len; d += 1.3, k++) {
+    const x = e.x0 + ux * d;
+    const y = e.y0 + uy * d - e.z * 0.2;
+    const sw = Math.sin(t * 2.2 + k * 0.9 + e.seed) * 0.12;
+    g.fillStyle = BUNTING[(k + e.seed * 3) % BUNTING.length];
+    g.beginPath();
+    g.moveTo(x - 0.35 * ux, y - 0.35 * uy);
+    g.lineTo(x + 0.35 * ux, y + 0.35 * uy);
+    g.lineTo(x + sw, y + 0.6);
+    g.closePath();
+    g.fill();
+  }
 }

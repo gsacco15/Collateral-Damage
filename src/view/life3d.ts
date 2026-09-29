@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type World } from '../jev';
 import { HULLS, type Ent } from './lifeScene';
+import { BUNTING } from './life2d';
 import { brokenLights, powerCut, streetLights } from './streetLights';
 import { brokenPoles, wireEnds, wiring } from './wires';
 
@@ -105,8 +106,8 @@ export class Life3D {
       this.meshes[name] = im;
     };
     add('boat', boatGeo(), std({ side: THREE.DoubleSide }), 40);
-    add('body', new THREE.CylinderGeometry(0.34, 0.42, 1.25, 7).translate(0, 0.62, 0), std(), 400);
-    add('head', new THREE.SphereGeometry(0.28, 8, 6).translate(0, 1.48, 0), std({ roughness: 0.8 }), 400);
+    add('body', new THREE.CylinderGeometry(0.34, 0.42, 1.25, 7).translate(0, 0.62, 0), std(), 800);
+    add('head', new THREE.SphereGeometry(0.28, 8, 6).translate(0, 1.48, 0), std({ roughness: 0.8 }), 800);
     add('rod', new THREE.CylinderGeometry(0.03, 0.05, 1, 4).translate(0, 0.5, 0), std({ color: '#6e5238' }), 80);
     add('float', new THREE.SphereGeometry(0.2, 6, 4), std({ color: '#d4452e' }), 80, false);
     add('prop', new THREE.CylinderGeometry(0.5, 0.5, 1, 10), std(), 120);
@@ -126,6 +127,43 @@ export class Life3D {
     add('mark', new THREE.OctahedronGeometry(1, 0).scale(0.75, 1.1, 0.12), new THREE.MeshStandardMaterial({ roughness: 0.7, flatShading: true, emissive: '#5a3a10', emissiveIntensity: 0.6 }), 8, false);
     add('mring', new THREE.RingGeometry(1.7, 2.05, 28).rotateX(-Math.PI / 2).translate(0, 0.08, 0), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6, depthWrite: false }), 8, false);
     add('letter', box(0, 0, 0, 0.9, 0.02, 0.58), std({ color: '#fbfaf6', side: THREE.DoubleSide }), 40, false);
+    // The souk's wares (see souk.ts): unit shapes, scaled and coloured per piece.
+    const rugTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 96;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 64, 96);
+      g.strokeStyle = 'rgba(255,240,200,1)';
+      g.fillStyle = '#e9dcc0';
+      g.fillRect(0, 0, 64, 8), g.fillRect(0, 88, 64, 8), g.fillRect(0, 0, 8, 96), g.fillRect(56, 0, 8, 96);
+      g.fillStyle = '#b9a88a';
+      g.beginPath();
+      g.moveTo(32, 22), g.lineTo(50, 48), g.lineTo(32, 74), g.lineTo(14, 48), g.closePath();
+      g.fill();
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.moveTo(32, 36), g.lineTo(40, 48), g.lineTo(32, 60), g.lineTo(24, 48), g.closePath();
+      g.fill();
+      for (let y = 12; y < 86; y += 6) g.fillRect(10, y, 3, 3), g.fillRect(51, y, 3, 3);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    add('g_box', box(0, 0.5, 0, 1, 1, 1), std({ roughness: 0.8 }), 400);
+    {
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.Float32BufferAttribute([-0.35, 0, 0, 0.35, 0, 0, 0, -0.6, 0], 3));
+      fg.computeVertexNormals();
+      add('g_flag', fg, std({ side: THREE.DoubleSide }), 400, false);
+    }
+    add('g_rug', box(0, 0.5, 0, 1, 1, 1), std({ map: rugTex, roughness: 1 }), 120, false);
+    add('g_pile', new THREE.IcosahedronGeometry(1, 1).scale(1, 0.7, 1), std({ roughness: 0.6 }), 600, false);
+    add('g_cone', new THREE.ConeGeometry(1, 1, 8).translate(0, 0.5, 0), std({ roughness: 1 }), 500, false);
+    add('g_bolt', new THREE.CylinderGeometry(0.5, 0.5, 1, 8).rotateX(Math.PI / 2).translate(0, 0.5, 0), std({ roughness: 0.9 }), 400, false);
+    add('g_pot', new THREE.SphereGeometry(1, 10, 6).scale(1, 0.75, 1).translate(0, 0.6, 0), std({ roughness: 0.35, metalness: 0.6 }), 300, false);
+    add('g_umb', mergeGeometries([new THREE.ConeGeometry(1, 0.45, 12, 1, true).translate(0, 2.2, 0).toNonIndexed(), new THREE.CylinderGeometry(0.03, 0.03, 2.2, 5).translate(0, 1.1, 0).toNonIndexed()])!, std({ side: THREE.DoubleSide }), 8);
     add('smoke', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#b9b4ac', roughness: 1, flatShading: true, transparent: true, opacity: 0.38, depthWrite: false }), 300, false);
     add('beacon', new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2a1a' }), 30, false);
     add('lamp', new THREE.SphereGeometry(0.25, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffe2a8' }), 40, false);
@@ -143,7 +181,7 @@ export class Life3D {
     add('c_pallet', mergeGeometries([0, 1, 2, 3, 4].map((k) => box(0, 0.14, -0.44 + k * 0.22, 1.2, 0.04, 0.14)).concat([box(-0.5, 0.06, 0, 0.1, 0.12, 1), box(0, 0.06, 0, 0.1, 0.12, 1), box(0.5, 0.06, 0, 0.1, 0.12, 1)]))!, std({ color: '#b89968' }), 120);
     add('c_tyres', mergeGeometries([0, 1, 2].map((k) => new THREE.TorusGeometry(0.32, 0.12, 6, 12).rotateX(Math.PI / 2).translate(0, 0.12 + k * 0.24, 0).toNonIndexed()))!, std({ color: '#2a2826' }), 120);
     add('c_crate', box(0, 0.3, 0, 0.6, 0.6, 0.6), std(), 300);
-    add('c_sacks', new THREE.SphereGeometry(0.35, 7, 5).scale(1, 0.55, 0.7).translate(0, 0.18, 0), std(), 200);
+    add('c_sacks', new THREE.SphereGeometry(0.35, 7, 5).scale(1, 0.55, 0.7).translate(0, 0.18, 0), std(), 320);
     add('c_skip', mergeGeometries([box(0, 0.6, 0, 1.9, 1.2, 1.2), box(0, 1.24, -0.3, 1.9, 0.06, 0.62)])!, std({ roughness: 0.6 }), 60);
     add('c_wreck', mergeGeometries([box(0, 0.35, 0, 4.2, 0.7, 1.9), box(-0.35, 1.0, 0, 2.0, 0.6, 1.62), box(1.4, 0.12, 0.7, 0.3, 0.24, 0.3), box(-1.4, 0.12, -0.7, 0.3, 0.24, 0.3), box(1.4, 0.12, -0.7, 0.3, 0.24, 0.3), box(-1.4, 0.12, 0.7, 0.3, 0.24, 0.3)])!, std({ roughness: 0.9 }), 80);
     add('c_rust', mergeGeometries([box(-1.0, 0.72, 0.96, 1.2, 0.5, 0.02), box(1.1, 0.72, -0.96, 1.0, 0.4, 0.02), box(0.9, 0.71, 0, 1.4, 0.02, 1.2)])!, std({ color: '#8a4a26', roughness: 1 }), 120, false);
@@ -439,6 +477,67 @@ export class Life3D {
           this.put('mark', e.x, e.y, e.z + 1.4, e.spin, 1, 1, 1, e.col);
           this.put('mring', e.x, e.y, 0, 0, 1 + ((time * 0.8) % 1) * 0.8, 1, 1 + ((time * 0.8) % 1) * 0.8, e.col);
           break;
+        case 'bunting': {
+          const len = Math.hypot(e.x1 - e.x0, e.y1 - e.y0);
+          const yaw = -Math.atan2(e.y1 - e.y0, e.x1 - e.x0);
+          for (let d = 0.5, k = 0; d < len; d += 1.3, k++) {
+            const u = d / len;
+            const sag = 0.9 * 4 * u * (1 - u);
+            this.put('g_flag', e.x0 + (e.x1 - e.x0) * u, e.y0 + (e.y1 - e.y0) * u, e.z - sag, yaw, 1, 1, 1, BUNTING[(k + e.seed * 3) % BUNTING.length], Math.sin(time * 2.2 + k * 0.9 + e.seed) * 0.35);
+          }
+          break;
+        }
+        case 'goods': {
+          const z = e.z ?? 0;
+          const yaw = -e.a;
+          switch (e.kind) {
+            case 'counter':
+              this.put('g_box', e.x, e.y, 0, yaw, e.w, 0.85, e.h, e.col);
+              break;
+            case 'cover':
+              this.put('g_box', e.x, e.y, 0, yaw, e.w, 1.05, e.h, e.col);
+              break;
+            case 'mat':
+              this.put('g_rug', e.x, e.y, 0, yaw, e.w, 0.03, e.h, e.col);
+              break;
+            case 'rug':
+              if (e.hang) this.put('g_rug', e.x, e.y, 0.2, yaw, e.w, e.h, 0.05, e.col);
+              else this.put('g_rug', e.x, e.y, 0, yaw, e.w, 0.04, e.h, e.col);
+              break;
+            case 'pile':
+              this.put('g_pile', e.x, e.y, z, 0, e.w, e.w, e.w, e.col);
+              break;
+            case 'cone':
+              this.put('g_cone', e.x, e.y, z, 0, e.w, e.h, e.w, e.col);
+              break;
+            case 'bolt':
+              this.put('g_bolt', e.x, e.y, z, yaw, e.w, e.w, e.h, e.col);
+              break;
+            case 'pot':
+              this.put('g_pot', e.x, e.y, z, 0, e.w, e.w, e.w, e.col);
+              break;
+            case 'loaves':
+              this.put('g_box', e.x, e.y, z, 0, e.w * 1.8, 0.12, e.w * 1.8, '#8a6a48');
+              for (let k = 0; k < 3; k++) this.put('g_pile', e.x - e.w * 0.5 + k * e.w * 0.5, e.y, z + 0.12, 0, e.w * 0.35, e.w * 0.3, e.w * 0.35, e.col);
+              break;
+            case 'sack':
+              this.put('c_sacks', e.x, e.y, z, 0, e.w * 2, e.w * 2.4, e.w * 2, '#d8c8a8');
+              this.put('g_pile', e.x, e.y, z + e.w * 0.85, 0, e.w * 0.6, e.w * 0.35, e.w * 0.6, e.col);
+              break;
+            case 'umbrella':
+              this.put('g_umb', e.x, e.y, 0, 0, e.w, e.h / 2.4, e.w, e.col);
+              break;
+            case 'grill':
+              this.put('g_box', e.x, e.y, 0, yaw, e.w, 0.9, e.h, e.col);
+              this.put('coal', e.x, e.y, 0.95, 0, 4, 1, 2);
+              break;
+            case 'handcart':
+              this.put('g_box', e.x, e.y, 0.45, yaw, e.w, 0.35, e.h, '#8a6a48');
+              for (let k = 0; k < 4; k++) this.put('g_pile', e.x + Math.cos(e.a) * (k * 0.4 - 0.6), e.y + Math.sin(e.a) * (k * 0.4 - 0.6), 0.8, 0, 0.3, 0.3, 0.3, e.col);
+              break;
+          }
+          break;
+        }
         case 'letter':
           this.put('letter', e.x, e.y, e.z, e.a, 1.8, 1.8, 1.8, undefined, e.tilt);
           break;

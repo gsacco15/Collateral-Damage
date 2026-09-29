@@ -4,6 +4,7 @@
 // moment, drawn by the flat map and built by the 3D model alike, so both always show the same thing.
 import { buildingAt, inRect, riverX, rng, type Building, type Rect, type World } from '../jev';
 import type { Wear } from './crowd';
+import { soukScene, type GoodsKind } from './souk';
 
 export interface SceneCtx {
   world: World;
@@ -53,7 +54,9 @@ export type Ent =
   | { t: 'awning'; x: number; y: number; a: number; w: number; col: string }
   | { t: 'mark'; x: number; y: number; z: number; col: string; spin: number } // a folded paper tag over someone the mission wants you to find
   | { t: 'moto'; x: number; y: number; a: number; col: string; rider: boolean }
-  | { t: 'letter'; x: number; y: number; z: number; a: number; tilt: number };
+  | { t: 'letter'; x: number; y: number; z: number; a: number; tilt: number }
+  | { t: 'bunting'; x0: number; y0: number; x1: number; y1: number; z: number; seed: number } // paper flags on a string, over the souk
+  | { t: 'goods'; kind: GoodsKind; x: number; y: number; a: number; col: string; w: number; h: number; col2?: string; hang?: boolean; z?: number }; // the souk's wares (see souk.ts)
 
 export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip' | 'wreck' | 'tyrepile' | 'cactus' | 'shrub' | 'pot' | 'bougain';
 
@@ -934,6 +937,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
   F.stacks.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: b.h + 0.5, seed: 31 + i, strength: b.name === 'Power station stack' ? 0.8 : h >= 3.5 && h < 20 ? 0.9 : 0.45, dark: b.name === 'Power station stack' ? 0.2 : 0.55, size: 1.4, d3: true }));
   if (alive(F.mill)) out.push({ t: 'smoke', x: F.mill!.cx - 10, y: F.mill!.cy, z: F.mill!.h + 1, seed: 21, strength: bell(h, 6, 18) * 0.8, dark: 0, size: 1.3 });
   for (const L of F.beacons) if (!cut && !c.damaged.has(L.b.id) && Math.sin(t * 3 + L.x * 0.1) > 0.2) out.push({ t: 'beacon', x: L.x, y: L.y, z: L.z, big: L.big });
+  soukScene(c, out);
   for (const f of extras) out.push(...f(c));
   return out;
 }
