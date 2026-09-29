@@ -10,7 +10,7 @@ import {
   estimate,
   fmtHour,
   FUZES,
-  fuze,
+  modeOf,
   inCircle,
   intelKey,
   intelOf,
@@ -732,7 +732,7 @@ export default function App() {
       w.onmessage = (e: MessageEvent<JobOut>) => {
         if (e.data.job === jobs.current.hours) setProfile(e.data.out.map((s) => ({ mean: s.mean, p90: s.p90 })));
         if (e.data.job === jobs.current.matrix)
-          setMatrix(e.data.out.map((s) => ({ weapon: s.c.weapon, fuze: s.c.fuze, label: [weapon(s.c.weapon).short, fuze(s.c.fuze).name], p90: s.p90, pk: s.pk })));
+          setMatrix(e.data.out.map((s) => ({ weapon: s.c.weapon, fuze: s.c.fuze, label: [weapon(s.c.weapon).short, modeOf(s.c.weapon, s.c.fuze).name], p90: s.p90, pk: s.pk })));
       };
     } catch {
       w = null;
@@ -1866,7 +1866,7 @@ export default function App() {
     setDayPlay(false);
     setPop(null);
     if (poolRef.current?.running) poolRef.current.pause();
-    const mega = !!weapon(plan.weapon).special;
+    const mega = !!weapon(plan.weapon).mega;
     // The biggest bomb: start a little further out, so the pull-back after it has somewhere to go.
     focusRef.current = mega ? { cx: plan.aimX, cy: plan.aimY + 10, zoom: 2.4, dur: 1.4 } : { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
     if (mega && view === 'model') modelRef.current?.flyTo(plan.aimX, plan.aimY, 460, 1.4);
@@ -2003,7 +2003,7 @@ export default function App() {
         )}
       </Step>
 
-      <Step n={2} title="Weapon" summary={`${w.short} · ${fuze(plan.fuze).name}${weaponWarn ? ` · destroys it ${pct(est!.pk)}` : ''}`} status={weaponWarn ? 'warn' : 'ok'} open={open.has('weapon')} onToggle={() => toggleStep('weapon')}>
+      <Step n={2} title="Weapon" summary={`${w.short} · ${modeOf(plan.weapon, plan.fuze).name}${weaponWarn ? ` · destroys it ${pct(est!.pk)}` : ''}`} status={weaponWarn ? 'warn' : 'ok'} open={open.has('weapon')} onToggle={() => toggleStep('weapon')}>
         <div className="armoury" key={plan.weapon}>
           <Origami id={plan.weapon} size={1.35} fold />
           <div>
@@ -2032,8 +2032,8 @@ export default function App() {
             </button>
           ))}
         </div>
-        <Seg value={plan.fuze} onChange={(f) => setPlan({ fuze: f })} options={FUZES.map((f) => [f.id, f.name] as [typeof f.id, string])} />
-        <p className="hint">{fuze(plan.fuze).note}</p>
+        <Seg value={plan.fuze} onChange={(f) => setPlan({ fuze: f })} options={FUZES.map((f) => [f.id, modeOf(plan.weapon, f.id).name] as [typeof f.id, string])} />
+        <p className="hint">{modeOf(plan.weapon, plan.fuze).note}</p>
         <button className="link" onClick={() => setWeaponData(true)}>
           Weapon data table
         </button>
@@ -2294,7 +2294,7 @@ export default function App() {
           <div className="flip small" key={key(testing)}>
             <span className="k">trying</span>
             <Chip k="Weapon" v={weapon(testing.weapon).short} />
-            <Chip k="Fuze" v={fuze(testing.fuze).name} />
+            <Chip k="Fuze" v={modeOf(testing.weapon, testing.fuze).name} />
             <Chip k="Heading" v={HEADING_NAMES[testing.heading]} />
             <Chip k="Aim" v={testing.aim} />
             <Chip k="Hour" v={fmtHour(testing.hour)} />
@@ -2686,7 +2686,7 @@ export default function App() {
                   <span className="k">Final decision</span>
                   <h2>Strike {target.name}?</h2>
                   <p className="plan-line">
-                    {w.name}, {fuze(plan.fuze).name.toLowerCase()} fuze, arriving from the {compassName(plan.heading + 180)}, {plan.day === 'friday' ? 'Friday' : 'a weekday'} at {fmtHour(plan.hour)}.
+                    {w.name}, {modeOf(plan.weapon, plan.fuze).name.toLowerCase()}{w.kinetic ? '' : ' fuze'}, arriving from the {compassName(plan.heading + 180)}, {plan.day === 'friday' ? 'Friday' : 'a weekday'} at {fmtHour(plan.hour)}.
                   </p>
                   <div className="sheet-nums">
                     <div>
@@ -3107,7 +3107,7 @@ export default function App() {
   );
 }
 
-const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${fuze(c.fuze).name.toLowerCase()}, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;
+const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${modeOf(c.weapon, c.fuze).name.toLowerCase()}, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;
 
 interface Panels {
   plan: boolean;

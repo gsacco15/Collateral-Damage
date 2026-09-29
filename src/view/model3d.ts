@@ -334,8 +334,21 @@ function paperPlane() {
     m.castShadow = true;
     return m;
   };
-  g.add(mk([0, 0, -2 * s, -1.6 * s, 0.5, 1.4 * s, 0, -0.6, 0.8 * s], '#f7f5f0'));
-  g.add(mk([0, 0, -2 * s, 0, -0.6, 0.8 * s, 1.6 * s, 0.5, 1.4 * s], '#dcd6cb'));
+  // A folded-paper drone: a slim body creased along its length, long straight wings (a lit fold and a shaded one),
+  // a V tail and a pusher propeller disc. Nose toward -z.
+  const L = 2 * s;
+  const W = 2.1 * s;
+  g.add(mk([0, 0.35, -L, -0.22 * s, 0, -0.6 * s, 0, -0.05, 0.9 * s, 0, 0.35, -L, 0, -0.05, 0.9 * s, 0.22 * s, 0, -0.6 * s], '#f1ede4')); // body, two faces
+  g.add(mk([-0.1 * s, 0.1, -0.3 * s, -W, 0.25, 0.05 * s, -W, 0.25, 0.3 * s, -0.1 * s, 0.1, -0.3 * s, -W, 0.25, 0.3 * s, -0.1 * s, 0.1, 0.25 * s], '#fbfaf6')); // left wing
+  g.add(mk([0.1 * s, 0.1, -0.3 * s, W, 0.25, 0.3 * s, W, 0.25, 0.05 * s, 0.1 * s, 0.1, -0.3 * s, 0.1 * s, 0.1, 0.25 * s, W, 0.25, 0.3 * s], '#ddd6c9')); // right wing
+  g.add(mk([-0.05 * s, 0.05, 0.6 * s, -0.7 * s, 0.55 * s, 0.95 * s, -0.05 * s, 0.05, 0.85 * s], '#e9e3d8')); // V tail, left
+  g.add(mk([0.05 * s, 0.05, 0.6 * s, 0.05 * s, 0.05, 0.85 * s, 0.7 * s, 0.55 * s, 0.95 * s], '#d2cabb')); // V tail, right
+  const prop = new THREE.Mesh(new THREE.CircleGeometry(0.55 * s, 20), new THREE.MeshBasicMaterial({ color: '#6f6a63', transparent: true, opacity: 0.22, side: THREE.DoubleSide }));
+  prop.position.set(0, 0, 0.95 * s);
+  g.add(prop);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12 * s, 10, 8), new THREE.MeshStandardMaterial({ color: '#4a4640', roughness: 0.4 }));
+  eye.position.set(0, -0.15 * s, -1.3 * s);
+  g.add(eye);
   return g;
 }
 
@@ -391,6 +404,7 @@ export class Model3D {
   private flashPower = 1100;
   private birds!: THREE.InstancedMesh;
   private scraps: { m: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3 }[] = [];
+  private streaks: { m: THREE.Mesh; born: number; lasts: number }[] = [];
   private fxKey: Outcome | null = null;
   private plane: THREE.Group;
   private bomb: THREE.Mesh;
@@ -1677,10 +1691,35 @@ export class Model3D {
       }
     }
     if (!o) return;
-    const crater = new THREE.Mesh(new THREE.CircleGeometry(4.5, 24), new THREE.MeshBasicMaterial({ color: '#3a3029', transparent: true, opacity: 0.8 }));
+    // The crater, sized by what made it: a pinhole from the blades, a punched hole from the spear, a huge deep pit
+    // with a raised rim of thrown earth from the bunker buster.
+    const wp = weapon(f.plan.weapon);
+    const cr = wp.id === 'blades' ? 0.9 : wp.id === 'spear' ? 2.2 : wp.deep ? 13 : 4.5;
+    const crater = new THREE.Mesh(new THREE.CircleGeometry(cr, 32), new THREE.MeshBasicMaterial({ color: wp.deep ? '#241c16' : '#3a3029', transparent: true, opacity: 0.85 }));
     crater.rotation.x = -Math.PI / 2;
     crater.position.set(o.ix, 0.1, o.iy);
     this.rubble.add(crater);
+    if (wp.deep) {
+      // A bowl dug into the ground, and the lip of earth and broken concrete thrown up round it.
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(cr * 0.92, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(1, 0.55, 1), new THREE.MeshStandardMaterial({ color: '#4a3b2e', roughness: 1, side: THREE.DoubleSide, flatShading: true }));
+      bowl.position.set(o.ix, 0.12, o.iy);
+      this.rubble.add(bowl);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(cr * 1.05, cr * 0.22, 6, 36).rotateX(Math.PI / 2).scale(1, 0.45, 1), new THREE.MeshStandardMaterial({ color: '#8a7560', roughness: 1, flatShading: true }));
+      rim.position.set(o.ix, 0.4, o.iy);
+      rim.castShadow = true;
+      this.rubble.add(rim);
+      const rr = rng(Math.round(o.ix * 13 + o.iy * 7));
+      for (let i = 0; i < 40; i++) {
+        const a = rr() * Math.PI * 2;
+        const d = cr * (1.1 + rr() * 1.3);
+        const s = 0.6 + rr() * 1.8;
+        const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), new THREE.MeshStandardMaterial({ color: rr() < 0.5 ? '#9a8f82' : '#6e5a47', roughness: 1, flatShading: true }));
+        chunk.position.set(o.ix + Math.cos(a) * d, s * 0.4, o.iy + Math.sin(a) * d);
+        chunk.rotation.set(rr() * 3, rr() * 3, 0);
+        chunk.castShadow = true;
+        this.rubble.add(chunk);
+      }
+    }
   }
 
   private crowd(f: Frame3D) {
@@ -1805,7 +1844,7 @@ export class Model3D {
       this.burst(s.plan, o);
     }
     const since = t - IMPACT_AT;
-    const mega = !!weapon(s.plan.weapon).special;
+    const mega = !!weapon(s.plan.weapon).mega;
     const fl = mega ? 1.4 : 0.6;
     this.flash.intensity = since > 0 && since < fl ? this.flashPower * (1 - since / fl) : 0;
     this.flash.position.set(o.ix, mega ? 60 : 8, o.iy);
@@ -1846,6 +1885,14 @@ export class Model3D {
       p.v.y *= 0.985;
       p.m.scale.setScalar(1 + p.grow * Math.sqrt(age));
       (p.m.material as THREE.MeshStandardMaterial).opacity = Math.max(0, 0.95 * (1 - age / 11));
+    }
+    for (const s2 of this.streaks) {
+      const k = (now - s2.born) / 1000 / s2.lasts;
+      s2.m.visible = k < 1;
+      if (k < 1) {
+        (s2.m.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+        s2.m.scale.set(1 - k * 0.8, 1, 1 - k * 0.8);
+      }
     }
     for (const p of this.scraps) {
       if (p.m.position.y <= 0.05 && p.v.y < 0) {
@@ -1915,17 +1962,20 @@ export class Model3D {
 
   private burst(plan: Plan, o: Outcome) {
     const w = weapon(plan.weapon);
-    const mega = !!w.special;
+    const mega = !!w.mega;
     this.smokeAt = { x: o.ix, z: o.iy, born: performance.now(), dark: o.secondary.length ? 1 : 0.55, big: mega ? 4 : 1 };
     const r = rng(Math.round(o.ix * 97 + o.iy));
     const e = effect(plan, structureAt(this.world, o.ix, o.iy));
     const now = performance.now();
     // The fireball and the pressure ring, sized like the flat map's: the gap between bombs is plain to see.
-    const size = mega ? 150 : 0.6 * 13 * (w.blast / 13) ** 1.45;
-    this.fireball(o.ix, o.iy, now, mega ? 3.2 : 0.9 + size / 30, size);
-    this.wave(now, mega ? 5.5 : 1.3, mega ? 700 : size * 3);
-    this.flashPower = mega ? 60000 : 1100 * (size / 8) ** 1.2;
+    // The spear and the blades carry no explosive: a white-hot spark and a dust ring, no fireball.
+    const size = mega ? 150 : w.kinetic ? (w.id === 'spear' ? 3 : 1) : 0.6 * 13 * (w.blast / 13) ** 1.45;
+    if (w.id === 'spear') this.fireball(o.ix, o.iy, now, 0.35, 3);
+    else if (!w.kinetic) this.fireball(o.ix, o.iy, now, mega ? 3.2 : 0.9 + size / 30, size);
+    this.wave(now, mega ? 5.5 : w.kinetic ? 0.7 : 1.3, mega ? 700 : w.kinetic ? (w.id === 'spear' ? 30 : 6) : size * 3);
+    this.flashPower = mega ? 60000 : w.kinetic ? (w.id === 'spear' ? 900 : 0) : 1100 * (size / 8) ** 1.2;
     this.flash.distance = mega ? 2600 : Math.max(180, size * 10);
+    if (w.kinetic) this.smokeAt = null; // nothing burns
     const puff = (x: number, y: number, z: number, shade: number, v: THREE.Vector3, delay: number, grow: number, size: number) => {
       const geo = new THREE.IcosahedronGeometry(size, 1);
       const pos = geo.attributes.position as THREE.BufferAttribute;
@@ -1943,7 +1993,39 @@ export class Model3D {
       this.wave(now + b.at * 1000, 1.2, big * 3);
       for (let i = 0; i < 10; i++) puff(b.x + (r() - 0.5) * 16, 6, b.y + (r() - 0.5) * 16, 0.22 + r() * 0.12, new THREE.Vector3(0.8, 7 + r() * 7, 0), b.at * 1000 + 200 + r() * 600, 1.8, 4);
     }
-    for (let i = 0; i < 16 + Math.round(e.blast); i++) {
+    if (w.id === 'spear') {
+      // The trail it left coming straight down: a white line hanging in the air a moment.
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 260, 8).translate(0, 130, 0), new THREE.MeshBasicMaterial({ color: '#f4f8ff', transparent: true, opacity: 0.9 }));
+      col.position.set(o.ix, 0, o.iy);
+      this.fx.add(col);
+      this.streaks.push({ m: col, born: now, lasts: 0.9 });
+    }
+    if (w.id === 'blades') {
+      // Six blades, swung out and spinning, catching the light, then falling.
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.05, 0.28), new THREE.MeshStandardMaterial({ color: '#e8edf2', metalness: 0.9, roughness: 0.2, emissive: '#8a9aa8', emissiveIntensity: 0.4 }));
+        m.position.set(o.ix + Math.cos(a) * 0.8, 1.4, o.iy + Math.sin(a) * 0.8);
+        m.rotation.y = -a;
+        m.castShadow = true;
+        this.fx.add(m);
+        this.scraps.push({ m, v: new THREE.Vector3(Math.cos(a) * 2.5, 4, Math.sin(a) * 2.5), spin: new THREE.Vector3(0, 22, 0) });
+      }
+    }
+    if (w.deep) {
+      // A column of earth and smoke, and the rubble thrown high: chunks going up tens of metres before they fall.
+      for (let i = 0; i < 26; i++) puff(o.ix + (r() - 0.5) * 12, 6 + i * 3, o.iy + (r() - 0.5) * 12, 0.42 + r() * 0.2, new THREE.Vector3((r() - 0.5) * 2, 12 + r() * 8, (r() - 0.5) * 2), 150 + i * 35, 1.3, 5 + r() * 3);
+      for (let i = 0; i < 120; i++) {
+        const a = r() * Math.PI * 2;
+        const s = 0.4 + r() * 1.6;
+        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), new THREE.MeshStandardMaterial({ color: ['#9a8f82', '#6e5a47', '#b8b1a6', '#4a3b2e'][Math.floor(r() * 4)], roughness: 1, flatShading: true }));
+        m.position.set(o.ix + (r() - 0.5) * 6, 2, o.iy + (r() - 0.5) * 6);
+        m.castShadow = true;
+        this.fx.add(m);
+        this.scraps.push({ m, v: new THREE.Vector3(Math.cos(a) * (3 + r() * 12), 30 + r() * 40, Math.sin(a) * (3 + r() * 12)), spin: new THREE.Vector3(r() * 6, r() * 6, 0) });
+      }
+    }
+    for (let i = 0; i < (w.kinetic ? (w.id === 'spear' ? 10 : 3) : 16 + Math.round(e.blast)); i++) {
       const a = r() * Math.PI * 2;
       const d = r() * e.blast * 0.7;
       puff(o.ix + Math.cos(a) * d, 2 + r() * 6, o.iy + Math.sin(a) * d, 0.72 + r() * 0.26, new THREE.Vector3(Math.cos(a) * 2 + 1.2, 4 + r() * 7, Math.sin(a) * 2 - 0.5), r() * 400, 0.6 + r() * 0.9, 2 + r() * 2.5);
@@ -1969,8 +2051,9 @@ export class Model3D {
       if (!b.hazard && !(o.secondary.length && b.id === targetOf(this.world, plan.target).buildingId)) continue;
       for (let i = 0; i < 8; i++) puff(b.cx + (r() - 0.5) * 14, 4, b.cy + (r() - 0.5) * 14, 0.3 + r() * 0.15, new THREE.Vector3(0.8, 6 + r() * 6, 0), 600 + r() * 900, 1.2, 3);
     }
-    const cols = ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc'];
-    for (let i = 0; i < (mega ? 420 : 140); i++) {
+    // The spear throws metal sparks and splinters; the blades almost nothing.
+    const cols = w.id === 'spear' ? ['#f4f8ff', '#ffd9a0', '#9aa3ab', '#c9ced3'] : ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc'];
+    for (let i = 0; i < (mega ? 420 : w.id === 'blades' ? 6 : w.id === 'spear' ? 90 : 140); i++) {
       const a = r() * Math.PI * 2;
       const g = lobe(plan.heading, Math.sin(a), -Math.cos(a));
       const v = (6 + r() * 20) * (0.5 + g) * (plan.fuze === 'delay' ? 0.55 : 1) * (mega ? 4 : Math.sqrt(size / 8));
@@ -1989,6 +2072,7 @@ export class Model3D {
     this.scraps = [];
     this.balls = [];
     this.waves = [];
+    this.streaks = [];
   }
 
   private fireball(x: number, z: number, born: number, lasts: number, size: number) {

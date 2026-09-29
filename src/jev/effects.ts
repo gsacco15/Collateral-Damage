@@ -3,7 +3,7 @@
 import { buildingAt, buildingDist, inRect, targetOf, type Building, type Material, type TargetId, type World } from './city';
 import type { Day } from './life';
 
-export type WeaponId = 'large' | 'medium' | 'small' | 'focused' | 'moab';
+export type WeaponId = 'large' | 'medium' | 'small' | 'focused' | 'bunker' | 'spear' | 'blades' | 'moab';
 export type FuzeId = 'instant' | 'delay' | 'airburst';
 
 export interface Weapon {
@@ -15,15 +15,24 @@ export interface Weapon {
   cep: number; // metres: half the bombs land within this of the aim
   note: string;
   special?: boolean; // only by hand: Jev never considers it
+  mega?: boolean; // the city-flattening one: its own slow, enormous blast, shake and pull-back
+  kinetic?: boolean; // no explosive: no fireball, its own settings in place of fuzes
+  deep?: boolean; // goes off deep: a huge crater, and rubble thrown high
 }
 
+// In order of harm: the least first, the biggest last.
 export const WEAPONS: Weapon[] = [
-  { id: 'large', name: '2,000-lb class', short: '2,000 lb', blast: 22, frag: 120, cep: 6, note: 'Destroys almost anything. Throws fragments a very long way.' },
-  { id: 'medium', name: '500-lb class', short: '500 lb', blast: 13, frag: 75, cep: 6, note: 'The workhorse. Enough for most buildings.' },
-  { id: 'small', name: '250-lb small-diameter', short: '250 lb', blast: 8, frag: 45, cep: 5, note: 'Narrow body, less explosive, smaller footprint.' },
+  // Two with no explosive at all. Illustrative numbers, like the rest; their three settings stand in for the fuzes.
+  { id: 'blades', name: 'Blade munition (R9X class)', short: 'Blades', blast: 1.5, frag: 3, cep: 1.2, kinetic: true, note: 'No explosive: just before it lands, six sword-like blades swing out. Meant to kill the one person it hits and spare the people standing near. It will not bring a building down.' },
+  { id: 'spear', name: 'Kinetic spear (tungsten rod)', short: 'Spear', blast: 5, frag: 30, cep: 2.5, kinetic: true, note: 'No explosive: a dense tungsten rod dropped from very high, faster than sound. It punches straight down; what it hits is shattered, and splinters fly out low.' },
   { id: 'focused', name: 'Low-collateral, dense case', short: 'Low-collateral', blast: 7, frag: 14, cep: 4, note: 'A casing that crumbles into dust, not fragments.' },
+  { id: 'small', name: '250-lb small-diameter', short: '250 lb', blast: 8, frag: 45, cep: 5, note: 'Narrow body, less explosive, smaller footprint.' },
+  { id: 'medium', name: '500-lb class', short: '500 lb', blast: 13, frag: 75, cep: 6, note: 'The workhorse. Enough for most buildings.' },
+  { id: 'large', name: '2,000-lb class', short: '2,000 lb', blast: 22, frag: 120, cep: 6, note: 'Destroys almost anything. Throws fragments a very long way.' },
+  // A 5,000-lb penetrator: through the roof and the floors, and goes off deep. A huge crater, and rubble thrown high.
+  { id: 'bunker', name: 'Bunker buster (5,000-lb class)', short: 'Bunker buster', blast: 26, frag: 100, cep: 5, deep: true, note: 'A thick steel penetrator that punches through metres of concrete before it goes off. Built for bunkers; in a street it digs a huge crater and throws rubble high into the air.' },
   // An 11-tonne air blast bomb. Illustrative radii: roughly where the pressure wave flattens buildings, and how far debris flies.
-  { id: 'moab', name: 'Massive air blast (MOAB class)', short: 'MOAB', blast: 280, frag: 500, cep: 9, special: true, note: 'An 11-tonne bomb pushed out of a cargo plane. Used once, on a remote tunnel complex. Never in a city: this is why.' },
+  { id: 'moab', name: 'Massive air blast (MOAB class)', short: 'MOAB', blast: 280, frag: 500, cep: 9, special: true, mega: true, note: 'An 11-tonne bomb pushed out of a cargo plane. Used once, on a remote tunnel complex. Never in a city: this is why.' },
 ];
 /** The weapons Jev may choose from. The biggest is only ever picked by hand. */
 export const SEARCH_WEAPONS = WEAPONS.filter((w) => !w.special);
@@ -40,6 +49,21 @@ export const FUZES: Fuze[] = [
   { id: 'airburst', name: 'Airburst', note: 'Goes off above. Widest spray; weakest on the building.' },
 ];
 export const fuze = (id: FuzeId) => FUZES.find((f) => f.id === id)!;
+/** The two weapons with no explosive have their own three settings, in the fuze's place. */
+const MODES: Partial<Record<WeaponId, Record<FuzeId, { name: string; note: string }>>> = {
+  spear: {
+    instant: { name: 'Straight down', note: 'Comes down near vertical and shatters on the roof: splinters fly out low across the street.' },
+    delay: { name: 'Through the floors', note: 'Punches down through every floor before it breaks up. The building takes it; the street far less.' },
+    airburst: { name: 'Flechettes', note: 'Breaks open high up into thousands of steel darts, raining down over a wide patch. Walls and roofs stop them; the open does not.' },
+  },
+  blades: {
+    instant: { name: 'Blades out', note: 'Six blades swing out just before it lands. Whoever is under it; almost no one else.' },
+    delay: { name: 'Blades folded', note: 'Lands inert, blades kept in: a heavy weight and nothing more. Only what it strikes.' },
+    airburst: { name: 'Wide sweep', note: 'The blades open a little higher and wider: surer of the one it is meant for, a little more danger to anyone beside them.' },
+  },
+};
+/** What a setting is called for this weapon: a fuze for a bomb, a mode for the spear and the blades. */
+export const modeOf = (w: WeaponId, f: FuzeId) => MODES[w]?.[f] ?? fuze(f);
 
 /** Everything Jev needs to know about one plan. */
 export interface Plan {
@@ -68,6 +92,16 @@ export interface Effect {
 export function effect(plan: Plan, hit: { h: number } | null): Effect {
   const w = weapon(plan.weapon);
   const base = hit ? hit.h : 0;
+  if (w.id === 'spear') {
+    if (plan.fuze === 'delay') return hit ? { blast: 7, frag: 12, fragP: 0.25, shieldPow: 1, z: Math.max(0.5, base - 6) } : { blast: 4, frag: 18, fragP: 0.35, shieldPow: 1, z: 0 };
+    if (plan.fuze === 'airburst') return { blast: 1.5, frag: 55, fragP: 0.5, shieldPow: 0.6, z: base + 25 };
+    return { blast: w.blast, frag: w.frag, fragP: 0.45, shieldPow: 1, z: base };
+  }
+  if (w.id === 'blades') {
+    if (plan.fuze === 'delay') return { blast: 1, frag: 1.2, fragP: 0.2, shieldPow: 1, z: base };
+    if (plan.fuze === 'airburst') return { blast: 2.2, frag: 4.5, fragP: 0.85, shieldPow: 1, z: base + 1 };
+    return { blast: w.blast, frag: w.frag, fragP: 0.95, shieldPow: 1, z: base };
+  }
   if (plan.fuze === 'delay')
     return hit ? { blast: w.blast * 1.4, frag: w.frag * 0.6, fragP: 0.55 * 0.35, shieldPow: 1, z: Math.max(0.5, base - 3.5) } : { blast: w.blast * 0.8, frag: w.frag * 0.55, fragP: 0.55 * 0.5, shieldPow: 1, z: 0 };
   if (plan.fuze === 'airburst') return { blast: w.blast * 0.75, frag: w.frag * 1.3, fragP: 0.55 * 1.2, shieldPow: 0.7, z: base + 7 };

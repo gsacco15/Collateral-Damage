@@ -10,7 +10,7 @@ export interface CityOpts {
   hour: number;
   pop: Population;
   damaged: Set<number>;
-  crater: { x: number; y: number; r: number } | null;
+  crater: { x: number; y: number; r: number; deep?: boolean } | null;
   blast?: { x: number; y: number; r: number } | null; // the last strike's heavy-blast radius: street lights near it are down
   view: Rect; // world rect to draw (culling)
   scale: number; // device pixels per metre, for detail decisions
@@ -215,6 +215,32 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
     g.beginPath();
     g.arc(o.crater.x, o.crater.y, o.crater.r * 2.4, 0, Math.PI * 2);
     g.fill();
+    if (o.crater.deep) {
+      // A deep pit: a near-black core, a lit and a shaded wall, a raised rim of thrown earth, and chunks round it.
+      const { x, y, r } = o.crater;
+      g.fillStyle = '#1e1813';
+      g.beginPath();
+      g.arc(x, y, r * 0.75, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(150,128,104,0.8)';
+      g.lineWidth = r * 0.28;
+      g.beginPath();
+      g.arc(x, y, r * 1.12, Math.PI * 0.9, Math.PI * 1.9);
+      g.stroke();
+      g.strokeStyle = 'rgba(90,74,58,0.85)';
+      g.beginPath();
+      g.arc(x, y, r * 1.12, Math.PI * 1.9, Math.PI * 2.9);
+      g.stroke();
+      let s = Math.round(x * 7 + y * 13);
+      const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+      for (let i = 0; i < 70; i++) {
+        const a = rnd() * Math.PI * 2;
+        const d = r * (1.3 + rnd() * 1.6);
+        const k = 0.4 + rnd() * 1.4;
+        g.fillStyle = rnd() < 0.5 ? '#9a8f82' : '#6e5a47';
+        g.fillRect(x + Math.cos(a) * d - k / 2, y + Math.sin(a) * d - k / 2, k, k * 0.8);
+      }
+    }
   }
 
   // Shadows go into their own layer so they can be softened and never double up.

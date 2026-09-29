@@ -27,6 +27,7 @@ import {
   type Population,
   type Rect,
   type World,
+  type WeaponId,
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
 import { drawLetters2D, drawLife2D } from './life2d';
@@ -241,7 +242,9 @@ export class MapView {
 
   private cityOpts(f: MapFrame, damaged: Set<number>, view: Rect, scale: number): CityOpts {
     const o = f.outcome;
-    const crater = o ? { x: o.ix, y: o.iy, r: weapon(this.fx?.plan.weapon ?? f.plan.weapon).blast * 0.35 } : null;
+    // The crater: a pinhole from the blades, a punched hole from the spear, a huge deep pit from the bunker buster.
+    const cw = weapon(this.fx?.plan.weapon ?? f.plan.weapon);
+    const crater = o ? { x: o.ix, y: o.iy, r: cw.id === 'blades' ? 0.4 : cw.id === 'spear' ? 1.3 : cw.deep ? cw.blast * 0.55 : cw.blast * 0.35, deep: !!cw.deep } : null;
     const blast = o ? { x: o.ix, y: o.iy, r: weapon(this.fx?.plan.weapon ?? f.plan.weapon).blast } : null;
     return { hour: f.plan.hour, pop: f.pop, damaged, crater, blast, view, scale };
   }
@@ -566,7 +569,7 @@ export class MapView {
       g.stroke();
     });
     if (!shown && !striking) {
-      drawAim(g, plan.aimX, plan.aimY, px, f.aimDrag ? 1.25 : 1, C.ink);
+      drawAim(g, plan.aimX, plan.aimY, px, f.aimDrag ? 1.25 : 1, C.ink, plan.weapon);
       // The approach handle: drag it around the aim to choose the direction of attack.
       const hp = this.handleWorld(plan);
       const h = (plan.heading * Math.PI) / 180;
@@ -826,21 +829,25 @@ export class MapView {
     const o = fx.outcome;
     if (!fx.impacted && fx.t >= fx.impactAt) {
       fx.impacted = true;
-      this.smoke = { x: o.ix, y: o.iy, born: this.time, dark: o.secondary.length ? 1 : 0.55 };
       const r = rng(Math.round(o.ix * 100 + o.iy));
       const w = weapon(fx.plan.weapon);
-      const mega = !!w.special;
-      this.shake = mega ? 3 : Math.min(1.4, 0.25 + w.blast / 18); // a small bomb nudges the table; a big one rattles it; the biggest shakes the whole room
+      // The spear and the blades: nothing burns, so no column of smoke.
+      this.smoke = w.kinetic ? null : { x: o.ix, y: o.iy, born: this.time, dark: o.secondary.length ? 1 : 0.55 };
+      const mega = !!w.mega;
+      this.shake = mega ? 3 : w.id === 'blades' ? 0 : w.id === 'spear' ? 0.7 : w.deep ? 1.9 : Math.min(1.4, 0.25 + w.blast / 18); // a small bomb nudges the table; a big one rattles it; the biggest shakes the whole room
       const e = effect(fx.plan, structureAt(this.world, o.ix, o.iy));
-      const n = Math.min(700, 40 + Math.round(w.blast ** 1.45 * 1.6));
-      const cols = ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc', '#d6d1c7', '#6b5a45'];
+      const n = w.id === 'blades' ? 0 : w.id === 'spear' ? 80 : Math.min(700, 40 + Math.round(w.blast ** 1.45 * 1.6));
+      // The spear throws metal sparks and splinters; the bunker buster, earth and broken concrete.
+      const cols = w.id === 'spear' ? ['#f4f8ff', '#ffd9a0', '#9aa3ab', '#c9ced3'] : w.deep ? ['#9a8f82', '#6e5a47', '#b8b1a6', '#4a3b2e', '#8f8781'] : ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc', '#d6d1c7', '#6b5a45'];
       for (let i = 0; i < n; i++) {
         const a = r() * Math.PI * 2;
         const g2 = lobe(fx.plan.heading, Math.sin(a), -Math.cos(a));
-        const v = (6 + r() * 26) * (0.5 + g2) * (fx.plan.fuze === 'delay' ? 0.55 : 1) * Math.sqrt(e.blast / 10);
-        fx.scraps.push({ x: o.ix, y: o.iy, z: 0, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 10 + r() * 22, rot: r() * 6, vr: (r() - 0.5) * 18, size: 0.6 + r() * 1.8, color: cols[Math.floor(r() * cols.length)] });
+        const v = (6 + r() * 26) * (0.5 + g2) * (fx.plan.fuze === 'delay' && !w.deep ? 0.55 : 1) * Math.sqrt(Math.max(4, e.blast) / 10) * (w.deep ? 0.55 : 1);
+        // Thrown high: the bunker buster's rubble goes up tens of metres before it falls.
+        const vz = w.deep ? 30 + r() * 45 : w.id === 'spear' ? 4 + r() * 8 : 10 + r() * 22;
+        fx.scraps.push({ x: o.ix, y: o.iy, z: 0, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz, rot: r() * 6, vr: (r() - 0.5) * 18, size: w.deep ? 1 + r() * 3 : 0.6 + r() * 1.8, color: cols[Math.floor(r() * cols.length)] });
       }
-      const puffs = mega ? 90 : 8 + Math.round(w.blast ** 1.45 * 0.35);
+      const puffs = mega ? 90 : w.id === 'blades' ? 2 : w.id === 'spear' ? 6 : w.deep ? 60 : 8 + Math.round(w.blast ** 1.45 * 0.35);
       for (let i = 0; i < puffs; i++) {
         const a = r() * Math.PI * 2;
         // The biggest raises a wall of dust and smoke over hundreds of metres, rolling in after the fireball.
@@ -906,7 +913,7 @@ export class MapView {
       }
     }
     for (const p of fx.puffs) p.life += dt;
-    if (fx.impacted && weapon(fx.plan.weapon).special) {
+    if (fx.impacted && weapon(fx.plan.weapon).mega) {
       const since = fx.t - fx.impactAt;
       if (since < 4.5) this.shake = Math.max(this.shake, 1.6 * (1 - since / 4.5));
     }
@@ -1020,6 +1027,32 @@ export class MapView {
       g.beginPath();
       g.ellipse(x + alt, y + alt, 1.2, 0.6, h, 0, Math.PI * 2);
       g.fill();
+      if (plan.weapon === 'spear') {
+        // Faster than sound: a white-hot streak with a long glowing trail behind it, and a shock cone round the head.
+        const tail = 26 + 20 * k;
+        const grd = g.createLinearGradient(x, y, x - ux * tail, y - uy * tail);
+        grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+        grd.addColorStop(0.25, 'rgba(190,215,255,0.6)');
+        grd.addColorStop(1, 'rgba(190,215,255,0)');
+        g.strokeStyle = grd;
+        g.lineWidth = Math.max(0.6, 2.2 * px);
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x - ux * tail, y - uy * tail);
+        g.stroke();
+        g.strokeStyle = `rgba(255,255,255,${0.5 * k})`;
+        g.lineWidth = 0.4;
+        g.beginPath();
+        g.moveTo(x - ux * 5 + uy * 3, y - uy * 5 - ux * 3);
+        g.lineTo(x, y);
+        g.lineTo(x - ux * 5 - uy * 3, y - uy * 5 + ux * 3);
+        g.stroke();
+        g.fillStyle = '#ffffff';
+        g.beginPath();
+        g.arc(x, y, 0.8, 0, Math.PI * 2);
+        g.fill();
+        return;
+      }
       g.save();
       g.translate(x, y);
       g.rotate(h);
@@ -1027,12 +1060,70 @@ export class MapView {
       g.beginPath();
       g.ellipse(0, 0, 0.7, 2.2, 0, 0, Math.PI * 2);
       g.fill();
+      if (plan.weapon === 'blades' && k > 0.72) {
+        // In the last moment the six blades swing out, spinning.
+        const open = Math.min(1, (k - 0.72) / 0.2);
+        g.strokeStyle = '#dfe5ea';
+        g.lineWidth = 0.35;
+        g.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + t * 14;
+          g.beginPath();
+          g.moveTo(Math.cos(a) * 0.5, Math.sin(a) * 0.5);
+          g.lineTo(Math.cos(a) * (0.5 + 2.4 * open), Math.sin(a) * (0.5 + 2.4 * open));
+          g.stroke();
+        }
+      }
       g.restore();
     }
     if (!fx.impacted) return;
     const dt = t - fx.impactAt;
     const e = effect(plan, structureAt(this.world, o.ix, o.iy));
-    if (dt < 0.5) {
+    if (plan.weapon === 'blades') {
+      // No fire: six blades flashing round as they cut, a little dust, and then nothing.
+      if (dt < 1.4) {
+        const k = dt / 1.4;
+        g.save();
+        g.lineCap = 'round';
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + dt * 18 * (1 - k * 0.8);
+          const reach = 1 + 2.6 * Math.min(1, dt * 6);
+          g.strokeStyle = `rgba(235,242,248,${0.95 * (1 - k)})`;
+          g.lineWidth = 0.45;
+          g.beginPath();
+          g.moveTo(o.ix + Math.cos(a) * 0.6, o.iy + Math.sin(a) * 0.6);
+          g.lineTo(o.ix + Math.cos(a) * reach, o.iy + Math.sin(a) * reach);
+          g.stroke();
+        }
+        g.strokeStyle = `rgba(214,204,188,${0.6 * (1 - k)})`;
+        g.lineWidth = 0.6;
+        g.beginPath();
+        g.arc(o.ix, o.iy, 1 + k * 5, 0, Math.PI * 2);
+        g.stroke();
+        g.restore();
+      }
+    } else if (plan.weapon === 'spear') {
+      // A white pinpoint, a ring of dust racing out low, and a scatter of sparks: no fireball.
+      if (dt < 0.3) {
+        const a = 1 - dt / 0.3;
+        const grd = g.createRadialGradient(o.ix, o.iy, 0, o.ix, o.iy, 6);
+        grd.addColorStop(0, `rgba(255,255,255,${a})`);
+        grd.addColorStop(0.5, `rgba(200,220,255,${a * 0.5})`);
+        grd.addColorStop(1, 'rgba(200,220,255,0)');
+        g.fillStyle = grd;
+        g.beginPath();
+        g.arc(o.ix, o.iy, 6, 0, Math.PI * 2);
+        g.fill();
+      }
+      if (dt < 1.2) {
+        const k = dt / 1.2;
+        g.strokeStyle = `rgba(214,204,188,${0.7 * (1 - k)})`;
+        g.lineWidth = Math.max(0.6, 2.5 * (1 - k));
+        g.beginPath();
+        g.arc(o.ix, o.iy, 2 + k * 26, 0, Math.PI * 2);
+        g.stroke();
+      }
+    } else if (dt < 0.5) {
       const a = 1 - dt / 0.5;
       const rad = e.blast * (1.5 + dt * 5);
       const grd = g.createRadialGradient(o.ix, o.iy, 0, o.ix, o.iy, rad);
@@ -1044,7 +1135,7 @@ export class MapView {
       g.arc(o.ix, o.iy, rad, 0, Math.PI * 2);
       g.fill();
     }
-    if (dt < 1.6) {
+    if (dt < 1.6 && !weapon(plan.weapon).kinetic) {
       const k = dt / 1.6;
       g.strokeStyle = `rgba(255,250,240,${(1 - k) * 0.9})`;
       g.lineWidth = (1 - k) * 3 * px + px;
@@ -1123,7 +1214,7 @@ export class MapView {
     // Drawn over the smoke and dust so the fireball is always seen. The flash and the shockwave, sized by the weapon: a pop for the smallest, a wide white burst for the biggest.
     // Size grows faster than the blast radius, so the difference between bombs is plain to see:
     // the 2,000-lb bomb is a wide, long fireball; the smallest barely more than a flash.
-    const mega = !!weapon(plan.weapon).special;
+    const mega = !!weapon(plan.weapon).mega;
     // The biggest gets its own, slower burst: a fireball hundreds of metres across, and a pressure wave you can watch cross the city.
     const size = mega ? 190 : 13 * (weapon(plan.weapon).blast / 13) ** 1.45;
     const lasts = mega ? 3.2 : 0.9 + size / 40;
@@ -1133,7 +1224,7 @@ export class MapView {
       g.fillStyle = `rgba(255,252,240,${0.85 * (1 - since / 0.5)})`;
       g.fillRect(o.ix - 3000, o.iy - 3000, 6000, 6000);
     }
-    if (fx.impacted && since < ringT) {
+    if (fx.impacted && since < ringT && !weapon(plan.weapon).kinetic) {
       const blast = size;
       if (since < lasts) {
         const k = since / lasts;
@@ -1264,7 +1355,7 @@ export function resolveStrike(world: World, plan: Plan, pop: Population, walkers
   const jit = (i: number) => Math.abs(Math.sin(seed * 0.001 + i * 7.1));
   const at: number[] = [];
   // After the biggest bomb, the depot goes a couple of seconds later, as its own second huge blast.
-  const first = w.special ? 2.2 : 0.55;
+  const first = w.mega ? 2.2 : 0.55;
   sec.forEach((s, i) => at.push(s.by >= 0 ? at[s.by] + 0.18 + jit(i) * 0.3 : first + jit(i) * 0.45));
   const blasts = sec.map((s, i) => ({ x: s.x, y: s.y, at: at[i], kind: (s.b ? 'fuel' : 'store') as 'fuel' | 'store' }));
   return { ix, iy, destroyed, damaged: [...damaged], hurtSlots, hurtWalkers, hurtCars, count, secondary: [...new Set(sec.map((s) => s.name))], blasts };
@@ -1374,10 +1465,77 @@ function drawTrack(g: CanvasRenderingContext2D, plan: Plan, px: number, world: W
   g.restore();
 }
 
-function drawAim(g: CanvasRenderingContext2D, x: number, y: number, px: number, k: number, color: string) {
+function drawAim(g: CanvasRenderingContext2D, x: number, y: number, px: number, k: number, color: string, wid?: WeaponId) {
   const r = 7 * px * k;
   g.strokeStyle = color;
   g.lineWidth = 1.4 * px;
+  // The new weapons and the MOAB have their own sights.
+  if (wid === 'blades') {
+    // Six blades round a small ring, like the thing itself opening.
+    g.beginPath();
+    g.arc(x, y, r * 0.45, 0, Math.PI * 2);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.3;
+      g.moveTo(x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r * 0.6);
+      g.quadraticCurveTo(x + Math.cos(a + 0.35) * r * 1.3, y + Math.sin(a + 0.35) * r * 1.3, x + Math.cos(a + 0.7) * r * 1.6, y + Math.sin(a + 0.7) * r * 1.6);
+    }
+    g.stroke();
+    return;
+  }
+  if (wid === 'spear') {
+    // A narrow diamond and a fine dot: a pinpoint sight.
+    g.beginPath();
+    g.moveTo(x, y - r * 1.5);
+    g.lineTo(x + r * 0.55, y);
+    g.lineTo(x, y + r * 1.5);
+    g.lineTo(x - r * 0.55, y);
+    g.closePath();
+    g.moveTo(x - r * 2, y);
+    g.lineTo(x - r * 0.9, y);
+    g.moveTo(x + r * 0.9, y);
+    g.lineTo(x + r * 2, y);
+    g.stroke();
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(x, y, 1.2 * px, 0, Math.PI * 2);
+    g.fill();
+    return;
+  }
+  if (wid === 'bunker') {
+    // A square with its corners marked, and a cross down into it.
+    const q = r * 1.1;
+    g.beginPath();
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      g.moveTo(x + sx * q, y + sy * q * 0.4);
+      g.lineTo(x + sx * q, y + sy * q);
+      g.lineTo(x + sx * q * 0.4, y + sy * q);
+    }
+    g.moveTo(x - q * 0.5, y);
+    g.lineTo(x + q * 0.5, y);
+    g.moveTo(x, y - q * 0.5);
+    g.lineTo(x, y + q * 0.5);
+    g.stroke();
+    g.strokeRect(x - q * 0.2, y - q * 0.2, q * 0.4, q * 0.4);
+    return;
+  }
+  if (wid === 'moab') {
+    // Two wide rings and a hatched band: a sight for something enormous.
+    g.beginPath();
+    g.arc(x, y, r * 1.1, 0, Math.PI * 2);
+    g.moveTo(x + r * 1.9, y);
+    g.arc(x, y, r * 1.9, 0, Math.PI * 2);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      g.moveTo(x + Math.cos(a) * r * 1.1, y + Math.sin(a) * r * 1.1);
+      g.lineTo(x + Math.cos(a + 0.2) * r * 1.9, y + Math.sin(a + 0.2) * r * 1.9);
+    }
+    g.moveTo(x - r * 0.5, y);
+    g.lineTo(x + r * 0.5, y);
+    g.moveTo(x, y - r * 0.5);
+    g.lineTo(x, y + r * 0.5);
+    g.stroke();
+    return;
+  }
   g.beginPath();
   g.arc(x, y, r, 0, Math.PI * 2);
   g.moveTo(x - r * 1.6, y);
@@ -1391,48 +1549,73 @@ function drawAim(g: CanvasRenderingContext2D, x: number, y: number, px: number, 
   g.stroke();
 }
 
-/** A paper plane seen from above, nose along heading h: two folded wings and a crease down the middle. */
+/**
+ * A folded-paper drone seen from above, nose along heading h: still a paper plane at heart (the folded crease, the
+ * lit and shaded halves), but with a slim body, long straight wings, a V tail and a pusher propeller.
+ */
 function paperPlane(g: CanvasRenderingContext2D, x: number, y: number, h: number, size: number, shadow: boolean) {
   g.save();
   g.translate(x, y);
   g.rotate(h);
   g.scale(size, size);
-  const left = [0, -1, -0.62, 0.72, -0.1, 0.5, 0, 0.78];
-  const right = [0, -1, 0.62, 0.72, 0.1, 0.5, 0, 0.78];
   const poly = (p: number[]) => {
     g.beginPath();
     g.moveTo(p[0], p[1]);
     for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]);
     g.closePath();
   };
+  // Long, straight wings swept a touch back; a slim body; a V tail.
+  const wingL = [-0.06, -0.12, -1.05, 0.02, -1.05, 0.14, -0.06, 0.1];
+  const wingR = [0.06, -0.12, 1.05, 0.02, 1.05, 0.14, 0.06, 0.1];
+  const body = [0, -1, 0.1, -0.7, 0.09, 0.7, 0, 0.78, -0.09, 0.7, -0.1, -0.7];
+  const tailL = [-0.05, 0.58, -0.36, 0.86, -0.3, 0.9, -0.02, 0.72];
+  const tailR = [0.05, 0.58, 0.36, 0.86, 0.3, 0.9, 0.02, 0.72];
   if (shadow) {
     g.fillStyle = 'rgba(40,28,18,0.28)';
-    poly([0, -1, -0.62, 0.72, 0, 0.78, 0.62, 0.72]);
-    g.fill();
+    for (const p of [wingL, wingR, body, tailL, tailR]) {
+      poly(p);
+      g.fill();
+    }
     g.restore();
     return;
   }
   g.lineJoin = 'round';
-  g.lineWidth = 0.05;
-  g.strokeStyle = 'rgba(60,50,40,0.45)';
+  g.lineWidth = 0.035;
+  g.strokeStyle = 'rgba(60,50,40,0.5)';
+  // The wings: a lit fold on one side, a shaded one on the other, a crease along each.
   g.fillStyle = '#fbfaf6';
-  poly(left);
+  poly(wingL);
   g.fill();
   g.stroke();
   g.fillStyle = '#ddd6c9';
-  poly(right);
+  poly(wingR);
   g.fill();
   g.stroke();
-  // The keel: a narrow fold under the crease.
-  g.fillStyle = '#b9b0a0';
-  poly([0, -0.55, 0.07, 0.62, 0, 0.78, -0.02, 0.6]);
+  g.fillStyle = '#e9e3d8';
+  poly(tailL);
   g.fill();
-  g.strokeStyle = 'rgba(40,30,20,0.6)';
-  g.lineWidth = 0.04;
+  g.stroke();
+  g.fillStyle = '#d2cabb';
+  poly(tailR);
+  g.fill();
+  g.stroke();
+  // The body, folded down the middle, a darker bulge for the sensor under the nose.
+  g.fillStyle = '#f1ede4';
+  poly(body);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#c9c1b2';
+  poly([0, -1, 0.1, -0.7, 0.09, 0.7, 0, 0.78]);
+  g.fill();
+  g.fillStyle = '#6f6a63';
   g.beginPath();
-  g.moveTo(0, -1);
-  g.lineTo(0, 0.78);
-  g.stroke();
+  g.arc(0, -0.72, 0.07, 0, Math.PI * 2);
+  g.fill();
+  // The pusher propeller at the back: a blur of a disc.
+  g.fillStyle = 'rgba(80,70,60,0.18)';
+  g.beginPath();
+  g.ellipse(0, 0.8, 0.26, 0.05, 0, 0, Math.PI * 2);
+  g.fill();
   g.restore();
 }
 

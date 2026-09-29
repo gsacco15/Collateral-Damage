@@ -6,7 +6,7 @@ const sourceOf = (r: string) => (/^Overhead/.test(r) ? 'Overhead' : /^Phone/.tes
 
 /** Does a report's count fit Jev's answer for its site? Reports with no count (notes) aren't compared. */
 function fits(r: string, reading: JevReading) {
-  const site = [...reading.sites].sort((a, b) => b.name.length - a.name.length).find((s) => r.includes(s.name));
+  const site = [...(reading.sites ?? [])].filter((s) => s?.name && Array.isArray(s.p)).sort((a, b) => b.name.length - a.name.length).find((s) => r.includes(s.name));
   const nums = r.replace(site?.name ?? '', '').match(/\d+/g) ?? [];
   // The observer's report starts with how long they watched: their count is the last number.
   const n = site && /nobody visible/.test(r) ? 0 : Number(/^Observer/.test(r) ? nums[nums.length - 1] : nums[0]);
@@ -16,7 +16,7 @@ function fits(r: string, reading: JevReading) {
 }
 
 export function JevCard({ reading, hour }: { reading: JevReply | null; hour: number }) {
-  const n = reading && reading.ok ? reading.reports.length : 0;
+  const n = reading && reading.ok ? (reading.reports?.length ?? 0) : 0;
   return (
     <section className="card jevcard">
       <h3>
@@ -80,7 +80,7 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
           <details className="jev-fold reports">
             <summary>The {n} reports Jev read</summary>
             <ul>
-              {reading.reports.map((r) => {
+              {(reading.reports ?? []).map((r) => {
                 const f = fits(r, reading);
                 return (
                   <li key={r}>

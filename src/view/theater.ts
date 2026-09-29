@@ -37,7 +37,7 @@ export function setTheaterDark(dark: boolean) {
     ? ['#ebe6dc', '#b8b1a4', '#8a8377', '#36332e', '#5b93e0', '#201f1c', '#2c3a31', '#4a463f', '#5d584f', 'rgba(34,33,30,0.8)']
     : ['#1c1a17', '#56514a', '#8c8579', '#e1dbcf', '#2a6bc4', '#ece8df', '#d3e3d8', '#c9c2b4', '#a8a194', 'rgba(244,241,234,0.78)'];
 }
-const SHORT: Record<string, string> = { large: '2000', medium: '500', small: '250', focused: 'LC', moab: 'MOAB', instant: 'imp', delay: 'dly', airburst: 'air' };
+const SHORT: Record<string, string> = { large: '2000', medium: '500', small: '250', focused: 'LC', spear: 'SPR', blades: 'BLD', moab: 'MOAB', instant: 'imp', delay: 'dly', airburst: 'air' };
 
 export class JevTheater {
   private g: CanvasRenderingContext2D;
