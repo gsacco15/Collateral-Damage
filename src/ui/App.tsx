@@ -1,5 +1,5 @@
 // Collateral Damage: plan a strike on a paper city and watch Jev, the engine, estimate who would be hurt.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   aimPoint,
   approver,
@@ -97,13 +97,75 @@ interface GuideStep {
   tour?: boolean; // once, on arrival: point at the warehouse, the school, the fuel depot, then back
   demo?: boolean; // replay a recorded search instead of running Jev live
   play?: boolean; // play through the day while on this step
+  ways?: boolean; // show the four ways a blast harms, lit one by one with the narration
+}
+
+// The four ways a blast harms people, drawn as little paper cards. `at` is the share of the narration
+// where each one is spoken, so each card lights as it is named.
+const WAYS: { title: string; sub: string; at: number; art: ReactNode }[] = [
+  {
+    title: 'Blast',
+    sub: 'the pressure wave',
+    at: 0.08,
+    art: (
+      <>
+        <path d="M6 30 q6 -10 0 -20 M11 32 q8 -12 0 -24 M16 34 q10 -14 0 -28" />
+        <Figure x={30} />
+      </>
+    ),
+  },
+  {
+    title: 'Fragments',
+    sub: 'and debris',
+    at: 0.29,
+    art: (
+      <>
+        <rect x={5} y={12} width={4} height={3} className="f" />
+        <rect x={11} y={20} width={3} height={3} className="f" />
+        <rect x={6} y={26} width={4} height={3} className="f" />
+        <path d="M10 13.5 h8 M14 21.5 h8 M10 27.5 h8" className="thin" />
+        <Figure x={30} />
+      </>
+    ),
+  },
+  {
+    title: 'Thrown',
+    sub: 'by the blast',
+    at: 0.4,
+    art: (
+      <>
+        <path d="M4 18 h9 M4 23 h11 M4 28 h8" className="thin" />
+        <g transform="rotate(-70 24 32)">
+          <Figure x={24} />
+        </g>
+        <rect x={38} y={10} width={3} height={26} className="f" />
+      </>
+    ),
+  },
+  {
+    title: 'After',
+    sub: 'fire, smoke, collapse',
+    at: 0.47,
+    art: (
+      <>
+        <path d="M30 8 q4 3 0 6 q-4 3 0 6" className="thin" />
+        <rect x={6} y={28} width={22} height={3} className="f" transform="rotate(-8 17 29)" />
+        <path d="M32 36 q2 -8 5 -10 q-1 5 2 6 q1 -3 3 -4 q1 6 -2 8 z" className="fire" />
+      </>
+    ),
+  },
+];
+
+function Figure({ x }: { x: number }) {
+  // A paper cut-out person, about 24 units tall, feet at y = 36.
+  return <path className="f" d={`M${x} 12 a2.4 2.4 0 1 1 0.01 0 M${x - 2.5} 15 h5 l1 11 h-2 l-0.6 10 h-1.2 l-0.4 -8 l-0.4 8 h-1.2 l-0.6 -10 h-2 z`} />;
 }
 
 const GUIDE: GuideStep[] = [
   { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target', tour: true },
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
   { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
-  { title: 'Where it would hurt', text: 'The red wash is the chance that someone standing in the open would be killed or badly hurt, over hundreds of replays of the strike. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
+  { title: 'Where it would hurt', text: 'A bomb harms in four ways. The red wash adds them up: the chance someone in the open is killed or badly hurt, over hundreds of replays. Fragments run down open streets; buildings cast shadows. Point at any spot to see the odds.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon', ways: true },
   { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, open: 'approach' },
   { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true },
@@ -147,6 +209,8 @@ export default function App() {
   const [hover, setHover] = useState<number | null>(null);
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
   const [guide, setGuide] = useState<number | null>(null);
+  const [waysLit, setWaysLit] = useState(-1);
+  const guideSeq = useRef(0);
   // Phones: no opening card and no big guide cards; the guide starts at once and the narrator does the telling.
   // A phone in either orientation: narrow when upright, short when turned on its side.
   const [phone, setPhone] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(PHONE).matches);
@@ -1386,12 +1450,19 @@ export default function App() {
     // "Change the hour" plays through the day; any other step (or leaving the guide) stops it.
     setDayPlay(i != null && !!GUIDE[i].play);
     if (i == null) {
+      guideSeq.current++;
       // Leaving the guide: back to the standard view, every layer on.
       setLayers({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true });
       return sound.stopVoice();
     }
-    sound.voice(i + 1);
     const g = GUIDE[i];
+    setWaysLit(-1);
+    const seq = ++guideSeq.current;
+    void sound.voice(i + 1).then((secs) => {
+      if (!g.ways || seq !== guideSeq.current) return;
+      // Light each way as the narrator names it; without narration, one after another.
+      WAYS.forEach((w, k) => mobileTimers.current.push(window.setTimeout(() => setWaysLit(k), secs ? w.at * secs * 1000 : 600 + k * 900)));
+    });
     if (g.plan) {
       const tgt = g.plan.target ?? plan.target;
       const t = targetOf(world, tgt);
@@ -2258,6 +2329,19 @@ export default function App() {
                 <div>
                   <h4>{GUIDE[guide].title}</h4>
                   {!phone && <p>{GUIDE[guide].text}</p>}
+                  {GUIDE[guide].ways && (
+                    <div className="ways">
+                      {WAYS.map((w, k) => (
+                        <div key={w.title} className={`way ${k <= waysLit ? 'lit' : ''} ${k === waysLit ? 'now' : ''}`}>
+                          <b>{w.title}</b>
+                          {!phone && <small>{w.sub}</small>}
+                          <svg viewBox="0 0 44 40" aria-hidden="true">
+                            {w.art}
+                          </svg>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {phone && !soundOn && (
                   <button
