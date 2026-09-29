@@ -480,7 +480,7 @@ export default function App() {
       else if (!striking && close > 0.35 && dMosque < 150 && !heardClose.current && performance.now() - lastCloseCall > 60_000) {
         heardClose.current = 'here';
         lastCloseCall = performance.now();
-        callToPrayer(prayerNow(h, plan.day) || 'visit');
+        callToPrayer('visit');
       }
       // Now and then, one small sound that fits where you are and the hour: about every twenty seconds.
       if (!striking && close > 0.15 && Math.random() < 0.02) {
@@ -549,7 +549,9 @@ export default function App() {
       pan = Math.max(-0.8, Math.min(0.8, ((min.cx - v.cx) * m.cam().s) / half));
     }
     // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
-    sound.cue('amb-call-to-prayer', pan, (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1));
+    // Coming close outside the timed calls ('visit'), it's lower still: just there in the background.
+    const vol = k === 'visit' ? 0.05 + near * 0.05 : (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1);
+    sound.cue('amb-call-to-prayer', pan, vol);
   };
   useEffect(() => {
     if (!soundOn) return;
