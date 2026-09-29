@@ -197,14 +197,20 @@ export default function App() {
     const id = window.setTimeout(() => goGuide(0), 600);
     return () => clearTimeout(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Closing the opening card: it lifts away and the city clears, then the guide begins.
+  const [introLeaving, setIntroLeaving] = useState(false);
   const closeIntro = (step: boolean) => {
-    setIntro(false);
     try {
       localStorage.setItem(INTRO_KEY, '1');
     } catch {
       /* fine: it just shows again next time */
     }
-    if (step) goGuide(0);
+    setIntroLeaving(true);
+    window.setTimeout(() => {
+      setIntro(false);
+      setIntroLeaving(false);
+      if (step) goGuide(0);
+    }, 480);
   };
   const [aimDrag, setAimDrag] = useState(false);
   const [dayPlay, setDayPlay] = useState(false);
@@ -941,18 +947,32 @@ export default function App() {
     ro.observe(canvas);
     let raf = 0;
     let last = performance.now();
+    // Camera moves are timed flights: they ease in and out, zoom at an even rate, and take longer the further they go.
+    let flight: { f: { cx: number; cy: number; zoom: number }; from: { cx: number; cy: number; zoom: number }; t: number; dur: number } | null = null;
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const f = focusRef.current;
-      if (f) {
+      if (!f) flight = null;
+      else {
         const v = map.view;
-        const k = 1 - Math.pow(0.001, dt); // frame-rate independent easing
-        v.cx += (f.cx - v.cx) * k;
-        v.cy += (f.cy - v.cy) * k;
-        v.zoom += (f.zoom - v.zoom) * k;
+        if (!flight || flight.f !== f) {
+          const { s } = map.cam();
+          const far = Math.hypot(f.cx - v.cx, f.cy - v.cy) * s + Math.abs(Math.log(f.zoom / v.zoom)) * 350;
+          flight = { f, from: { cx: v.cx, cy: v.cy, zoom: v.zoom }, t: 0, dur: 0.8 + Math.min(1, far / 900) };
+        }
+        flight.t += dt;
+        const u = Math.min(1, flight.t / flight.dur);
+        const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; // ease in and out
+        const a = flight.from;
+        v.zoom = Math.exp(Math.log(a.zoom) + (Math.log(f.zoom) - Math.log(a.zoom)) * e);
+        v.cx = a.cx + (f.cx - a.cx) * e;
+        v.cy = a.cy + (f.cy - a.cy) * e;
         map.clampView();
-        if (Math.abs(f.zoom - v.zoom) < 0.005 && Math.hypot(f.cx - v.cx, f.cy - v.cy) < 0.1) focusRef.current = null;
+        if (u >= 1) {
+          focusRef.current = null;
+          flight = null;
+        }
       }
       if (frameRef.current) map.frame(frameRef.current, dt);
       const b = bannerRef.current;
@@ -1812,7 +1832,7 @@ export default function App() {
   );
 
   return (
-    <div className={`app m-${mobileTab} ${nightness(shownPlan.hour) > 0.5 ? 'night' : ''} ${mapFull ? 'mapfull' : ''}`}>
+    <div className={`app m-${mobileTab} ${nightness(shownPlan.hour) > 0.5 ? 'night' : ''} ${mapFull ? 'mapfull' : ''} ${guide != null ? 'guiding' : ''}`}>
       <header className="top">
         <div className="brand">
           <b>Collateral Damage</b>
@@ -2206,16 +2226,16 @@ export default function App() {
                     }}
                     aria-label="Turn the narration on"
                   >
-                    🔈 Listen
+                    🔈
                   </button>
                 )}
                 <div className="guide-nav">
-                  <button onClick={() => goGuide(Math.max(0, guide - 1))} disabled={guide === 0}>
-                    Back
+                  <button onClick={() => goGuide(Math.max(0, guide - 1))} disabled={guide === 0} aria-label="Back">
+                    {phone ? '‹' : 'Back'}
                   </button>
                   {guide < GUIDE.length - 1 ? (
-                    <button className="primary" onClick={() => goGuide(guide + 1)}>
-                      Next
+                    <button className="primary" onClick={() => goGuide(guide + 1)} aria-label="Next">
+                      {phone ? '›' : 'Next'}
                     </button>
                   ) : (
                     <button className="primary" onClick={() => goGuide(null)}>
@@ -2514,7 +2534,7 @@ export default function App() {
       </main>
 
       {intro && (
-        <div className="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+        <div className={`intro ${introLeaving ? 'leaving' : ''}`} role="dialog" aria-modal="true" aria-labelledby="intro-title">
           <div className="intro-card">
             <span className="k">06:00 · Targeting cell</span>
             <h1 id="intro-title">Collateral damage</h1>
