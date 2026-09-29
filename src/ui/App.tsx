@@ -152,7 +152,7 @@ const loadDiscovered = () => {
 const planFor = (world: ReturnType<typeof buildCity>, target: TargetId): Plan => {
   const t = targetOf(world, target);
   const a = targetCentre(t);
-  return { target, weapon: 'medium', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
+  return { target, weapon: 'small', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
 };
 
 export default function App() {
@@ -1917,7 +1917,7 @@ export default function App() {
         window.setTimeout(() => {
           setDebrief({ kind, count: o.count, inSchool });
           void sound.feature(`voice/debrief-${kind}`);
-        }, (stampDelay(o) + 4.2) * 1000);
+        }, (stampDelay(o) + 7.6) * 1000); // after the radio's result call and "stand by" have finished
       }
       // The secret file: was the courier there, and did it reach him?
       const ms = missionRef.current;
@@ -2664,7 +2664,7 @@ export default function App() {
             )}
             {talk && <TalkCard talk={talk} onClose={hush} />}
             {debrief && outcome && (
-              <div className={`debrief ${debrief.kind}`} role="dialog" aria-label="Debrief">
+              <div className={`debrief ${debrief.kind}`} role="status" aria-label="Narration">
                 <button
                   className="talk-x"
                   aria-label="Close"
@@ -2675,12 +2675,7 @@ export default function App() {
                 >
                   ×
                 </button>
-                <span className="k">Debrief · Warehouse 14 and Cotton Street School</span>
                 <p>{DEBRIEF[debrief.kind]}</p>
-                <div className="debrief-count">
-                  <b>{debrief.count}</b> <span>killed or badly hurt</span>
-                  <b className={debrief.inSchool ? 'bad' : ''}>{debrief.inSchool}</b> <span>of them in the school</span>
-                </div>
               </div>
             )}
             {missionEnd && (
@@ -3255,13 +3250,13 @@ export default function App() {
   );
 }
 
-/** What the narrator says after a strike that destroys Warehouse 14 or touches the school. */
+/** What the narrator says after a strike that hits Warehouse 14 or touches the school. */
 const DEBRIEF = {
-  hurt: 'Warehouse 14 is gone. Across Cotton Street, the school was not empty. The report will say the target was destroyed. It will also list the children by name, because someone has to. The estimate said this could happen, and it was signed anyway. That is what collateral damage means: not an accident, but a number someone accepted before it happened.',
-  empty: 'The strike reached Cotton Street School, but the classrooms were empty. The hour was chosen well, or the luck was good. Tomorrow the children come back to broken windows, and a teacher will try to explain. The estimate is only ever about people. Buildings get rebuilt. Most of the time.',
-  'hurt-standing': 'Warehouse 14 is still standing. The school across Cotton Street was not spared. The children inside will be counted, and named. And the target will be struck again tomorrow. That is the worst of it: harm, with nothing gained for it.',
-  standing: "The strike hit Warehouse 14, but it's still standing. Whatever was stored inside may still be there, and the planners will be asked to go again. Across Cotton Street, the school wasn't touched. Every second strike is another estimate, another signature, and another chance for the numbers to go the other way.",
-  spared: "Warehouse 14 is destroyed. Across Cotton Street, the school is still standing, and no one inside it was hurt. This time the choices held: the weapon, the hour, the angle of approach. It isn't only luck. Sometimes it's a planner who asked, before anything else: who else is here, right now?",
+  hurt: "The warehouse is gone. But the school across the street wasn't empty. Tomorrow there'll be a report. It'll say the target was destroyed. And further down, there'll be a list of children's names. Someone saw this number before the strike, and signed anyway.",
+  empty: 'The blast reached the school, but the classrooms were empty. The right hour, or just luck. Tomorrow the kids come back to broken glass, and a teacher has to explain what happened. The windows can be fixed.',
+  'hurt-standing': "The warehouse is still standing. The school across the street wasn't so lucky. There were children inside. And tomorrow, someone will be asked to try again. All that harm, and nothing to show for it.",
+  standing: "It hit the warehouse, but the building's still standing. Whatever's inside might still be there. The school across the street is fine, this time. But a miss means another plan, another signature, and another roll of the dice.",
+  spared: "The warehouse is gone. And the school across the street: everyone inside is okay. That wasn't only luck. The weapon, the hour, the direction: someone chose those carefully. Someone stopped and asked who else would be there.",
 };
 
 const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${modeOf(c.weapon, c.fuze).name.toLowerCase()}, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;
