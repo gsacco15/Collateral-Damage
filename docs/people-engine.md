@@ -37,5 +37,12 @@ questions per district and after strikes, never individuals, never the physics.
    - people, animals, teahouse circles and fishermen clear away nearby and return as it fades.
    The estimate, Jev's searches (workers get the marks), the map and 3D all use it. Rebuild the city clears it.
    The outcome card compares a roll with the estimate the strike was planned on.
-3. **Jev behaviour director** (next): TypeSafe steers district behaviour and post-strike responses with narrow,
-   cached multiple-choice questions; the rules above are the fallback.
+3. **Jev behaviour director** (built; Living only; `src/jev/behave.ts`, `api/behave.ts`, `src/ui/behaveLive.ts`):
+   - one call per hour for the whole city: five questions per district (street, work, school, market, prayer),
+     given what the city is still reacting to (recent strikes, bucketed);
+   - one call per strike: how the area responds (help at the ruin, shops shut, school pickup, hospital, quiet streets);
+   - answers are five-step tones turned into capped multipliers (0.4 to 1.45×) on the rules; people who stay away go
+     home, nobody appears or vanishes; landmarks and the physics are never touched;
+   - keyed by hour, day and bucketed events, cached by the server and CDN: each question paid for once;
+   - never waited on: rules act at once, Jev's answer nudges them on arrival, with a short note on the map;
+   - offline (no key, local preview): rules only.

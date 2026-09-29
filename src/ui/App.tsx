@@ -42,6 +42,14 @@ import {
   type Place,
   type Mark,
   type Plan,
+  type AfterMood,
+  type Behaviour,
+  cityId,
+  districtAt,
+  markKey,
+  moodNote,
+  recentEvents,
+  sevBucket,
   type Scored,
   type TargetId,
   type WeaponId,
@@ -58,6 +66,7 @@ import { JevCard } from './jevCard';
 import { personIn, personInCar, personLine, personOut } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
+import { readAfterMood, readCityMood } from './behaveLive';
 import { readIntel } from './jevLive';
 import { addSceneExtra } from '../view/lifeScene';
 import { bakerLine, current, DONE, EARLY, ENDINGS, FIGURES, figureAt, HANDLER_BRIEF, inHours, loadMission, MEETS, missionEnts, newMission, SAMIR, saveMission, scatterLetters, setLive, STRANGER, type FigureId, type MissionState } from '../mission/mission';
@@ -477,6 +486,10 @@ export default function App() {
   // the school gate, families at the hospital). Cleared with the ruins.
   const [marks, setMarks] = useState<Mark[]>([]);
   const struckEst = useRef<Estimate | null>(null);
+  // Living: Jev's reading of how the city's people are behaving (per district this hour, and round each strike).
+  // Rules act at once; Jev's answers arrive in the background and nudge them. Offline, the rules stand alone.
+  const [cityMood, setCityMood] = useState<{ id: string; districts: Behaviour['districts'] } | null>(null);
+  const [afterMoods, setAfterMoods] = useState<Record<string, AfterMood>>({});
   const marksRef = useRef(marks);
   marksRef.current = marks;
   const theaterCanvas = useRef<HTMLCanvasElement>(null);
@@ -737,7 +750,43 @@ export default function App() {
     prayerKey.current = k;
   }, [soundOn, plan.hour, plan.day]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive, marks), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive, marks]);
+  // Jev's behaviour readings (Living): the city this hour, given what it's still reacting to; each strike's area.
+  const cityKey = useMemo(() => ({ hour: ((Math.floor(plan.hour) % 24) + 24) % 24, day: plan.day, events: recentEvents(world, plan.hour, plan.day, marks) }), [world, plan.hour, plan.day, marks]);
+  const cityKeyId = cityId(cityKey);
+  const moodNoted = useRef('');
+  useEffect(() => {
+    if (!alive) return;
+    const id = window.setTimeout(() => {
+      void readCityMood(cityKey).then((r) => {
+        if (!r.ok) return;
+        setCityMood({ id: cityKeyId, districts: r.districts });
+        const note = moodNote(world, r.districts);
+        if (note.length && moodNoted.current !== cityKeyId) {
+          moodNoted.current = cityKeyId;
+          flash(`Jev reads the city: ${note.join(' · ')}.`);
+        }
+      });
+    }, 400);
+    return () => window.clearTimeout(id);
+  }, [alive, cityKeyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!alive) return;
+    for (const m of marks) {
+      const key = markKey(world, m);
+      if (afterMoods[key]) continue;
+      void readAfterMood(districtAt(world, m.x, m.y), Math.floor(m.hour), m.day, sevBucket(m.sev)).then((r) => {
+        if (r.ok) setAfterMoods((prev) => (prev[key] ? prev : { ...prev, [key]: r.mood }));
+      });
+    }
+  }, [alive, marks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const behave = useMemo<Behaviour | null>(() => {
+    if (!alive) return null;
+    const districts = cityMood?.id === cityKeyId ? cityMood.districts : {};
+    return Object.keys(districts).length || Object.keys(afterMoods).length ? { districts, after: afterMoods } : null;
+  }, [alive, cityMood, cityKeyId, afterMoods]);
+  const behaveRef = useRef(behave);
+  behaveRef.current = behave;
+  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive, marks, behave), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive, marks, behave]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
   // Every change reruns the estimate and the danger field. While the day plays, they hold still (the map's
@@ -775,20 +824,20 @@ export default function App() {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h + 0.5 }));
       jobs.current.hours = Date.now();
-      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, living: alive, marks, runs: 150, cands };
+      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, living: alive, marks, behave, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 250);
     return () => clearTimeout(id);
-  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive, marks]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive, marks, behave]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = SEARCH_WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
       jobs.current.matrix = Date.now() + 1;
-      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, living: alive, marks, runs: 150, cands };
+      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, living: alive, marks, behave, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 350);
     return () => clearTimeout(id);
-  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive, marks]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive, marks, behave]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dayPlay) return;
@@ -1005,6 +1054,7 @@ export default function App() {
           setPhase('search');
           pool.living = aliveRef.current;
           pool.marks = marksRef.current;
+          pool.behave = behaveRef.current;
           pool.start(plan, obs, sp, SEED, false, got, ruinsRef.current);
         });
       },
@@ -1024,6 +1074,7 @@ export default function App() {
     bestRef.current = undefined;
     pool.living = aliveRef.current;
     pool.marks = marksRef.current;
+    pool.behave = behaveRef.current;
     pool.start(plan, obs, space(), SEED, onlySpace, intelRef.current, ruinsRef.current);
   }, [assumptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1053,7 +1104,7 @@ export default function App() {
   // The map shows Jev's plan instead of yours: while it searches (if you asked to watch), or while you inspect one.
   const following = !!ghostPlan && ((follow && status.running) || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
-  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive, marks) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive, marks]);
+  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive, marks, behave) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive, marks, behave]);
 
   frameRef.current = {
     world,
@@ -2052,7 +2103,7 @@ export default function App() {
       sound.radio('radio-08-bda', verdict + 2.7);
     };
     m.onSettled = () => setStriking(false);
-    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current, marksBefore), Math.floor(Math.random() * 1e9));
+    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));
     strikeRef.current = { plan, outcome: o, before, marksBefore };
   };
   /** Clear the last strike's effects, keeping the ruins. */
@@ -2068,6 +2119,7 @@ export default function App() {
     endStrike();
     setRuins([]);
     setMarks([]);
+    setAfterMoods({});
   }
   // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
   const callOff = () => {

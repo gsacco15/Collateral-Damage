@@ -3,6 +3,7 @@ import { buildCity } from './city';
 import type { Plan } from './effects';
 import type { IntelByHour } from './intel';
 import type { Mark, Observations } from './life';
+import type { Behaviour } from './behave';
 import { candidates, key, scoreDetailed, type Candidate, type Job, type Scored, type SearchSpace } from './search';
 import type { JobOut } from './worker';
 
@@ -48,6 +49,7 @@ export class JevPool {
   private ruins: number[] = [];
   living = false; // which people model the searches use
   marks: Mark[] = []; // Living: earlier strikes the city is still reacting to
+  behave: Behaviour | null = null; // Living: Jev's reading of how people are behaving
   private seed = 7;
   results: Scored[] = [];
   total = 0;
@@ -157,7 +159,7 @@ export class JevPool {
       if (slot.pending) continue;
       const size = n === Infinity ? 6 : Math.min(n - sent, Math.max(1, Math.ceil((n - sent) / this.slots.length)));
       const cands = this.queue.splice(0, size);
-      const msg: Job = { job: ++this.job, seed: this.seed, base: this.base!, obs: this.obs, intel: this.intel, ruins: this.ruins, living: this.living, marks: this.marks, runs: this.runs, cands };
+      const msg: Job = { job: ++this.job, seed: this.seed, base: this.base!, obs: this.obs, intel: this.intel, ruins: this.ruins, living: this.living, marks: this.marks, behave: this.behave, runs: this.runs, cands };
       slot.pending++;
       sent += cands.length;
       this.jobGen.set(msg.job, this.generation);

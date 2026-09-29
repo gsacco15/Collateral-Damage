@@ -4,6 +4,7 @@ import { rng } from './rng';
 import type { Building, Kind, SpaceKind, World } from './city';
 import { judgedMean, type Intel } from './levels';
 import { living as livingOf } from './people';
+import { markKey, type AfterMood, type Behaviour, type DistrictMood } from './behave';
 
 export type Day = 'weekday' | 'friday';
 
@@ -144,7 +145,7 @@ export interface Crowd {
 
 
 /** Who is expected where at this moment. Hours watched narrow the guess; Jev's reading of the reports replaces it; logged sightings are taken as known. */
-export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = [], alive = false, marks: Mark[] = []): Population {
+export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = [], alive = false, marks: Mark[] = [], behave: Behaviour | null = null): Population {
   const fri = day === 'friday' ? 1 : 0;
   const expected = new Float32Array(world.buildings.length);
   const observed = new Int16Array(world.buildings.length).fill(-1);
@@ -165,6 +166,9 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
   const spaceQ = new Float32Array(world.spaces.length);
   for (const s of world.spaces) spaceQ[s.id] = L ? Math.min(1, curve(SPACE[s.kind][fri], hour - L.sshift[s.id]) * L.sk[s.id]) : curve(SPACE[s.kind][fri], hour);
   const t = curve(TRAFFIC, hour) * (fri ? 0.6 : 1);
+  // Living, with Jev's reading of how each district is behaving this hour: fewer (or more) at work, school, the
+  // shops, the mosque; those who don't go out stay home, so nobody appears or vanishes.
+  if (L && behave) applyMoods(world, behave.districts, expected, spaceQ);
   // Living: pavements are busiest where people are out and about right now: in districts full of shops, work and
   // open spaces by day, around home in the evening.
   let streetD: Float32Array | undefined;
@@ -188,8 +192,9 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     const mean = num / Math.max(1, den);
     streetD = new Float32Array(act.length);
     for (let i = 0; i < act.length; i++) streetD[i] = pts[i] ? Math.min(2.2, Math.max(0.35, Math.sqrt(act[i] / pts[i] / Math.max(1e-6, mean)))) : 1;
+    if (behave) world.districts.forEach((d, i) => (streetD![i] *= behave.districts[d.id]?.street ?? 1));
   }
-  const after = L && marks.length ? aftermath(world, hour, day, marks, expected, spaceQ, ruins) : null;
+  const after = L && marks.length ? aftermath(world, hour, day, marks, expected, spaceQ, ruins, behave) : null;
   return {
     living: !!L,
     streetD,
@@ -232,7 +237,7 @@ function nearestStreet(w: World, x: number, y: number) {
  * - families gather at the nearest hospital, which fills.
  * Edits the counts in place; returns the crowds, the quiet streets and where the small life has fled.
  */
-function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Float32Array, spaceQ: Float32Array, ruins: number[]) {
+function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Float32Array, spaceQ: Float32Array, ruins: number[], behave: Behaviour | null) {
   const crowds: Crowd[] = [];
   const quiet: { x: number; y: number; r: number; k: number }[] = [];
   const hush: { x: number; y: number; r: number }[] = [];
@@ -244,8 +249,10 @@ function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Fl
     const e = (h - m.hour + 24) % 24; // hours since
     const help = e < 3 ? 1 : e < 8 ? (8 - e) / 5 : 0;
     if (help <= 0) continue;
-    crowds.push({ x: m.x, y: m.y, r: 12 + 8 * m.sev, n: Math.round((10 + 45 * m.sev) * help * dayk), kind: 'help' });
-    quiet.push({ x: m.x, y: m.y, r: 250, k: 1 - 0.75 * help });
+    // Jev's reading of how this place responds, where it has one; otherwise the rules as they are.
+    const J: AfterMood = behave?.after[markKey(w, m)] ?? { help: 1, close: 1, pickup: 1, hospital: 1, quiet: 1 };
+    crowds.push({ x: m.x, y: m.y, r: 12 + 8 * m.sev, n: Math.round((10 + 45 * m.sev) * help * dayk * J.help), kind: 'help' });
+    quiet.push({ x: m.x, y: m.y, r: 250, k: Math.max(0.1, 1 - 0.75 * help * J.quiet) });
     hush.push({ x: m.x, y: m.y, r: 120 + 260 * help });
     const openLate = e < Math.max(1, 21 - m.hour);
     for (const b of w.buildings) {
@@ -254,13 +261,13 @@ function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Fl
       if (b.kind === 'school' && d < 600 && m.hour >= 7 && m.hour < 15 && e < 2.5) {
         // Parents come for their children: the school empties towards its gate.
         const was = expected[b.id];
-        expected[b.id] = was * 0.2;
+        expected[b.id] = was * Math.max(0.05, 1 - 0.8 * J.pickup);
         const g = nearestStreet(w, b.cx, b.cy);
-        crowds.push({ x: g.x, y: g.y, r: 8, n: Math.round(Math.min(60, was * 0.25)), kind: 'gate' });
+        crowds.push({ x: g.x, y: g.y, r: 8, n: Math.round(Math.min(60, was * 0.25 * J.pickup)), kind: 'gate' });
         continue;
       }
-      if (d < 450 && b.kind === 'shop' && b.district === 'market' && openLate) {
-        expected[b.id] *= 0.3;
+      if (d < 450 && b.kind === 'shop' && b.district === 'market' && openLate && J.close > 0.5) {
+        expected[b.id] *= Math.max(0.05, 1 - 0.7 * J.close);
         continue;
       }
       if (d > 250) continue;
@@ -270,7 +277,7 @@ function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Fl
     }
     for (const sp of w.spaces) {
       const d = Math.hypot(sp.rect.x + sp.rect.w / 2 - m.x, sp.rect.y + sp.rect.h / 2 - m.y);
-      if (sp.kind === 'market' && d < 450 && openLate) spaceQ[sp.id] *= 0.1;
+      if (sp.kind === 'market' && d < 450 && openLate && J.close > 0.5) spaceQ[sp.id] *= Math.max(0.05, 1 - 0.9 * J.close);
       else if (d < 300) spaceQ[sp.id] *= 1 - 0.8 * help * (1 - d / 300);
     }
     // The nearest hospital (or clinic): families come looking for the wounded.
@@ -284,10 +291,54 @@ function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Fl
     if (best && hosp > 0) {
       expected[best.b.id] = Math.min(best.b.capacity * 1.15, expected[best.b.id] * (1 + 0.3 * hosp));
       const g = nearestStreet(w, best.b.cx, best.b.cy);
-      crowds.push({ x: g.x, y: g.y, r: 9, n: Math.round((8 + 30 * m.sev) * hosp * dayk), kind: 'hospital' });
+      crowds.push({ x: g.x, y: g.y, r: 9, n: Math.round((8 + 30 * m.sev) * hosp * dayk * J.hospital), kind: 'hospital' });
     }
   }
   return { crowds: crowds.filter((c) => c.n > 0), quiet, hush };
+}
+
+const ACT: Partial<Record<string, keyof DistrictMood>> = {
+  office: 'work',
+  hall: 'work',
+  workshop: 'work',
+  warehouse: 'work',
+  factory: 'work',
+  kiln: 'work',
+  greenhouse: 'work',
+  school: 'school',
+  shop: 'market',
+  stand: 'market',
+  mosque: 'prayer',
+};
+const SPACE_ACT: Partial<Record<string, keyof DistrictMood>> = { market: 'market', courtyard: 'prayer', plaza: 'street', park: 'street', pitch: 'street', playground: 'school', busstation: 'street', yard: 'work' };
+
+/** Jev's district moods, as capped multipliers; whoever stays away from work, school, the shops or the mosque is at home. */
+function applyMoods(w: World, moods: Behaviour['districts'], expected: Float32Array, spaceQ: Float32Array) {
+  const moved = new Map<string, number>();
+  for (const b of w.buildings) {
+    const m = moods[b.district];
+    const a = ACT[b.kind];
+    if (!m || !a || !expected[b.id]) continue;
+    const was = expected[b.id];
+    expected[b.id] = Math.min(b.capacity * 1.15, was * m[a]);
+    moved.set(b.district, (moved.get(b.district) ?? 0) + was - expected[b.id]);
+  }
+  // Home to their own district where it has homes; the rest (the civic centre, the works) home across the city.
+  let rest = 0;
+  const spread = (homes: Building[], n: number) => {
+    const room = homes.reduce((s, b) => s + (n > 0 ? b.capacity - expected[b.id] : expected[b.id]), 0);
+    if (room <= 0) return n;
+    const k = Math.min(1, Math.abs(n) / room);
+    for (const b of homes) expected[b.id] += n > 0 ? (b.capacity - expected[b.id]) * k : -expected[b.id] * k * 0.9;
+    return n - Math.sign(n) * Math.min(Math.abs(n), room);
+  };
+  for (const [d, n] of moved) rest += spread(w.buildings.filter((b) => b.district === d && HOMES.has(b.kind)), n);
+  if (Math.abs(rest) > 0.5) spread(w.buildings.filter((b) => HOMES.has(b.kind)), rest);
+  for (const sp of w.spaces) {
+    const m = moods[sp.district];
+    const a = SPACE_ACT[sp.kind];
+    if (m && a) spaceQ[sp.id] = Math.min(1, spaceQ[sp.id] * m[a]);
+  }
 }
 
 /** How busy a pavement point is next to normal, given the quiet after strikes (1 = normal). */

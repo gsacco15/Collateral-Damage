@@ -66,3 +66,34 @@ describe('After a strike (Living)', () => {
     expect(b).toBeGreaterThan(a + 3);
   });
 });
+
+import handler from '../../api/behave';
+import { cityRequest, parseCity, readCity, recentEvents, type Behaviour } from '.';
+
+describe('Jev behaviour director', () => {
+  it('asks five narrow questions per district, and reads the answers into capped multipliers', () => {
+    const body = cityRequest(city, { hour: 8, day: 'weekday', events: [] });
+    expect(Object.keys(body.questions).length).toBe(5 * city.districts.filter((d) => d.id !== 'desert').length);
+    const answers: Record<string, unknown> = { oldtown__school: { choice: 'very_low' }, market__market: { choice: 'high' }, civic__work: { choice: 'nonsense' } };
+    const moods = readCity(city, { answers });
+    expect(moods.oldtown!.school).toBe(0.4);
+    expect(moods.market!.market).toBe(1.25);
+    expect(moods.civic!.work).toBe(1); // anything unexpected leaves the rules as they are
+  });
+  it('moves people home rather than losing them', () => {
+    const behave: Behaviour = { districts: Object.fromEntries(city.districts.map((d) => [d.id, { street: 1, work: 0.4, school: 0.4, market: 0.4, prayer: 1 }])), after: {} };
+    const a = population(city, 10, 'weekday', 6, {}, {}, [], true);
+    const b = population(city, 10, 'weekday', 6, {}, {}, [], true, [], behave);
+    const sum = (e: Float32Array) => e.reduce((s, x) => s + x, 0);
+    expect(Math.abs(sum(b.expected) - sum(a.expected)) / sum(a.expected)).toBeLessThan(0.08);
+    const shop = city.buildings.find((x) => x.kind === 'shop' && a.expected[x.id] > 2)!;
+    expect(b.expected[shop.id]).toBeLessThan(a.expected[shop.id] * 0.5);
+  });
+  it('keys only what matters, and the endpoint refuses anything else', async () => {
+    expect(recentEvents(city, 10, 'weekday', [])).toEqual([]);
+    expect(parseCity(new URLSearchParams('hour=10&day=weekday&events=oldtown:high:now'))).not.toBeNull();
+    expect(parseCity(new URLSearchParams('hour=10&day=weekday&events=drop table'))).toBeNull();
+    expect((await handler(new Request('https://x.test/api/behave?kind=city&hour=99&day=weekday'))).status).toBe(400);
+    expect((await handler(new Request('https://x.test/api/behave?kind=nope'))).status).toBe(400);
+  });
+});

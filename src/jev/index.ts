@@ -7,3 +7,4 @@ export * from './effects';
 export * from './estimate';
 export * from './search';
 export * from './intel';
+export * from './behave';
