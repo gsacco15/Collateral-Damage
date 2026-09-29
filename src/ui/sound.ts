@@ -2,8 +2,8 @@
 // Ambience follows the hour and where you're looking; radio lines go through a band-pass "radio" filter;
 // the guide has a narrator. Files live in public/audio/.
 
-export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school' | 'amb-industry' | 'amb-camp' | 'amb-groves' | 'amb-desert' | 'amb-mosque';
-const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school', 'amb-industry', 'amb-camp', 'amb-groves', 'amb-desert', 'amb-mosque'];
+export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school' | 'amb-industry' | 'amb-camp' | 'amb-groves' | 'amb-desert' | 'amb-mosque' | 'amb-crowd';
+const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school', 'amb-industry', 'amb-camp', 'amb-groves', 'amb-desert', 'amb-mosque', 'amb-crowd'];
 const KEY = 'cd.sound.v2'; // v2: everyone starts with sound on again
 const MIX_KEY = 'cd.mix.v2'; // v2: everyone starts again from the quieter default
 const HEADROOM = 0.85; // the loudest the page ever gets, at 100% on every slider
@@ -19,6 +19,7 @@ const DEFAULT_MIX: Mix = { master: 0.8, ambience: 0.7, effects: 0.8, voices: 1 }
 type Bus = 'ambience' | 'effects' | 'voices';
 
 export type Cue =
+  | 'siren-far' // Living: a distant siren after a strike
   | 'ui-hover'
   | 'ui-click'
   | 'ui-toggle'

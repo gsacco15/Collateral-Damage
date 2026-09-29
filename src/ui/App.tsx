@@ -357,7 +357,7 @@ export default function App() {
   const [strikeOpen, setStrikeOpen] = useState(false);
   // Ready the strike's sounds while the decision is still open, so they land with the plane, not after it.
   useEffect(() => {
-    if (strikeOpen) sound.preload(['aircraft-approach', 'aircraft-cargo', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
+    if (strikeOpen) sound.preload(['aircraft-approach', 'aircraft-cargo', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda', 'siren-far']);
   }, [strikeOpen]);
   // A briefed target's story, shown (and narrated) when you pick it from the top bar.
   const [story, setStory] = useState<keyof typeof TARGET_STORIES | null>(null);
@@ -598,6 +598,8 @@ export default function App() {
     const bl = world.blocks.find((q) => x >= q.x - 8 && x <= q.x + q.w + 8 && y >= q.y - 8 && y <= q.y + q.h + 8);
     return bl?.district ?? '';
   };
+  // Living, after a strike: where people are gathered (the ruin, a school gate, the hospital), for the sound of them.
+  const crowdRef = useRef<{ zones: Rect[]; size: number }>({ zones: [], size: 0 });
   useEffect(() => {
     if (!soundOn) return;
     const h = plan.hour;
@@ -647,6 +649,8 @@ export default function App() {
         ['amb-groves', near(zones.groves), (0.3 + 0.7 * day) * 0.4],
         // The mosque courtyard: quiet most of the day, busier around prayers, fullest at Friday noon.
         // The mosque's own sounds (the courtyard water, the gathering) are for the day; at night it is quiet.
+        // Living, after a strike: the crowd at the ruin (and at a school gate or the hospital), as loud as it is big.
+        ['amb-crowd', near(crowdRef.current.zones), crowdRef.current.size ? Math.min(0.6, 0.15 + crowdRef.current.size / 90) : 0],
         ['amb-mosque', near(zones.mosque), (h >= 21 || h < 5 ? 0 : 1) * (prayerNow(h, plan.day) === 'friday' ? 0.75 : prayerNow(h, plan.day) ? 0.55 : 0.35) * (0.4 + 0.6 * day)],
       ];
       let pick: [Bed, number, number] | null = null;
@@ -810,6 +814,10 @@ export default function App() {
   const behaveRef = useRef(behave);
   behaveRef.current = behave;
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive, marks, behave), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive, marks, behave]);
+  crowdRef.current = (() => {
+    const cs = (popNow.crowds ?? []).filter((c) => c.kind === 'help' || c.kind === 'gate' || c.kind === 'hospital');
+    return { zones: cs.map((c) => ({ x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 })), size: cs.reduce((t, c) => t + c.n, 0) };
+  })();
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
   // Every change reruns the estimate and the danger field. While the day plays, they hold still (the map's
@@ -2119,6 +2127,8 @@ export default function App() {
       // After the blast has settled: one call with the result, then a quiet "stand by".
       sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', verdict + 1.9);
       sound.radio('radio-08-bda', verdict + 2.7);
+      // Living: somewhere across the city, a siren sets off towards it.
+      if (aliveRef.current) sound.play('siren-far', verdict + 1.2, 0.32);
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));
