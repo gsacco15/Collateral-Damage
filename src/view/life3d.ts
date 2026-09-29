@@ -117,6 +117,16 @@ export class Life3D {
     add('c_crate', box(0, 0.3, 0, 0.6, 0.6, 0.6), std(), 300);
     add('c_sacks', new THREE.SphereGeometry(0.35, 7, 5).scale(1, 0.55, 0.7).translate(0, 0.18, 0), std(), 200);
     add('c_skip', mergeGeometries([box(0, 0.6, 0, 1.9, 1.2, 1.2), box(0, 1.24, -0.3, 1.9, 0.06, 0.62)])!, std({ roughness: 0.6 }), 60);
+    add('c_wreck', mergeGeometries([box(0, 0.35, 0, 4.2, 0.7, 1.9), box(-0.35, 1.0, 0, 2.0, 0.6, 1.62), box(1.4, 0.12, 0.7, 0.3, 0.24, 0.3), box(-1.4, 0.12, -0.7, 0.3, 0.24, 0.3), box(1.4, 0.12, -0.7, 0.3, 0.24, 0.3), box(-1.4, 0.12, 0.7, 0.3, 0.24, 0.3)])!, std({ roughness: 0.9 }), 80);
+    add('c_rust', mergeGeometries([box(-1.0, 0.72, 0.96, 1.2, 0.5, 0.02), box(1.1, 0.72, -0.96, 1.0, 0.4, 0.02), box(0.9, 0.71, 0, 1.4, 0.02, 1.2)])!, std({ color: '#8a4a26', roughness: 1 }), 120, false);
+    add('c_tyrepile', mergeGeometries([[0, 0, 0], [0.7, 0, 0.3], [0.3, 0.24, 0.1], [-0.4, 0, 0.5], [0.2, 0.48, 0.2]].map(([x, y, z]) => new THREE.TorusGeometry(0.32, 0.12, 6, 12).rotateX(Math.PI / 2 + (x - z) * 0.4).translate(x, 0.12 + y, z).toNonIndexed()))!, std({ color: '#2a2826' }), 60);
+    add('c_cactus', mergeGeometries([[0, 0.45, 0, 0], [0.3, 0.95, 0.05, 0.5], [-0.3, 0.9, 0, -0.6], [0.05, 1.35, 0.05, 0.2]].map(([x, y, z, a]) => new THREE.SphereGeometry(0.34, 7, 5).scale(1, 1.25, 0.28).rotateZ(a).translate(x, y, z).toNonIndexed()))!, std({ color: '#6f8f4a' }), 80);
+    add('c_shrub', new THREE.IcosahedronGeometry(0.9, 1).scale(1, 0.85, 1).translate(0, 0.8, 0), std({ color: '#5f7a45' }), 40);
+    add('c_bloom', new THREE.IcosahedronGeometry(0.95, 0).scale(1, 0.8, 1).translate(0, 0.9, 0), new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true, transparent: true, opacity: 0.55 }), 40, false);
+    add('c_pot', mergeGeometries([new THREE.CylinderGeometry(0.26, 0.18, 0.45, 8).translate(0, 0.22, 0).toNonIndexed(), new THREE.IcosahedronGeometry(0.3, 0).translate(0, 0.62, 0).toNonIndexed()])!, std(), 200);
+    add('c_bougain', mergeGeometries([new THREE.IcosahedronGeometry(1, 1).scale(1.7, 1.1, 0.55).translate(0, 1.9, 0).toNonIndexed(), new THREE.IcosahedronGeometry(0.7, 0).scale(1.2, 0.9, 0.5).translate(0.9, 1.1, 0).toNonIndexed()])!, std(), 120);
+    add('t_door', box(1.6, 1.0, 1.06, 0.95, 0.9, 0.04), std({ roughness: 0.7 }), 16, false);
+    add('t_load', mergeGeometries([box(-1.6, 1.6, -0.5, 1.1, 1.0, 1.1), box(-0.5, 1.7, 0.45, 1.1, 1.2, 1.1), box(-1.5, 2.4, 0.3, 1.0, 0.6, 1.4), box(-0.4, 1.5, -0.6, 1.0, 0.8, 1.0)])!, std(), 16);
     add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 6, false);
     add('engine', mergeGeometries([box(-0.7, 1.4, 0, 6.6, 2.4, 2.5), box(3.3, 1.2, 0, 1.4, 2.0, 2.5)])!, std({ color: '#c0392b', roughness: 0.5, flatShading: false }), 4);
     add('ladder', mergeGeometries([box(-0.7, 2.7, 0.45, 6, 0.1, 0.1), box(-0.7, 2.7, -0.45, 6, 0.1, 0.1), ...Array.from({ length: 9 }, (_, k) => box(-3.4 + k * 0.7, 2.7, 0, 0.08, 0.08, 0.9))])!, std({ color: '#d9d4c8' }), 4, false);
@@ -267,8 +277,11 @@ export class Life3D {
           break;
         case 'truck': {
           const yaw = -e.a;
-          this.put(e.lorry ? 'lorry' : 'truck', e.x, e.y, 0, yaw, 1, 1, 1, e.col);
-          if (!e.lorry) this.put('cargo', e.x, e.y, 0, yaw, 1, 1, 1, e.load);
+          // Janky: leaning on tired springs, a door from another truck, loaded high.
+          this.put(e.lorry ? 'lorry' : 'truck', e.x, e.y, 0, yaw, 1, 1, 1, e.col, e.lean);
+          this.put('t_door', e.x, e.y, 0, yaw, 1, 1, 1, e.door, e.lean);
+          if (!e.lorry) this.put('t_load', e.x, e.y, 0, yaw, 1, 1, 1, e.load, e.lean * 1.5);
+          this.put('smoke', e.x - Math.cos(e.a) * (3.4 + e.smoke * 2), e.y - Math.sin(e.a) * (3.4 + e.smoke * 2), 0.5 + e.smoke * 0.8, e.smoke * 3, 0.25 + e.smoke * 0.5, 0.25 + e.smoke * 0.5, 0.25 + e.smoke * 0.5, '#9a9aa0');
           this.put('twheels', e.x, e.y, 0, yaw, 1, 1, 1);
           if (night > 0.3) this.put('dpool', e.x + Math.cos(e.a) * 6, e.y + Math.sin(e.a) * 6, 0.3, 0, 4, 1, 4, '#fff0c8');
           break;
@@ -288,7 +301,13 @@ export class Life3D {
           break;
         }
         case 'clutter':
-          this.put('c_' + e.kind, e.x, e.y, 0, -e.a, 1, 1, 1, e.kind === 'pallet' || e.kind === 'tyres' ? undefined : e.col);
+          if (e.kind === 'shrub') {
+            this.put('c_shrub', e.x, e.y, 0, 0, 1, 1, 1);
+            this.put('c_bloom', e.x, e.y, 0, 0.4, 1, 1, 1, e.col);
+          } else if (e.kind === 'wreck') {
+            this.put('c_wreck', e.x, e.y, 0, -e.a, 1, 1, 1, e.col);
+            this.put('c_rust', e.x, e.y, 0, -e.a, 1, 1, 1);
+          } else this.put('c_' + e.kind, e.x, e.y, 0, -e.a, 1, 1, 1, e.kind === 'pallet' || e.kind === 'tyres' || e.kind === 'tyrepile' || e.kind === 'cactus' ? undefined : e.col);
           break;
         case 'police': {
           const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;

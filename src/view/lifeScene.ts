@@ -30,7 +30,7 @@ export type Ent =
   | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string; v?: boolean } // v: parked nose-in, north-south
   | { t: 'scooter'; x: number; y: number; a: number; col: string; sway: number }
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
-  | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string }
+  | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string; door: string; lean: number; smoke: number } // janky: odd door, a lean, a puff of exhaust
   | { t: 'fountain'; x: number; y: number; r: number }
   | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string }
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
@@ -44,7 +44,7 @@ export type Ent =
   | { t: 'moon'; x: number; y: number; a: number }
   | { t: 'awning'; x: number; y: number; a: number; w: number; col: string };
 
-export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip';
+export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip' | 'wreck' | 'tyrepile' | 'cactus' | 'shrub' | 'pot' | 'bougain';
 
 export const HULLS: [string, string, string][] = [
   ['#fbfaf6', '#e6e0d3', '#cfc7b6'], // white paper
@@ -71,7 +71,7 @@ interface Fixed {
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
   clutter: { kind: Clutter; x: number; y: number; a: number; col: string }[];
-  trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string }[];
+  trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string; door: string; lean: number }[];
   stacks: Building[];
   cafes: { x: number; y: number; evening: boolean; awn: number }[];
   smokers: { x: number; y: number; face: number; b: Building }[];
@@ -250,6 +250,8 @@ function makeFixed(w: World): Fixed {
     dir: (r() < 0.5 ? 1 : -1) as 1 | -1,
     lorry: i % 3 === 0,
     load: ['#7fa3b8', '#c99a5e', '#8fa86a', '#e0cfa8', '#d0d4d6'][i % 5],
+    door: ['#8a4a2a', '#d9d4c8', '#3f6a4a', '#6c8aa8', '#c9b24c'][(i + 2) % 5], // a door off another truck
+    lean: (r() - 0.5) * 0.09,
   }));
   // Yard clutter along the walls: what each kind of place leaves outside its door.
   const clutter: Fixed['clutter'] = [];
@@ -294,6 +296,32 @@ function makeFixed(w: World): Fixed {
     } else if ((b.kind === 'home' || b.kind === 'apartment') && roll < 0.06) {
       beside(b, 1, (x, y, a) => add(r() < 0.5 ? 'gas' : 'tyres', x, y, a, '#d0d4d6'));
     }
+  }
+  // Broken-down cars left where they died: on the kerbs of back streets and in the yards, rusting, no wheels.
+  for (const rd of pickN(streets, 22)) {
+    const q = rd.rect;
+    const h = q.w > q.h;
+    const d = 8 + r() * Math.max(1, (h ? q.w : q.h) - 16);
+    const side = r() < 0.5 ? -1 : 1;
+    const x = h ? q.x + d : q.x + q.w / 2 + side * (q.w / 2 - 1.3);
+    const y = h ? q.y + q.h / 2 + side * (q.h / 2 - 1.3) : q.y + d;
+    if (!buildingAt(w, x, y) && !w.roads.some((o) => o !== rd && inRect(o.rect, x, y, 3))) add('wreck', x, y, h ? 0 : Math.PI / 2, ['#8a5a3e', '#6f6a60', '#9a7a5a', '#5a5f66'][Math.floor(r() * 4)]);
+  }
+  for (const b of w.buildings) {
+    if (!(b.kind === 'workshop' || (b.district === 'tinhill' && b.kind !== 'shop')) || r() > 0.08) continue;
+    beside(b, 1, (x, y, a) => add(r() < 0.5 ? 'wreck' : 'tyrepile', x + (a ? 1.5 : 0), y + (a ? 0 : 1.5), a + (r() - 0.5) * 0.4, ['#8a5a3e', '#6f6a60', '#9a7a5a'][Math.floor(r() * 3)]));
+  }
+  // Plants of the region: bougainvillea over the walls of homes and villas, potted plants by the doors,
+  // prickly pear on Tin Hill, at the camp's edge and by the groves, oleander along the boulevard.
+  for (const b of w.buildings) {
+    const home = b.kind === 'home' || b.kind === 'villa';
+    if (home && (b.district === 'garden' || b.district === 'oldtown' || b.district === 'quarter') && r() < 0.13) beside(b, 1, (x, y, a) => add('bougain', x, y, a, r() < 0.7 ? '#c2327a' : '#e0703a'));
+    else if (home && r() < 0.09) beside(b, 1 + Math.floor(r() * 2), (x, y, a) => add('pot', x, y, a, r() < 0.5 ? '#c47a5a' : '#6f8a96'));
+    else if ((b.district === 'tinhill' || b.district === 'camp' || b.district === 'groves') && r() < 0.07) beside(b, 1, (x, y, a) => add('cactus', x, y, a, '#6f8f4a'));
+  }
+  for (let x = 30; x < 990; x += 46) {
+    if (Math.abs(x - 745) < 60 || Math.abs(x - 360) < 30) continue;
+    add('shrub', x + (r() - 0.5) * 6, 350, 0, r() < 0.6 ? '#e07a9a' : '#f4f2ec');
   }
   // A skip at some street corners, a stack of drums by the depot and the power station.
   for (const rd of pickN(streets, 26)) {
@@ -633,7 +661,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
     const x = s.h ? s.r.x + along : s.r.x + s.r.w / 2 + s.lane * s.dir;
     const y = s.h ? s.r.y + s.r.h / 2 - s.lane * s.dir : s.r.y + along;
     if (!far(x, y) || onBroken(x, y)) return;
-    out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load });
+    out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load, door: s.door, lean: s.lean + Math.sin(t * 5 + i) * 0.012, smoke: (t * 1.3 + i * 0.37) % 1 });
   });
   for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1)) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col });
   // The fountain on the Circus, running from morning until late.

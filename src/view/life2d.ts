@@ -448,6 +448,73 @@ function clutter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'clutter' }
       g.ellipse(0, 0, 0.35, 0.24, 0.3, 0, Math.PI * 2);
       g.fill();
       break;
+    case 'wreck':
+      // A dead car: rust coming through the paint, a door gone, the glass out.
+      shadow(4.4, 2);
+      g.fillStyle = e.col;
+      g.fillRect(-2.2, -1, 4.4, 2);
+      g.fillStyle = 'rgba(140,70,30,0.45)';
+      g.fillRect(-1.6, -0.9, 1.1, 0.8);
+      g.fillRect(0.6, 0.2, 1.3, 0.7);
+      g.fillStyle = 'rgba(30,28,26,0.75)';
+      g.fillRect(-1.2, -0.8, 1.9, 1.6); // no roof glass, the cabin open
+      g.fillStyle = '#3a3634';
+      g.fillRect(-0.4, 0.95, 1.1, 0.12); // the missing door's gap
+      break;
+    case 'tyrepile':
+      g.strokeStyle = '#2a2826';
+      g.lineWidth = 0.22;
+      for (let k = 0; k < 5; k++) {
+        g.beginPath();
+        g.arc(((k * 37) % 7) * 0.2 - 0.6, ((k * 53) % 5) * 0.25 - 0.5, 0.34, 0, Math.PI * 2);
+        g.stroke();
+      }
+      break;
+    case 'cactus':
+      g.fillStyle = e.col;
+      for (let k = 0; k < 4; k++) {
+        g.beginPath();
+        g.ellipse(Math.cos(k * 1.7) * 0.4, Math.sin(k * 1.7) * 0.4, 0.34, 0.22, k, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#e0a23a';
+      g.fillRect(0.3, -0.35, 0.1, 0.1);
+      break;
+    case 'shrub':
+      g.fillStyle = 'rgba(40,30,20,0.2)';
+      g.beginPath();
+      g.arc(0.35, 0.35, 0.9, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#5f7a45';
+      g.beginPath();
+      g.arc(0, 0, 0.9, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = e.col;
+      for (let k = 0; k < 7; k++) g.fillRect(Math.cos(k * 2.3) * 0.55 - 0.08, Math.sin(k * 2.3) * 0.55 - 0.08, 0.16, 0.16);
+      break;
+    case 'pot':
+      g.fillStyle = e.col;
+      g.beginPath();
+      g.arc(0, 0, 0.26, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#6f8f4a';
+      g.beginPath();
+      g.arc(0, 0, 0.2, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'bougain':
+      // Spilling over the wall: a long magenta mass with dark leaves showing through.
+      g.fillStyle = '#4f6a3a';
+      g.beginPath();
+      g.ellipse(0, 0, 1.6, 0.55, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = e.col;
+      for (let k = 0; k < 9; k++) {
+        g.beginPath();
+        g.arc(-1.3 + k * 0.32, Math.sin(k * 1.9) * 0.25, 0.22, 0, Math.PI * 2);
+        g.fill();
+      }
+      break;
     case 'skip':
       shadow(1.9, 1.2);
       g.fillStyle = e.col;
@@ -658,12 +725,33 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         g.fillRect(e.lorry ? 1.4 : 1, -1.05, 1.6, 2.1); // the cab
         g.fillStyle = 'rgba(40,50,62,0.6)';
         g.fillRect(e.lorry ? 2.6 : 2.2, -0.9, 0.35, 1.8);
+        g.fillStyle = e.door; // a door off another truck
+        g.fillRect(e.lorry ? 1.6 : 1.2, 0.85, 0.9, 0.2);
+        g.fillStyle = 'rgba(140,70,30,0.45)';
+        g.fillRect(e.lorry ? 1.5 : 1.1, -1.05, 0.5, 0.35);
         g.fillStyle = e.lorry ? '#d9d4c8' : shadeHex(e.col);
         g.fillRect(e.lorry ? -3.4 : -2.6, -1.05, e.lorry ? 4.7 : 3.5, 2.1); // the bed or the box
         if (!e.lorry) {
+          // Loaded high and past the sides, roped down.
           g.fillStyle = e.load;
-          for (let k = 0; k < 4; k++) g.fillRect(-2.4 + (k % 2) * 1.5, -0.85 + Math.floor(k / 2) * 0.95, 1.3, 0.8);
+          for (let k = 0; k < 6; k++) g.fillRect(-2.7 + (k % 3) * 1.1, -1.2 + Math.floor(k / 3) * 1.15, 1.05, 1.05);
+          g.strokeStyle = 'rgba(60,45,30,0.7)';
+          g.lineWidth = 0.06;
+          g.beginPath();
+          g.moveTo(-2.7, -1.2);
+          g.lineTo(0.6, 1.1);
+          g.moveTo(-2.7, 1.1);
+          g.lineTo(0.6, -1.2);
+          g.stroke();
+        } else {
+          g.fillStyle = 'rgba(140,70,30,0.3)';
+          g.fillRect(-3.2, -1.05, 1.4, 2.1);
         }
+        // A puff of blue-grey exhaust behind.
+        g.fillStyle = `rgba(150,150,155,${0.45 * (1 - e.smoke)})`;
+        g.beginPath();
+        g.arc(-3.2 - e.smoke * 2.5, 0.6, 0.3 + e.smoke * 0.8, 0, Math.PI * 2);
+        g.fill();
         g.restore();
         break;
       case 'fountain': {
