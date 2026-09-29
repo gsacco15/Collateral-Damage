@@ -719,6 +719,13 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .toast span { display: none; }
   .maptip { max-width: 190px; }
   .hud-hint { top: 80px; font-size: 11px; }
+  /* The building card: small, bottom-left above the Strike button, see-through. */
+  .popcard { left: 10px !important; right: auto; top: auto !important; bottom: 58px; width: min(250px, calc(100% - 20px)) !important; max-height: 55%; overflow-y: auto; padding: 8px 10px; gap: 6px; border-radius: 12px; font-size: 11.5px; background: rgba(251, 250, 246, 0.74); }
+  .popcard .pop-head b { font-size: 13px; }
+  .popcard .pop-head span { font-size: 10.5px; }
+  .popcard .story, .popcard .hint { font-size: 11px; line-height: 1.4; margin: 0; }
+  .popcard .k { font-size: 9.5px; }
+  .popcard .btn.small { padding: 4px 9px; font-size: 11.5px; }
 }
 
 /* At night the desk dims with the city: the same paper in evening light. Text stays dark, so every chart reads the same. */
