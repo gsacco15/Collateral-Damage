@@ -356,7 +356,7 @@ export default function App() {
       const rx = riverX(v.cy);
       const candidates: [Bed, [number, number], number][] = [
         ['amb-market', near(zones.market), day * 0.7],
-        ['amb-park', near(zones.park), (0.3 + 0.7 * day) * 0.6],
+        ['amb-park', near(zones.park), (0.3 + 0.7 * day) * 0.3],
         ['amb-pitch', near(zones.pitch), day * 0.5],
         ['amb-school', near(zones.school), school ? 0.5 : 0],
         ['amb-traffic', near(zones.traffic), busy * 0.35],
@@ -392,9 +392,9 @@ export default function App() {
         const pool: [CityCue, number][] = night
           ? [['cue-dog', 1], ...(at === 'tinhill' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : [])]
           : dawn
-            ? [['cue-rooster', at === 'tinhill' || at === 'oldtown' ? 2 : 1], ['cue-shutter', at === 'market' || at === 'oldtown' ? 2 : 0.5], ['cue-pigeons', 1]]
+            ? [['cue-rooster', at === 'tinhill' || at === 'oldtown' ? 2 : 1], ['cue-shutter', at === 'market' || at === 'oldtown' ? 2 : 0.5], ['cue-pigeons', 0.3]]
             : [
-                ['cue-pigeons', 1],
+                ['cue-pigeons', 0.3],
                 ['cue-moped', 0.8],
                 ['cue-workshop', at === 'workshops' && weekday && h >= 8 && h < 17 ? 3 : 0],
                 ['cue-sellers', at === 'market' && h >= 9 && h < 14 ? 3 : 0],
@@ -407,7 +407,7 @@ export default function App() {
         const total = pool.reduce((n, [, w]) => n + w, 0);
         let r = Math.random() * total;
         const pick = pool.find(([, w]) => (r -= w) < 0)?.[0];
-        if (pick) sound.cue(pick, (Math.random() - 0.5) * 1.4, (pick === 'cue-siren' ? 0.1 : 0.16) + 0.12 * close);
+        if (pick) sound.cue(pick, (Math.random() - 0.5) * 1.4, (pick === 'cue-siren' ? 0.1 : pick === 'cue-pigeons' ? 0.08 : 0.16) + 0.1 * close);
       }
     };
     tick();

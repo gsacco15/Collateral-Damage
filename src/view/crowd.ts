@@ -70,6 +70,7 @@ const MAX_SPACE_WALKERS = 80;
 export class Crowd {
   walkers: Walker[] = [];
   cars: Car[] = [];
+  private lastHourChange = 0;
   broken: Rect | null = null; // a dropped bridge: cars turn back before the gap
   private r = rng(4242);
   private nextId = 1;
@@ -141,15 +142,21 @@ export class Crowd {
       if (mine.length > n) for (const x of mine.slice(n)) x.gone = true;
       else for (let i = mine.length; i < n; i++) this.walkers.push(this.spawn('space', sp.rect.x + 1 + r() * (sp.rect.w - 2), sp.rect.y + 1 + r() * (sp.rect.h - 2), sp.rect));
     }
-    // People moving between buildings as the hour changes.
-    if (prev && prev.hour !== pop.hour) {
+    // People moving between buildings as the hour changes: a handful, scaled to how busy the streets are, and
+    // none while the clock is racing (playing the day, holding for an hour) so they never pile up.
+    const now = performance.now();
+    const racing = now - this.lastHourChange < 1500;
+    if (prev && prev.hour !== pop.hour) this.lastHourChange = now;
+    const moving = this.walkers.filter((x) => x.kind === 'transit' && !x.gone).length;
+    if (prev && prev.hour !== pop.hour && !racing && moving < 60) {
       const from: Building[] = [];
       const to: Building[] = [];
       for (const b of w.buildings) {
         const d = shownCount(pop, b) - shownCount(prev, b);
         for (let i = 0; i < Math.min(6, Math.abs(d)); i++) (d > 0 ? to : from).push(b);
       }
-      const n = Math.min(160, Math.max(from.length, to.length));
+      const busy = Math.max(0.25, Math.min(1, pop.streetQ / 0.12));
+      const n = Math.min(60 - moving, Math.round(Math.min(60, Math.max(from.length, to.length)) * busy));
       for (let i = 0; i < n; i++) {
         const a = from[Math.floor(r() * from.length)];
         if (!a || !to.length) break;
@@ -159,7 +166,7 @@ export class Crowd {
         if (a === b) continue;
         const t = this.spawn('transit', a.cx, a.cy);
         t.path = this.route(a, b);
-        t.speed = 8 + r() * 6;
+        t.speed = 4.5 + r() * 3;
         t.phase = -r() * 1.5;
         this.walkers.push(t);
       }

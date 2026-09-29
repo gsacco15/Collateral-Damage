@@ -1243,7 +1243,7 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
   const hx = w.x;
   const hy = w.y + bob - 0.05 * scale;
   const hr = 0.3 * scale;
-  const near = px < 0.16;
+  const near = px < 0.22; // close enough to see faces
   // Facing: the way they're walking, or a slow look around when standing.
   const next = w.path[0];
   const a = next && (next.x !== w.x || next.y !== w.y) ? Math.atan2(next.y - w.y, next.x - w.x) : w.phase + Math.sin(time * 0.3 + w.phase) * 0.8;

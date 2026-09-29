@@ -62,7 +62,7 @@ const VOLUME: Partial<Record<Cue, number>> = {
   'ui-hover': 0.12,
   'ui-click': 0.15,
   'ui-toggle': 0.18,
-  'ui-discover': 0.35,
+  'ui-discover': 0.18,
   'ui-weapon': 0.3,
   'ui-building': 0.2,
   'hold-abort': 0.3,
