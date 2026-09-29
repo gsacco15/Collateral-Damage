@@ -4,7 +4,7 @@
 
 export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school' | 'amb-industry' | 'amb-camp' | 'amb-groves' | 'amb-desert' | 'amb-mosque';
 const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school', 'amb-industry', 'amb-camp', 'amb-groves', 'amb-desert', 'amb-mosque'];
-const KEY = 'cd.sound';
+const KEY = 'cd.sound.v2'; // v2: everyone starts with sound on again
 const MIX_KEY = 'cd.mix.v2'; // v2: everyone starts again from the quieter default
 const HEADROOM = 0.85; // the loudest the page ever gets, at 100% on every slider
 

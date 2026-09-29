@@ -211,6 +211,8 @@ export default function App() {
     } catch {
       /* fine: it just shows again next time */
     }
+    // Stepping in turns the sound on: the guide is told, not read. (This click also lets the browser play it.)
+    if (step && !sound.enabled) sound.setEnabled(true);
     setIntroLeaving(true);
     window.setTimeout(() => {
       setIntro(false);
@@ -2564,15 +2566,6 @@ export default function App() {
               </button>
               <button className="btn" onClick={() => closeIntro(false)}>
                 Look around first
-              </button>
-              <button
-                className="btn listen"
-                onClick={() => {
-                  sound.setEnabled(true);
-                  sound.voice(0);
-                }}
-              >
-                🔈 Listen
               </button>
             </div>
           </div>
