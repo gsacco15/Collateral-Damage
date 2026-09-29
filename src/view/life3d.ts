@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type World } from '../jev';
-import { HULLS, type Ent } from './lifeScene';
+import { HULLS, type Ent, SIGNS } from './lifeScene';
 import { BUNTING } from './life2d';
 import { brokenLights, powerCut, streetLights } from './streetLights';
 import { brokenPoles, wireEnds, wiring } from './wires';
@@ -204,6 +204,28 @@ export class Life3D {
     add('c_bedding', new THREE.CylinderGeometry(0.22, 0.22, 1.5, 8).rotateZ(Math.PI / 2).translate(0, 0.22, 0), std(), 140);
     add('c_washline', mergeGeometries([cyl(0.03, 1.7, -2, 0.85, 0), cyl(0.03, 1.7, 2, 0.85, 0), box(0, 1.65, 0, 4, 0.02, 0.02), ...[-1.4, -0.5, 0.4, 1.3].map((x) => box(x, 1.3, 0, 0.6, 0.7, 0.02))])!, std({ side: THREE.DoubleSide }), 140);
     add('c_ladder', mergeGeometries([box(0, 1.3, -0.2, 0.05, 2.6, 0.05), box(0, 1.3, 0.2, 0.05, 2.6, 0.05), ...[0.4, 0.9, 1.4, 1.9, 2.4].map((y) => box(0, y, 0, 0.04, 0.04, 0.4))])!.rotateZ(0.22), std(), 90);
+    // Shop signs: a board over the door, and for each sign its painted words (in Dari) on the front.
+    add('c_shopsign', box(0, 0, -0.03, 1.9, 0.7, 0.06), std(), 60);
+    SIGNS.forEach(([word, col], i) => {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 96;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#f6f1e6';
+      g.fillRect(0, 0, 256, 96);
+      g.strokeStyle = col;
+      g.lineWidth = 8;
+      g.strokeRect(6, 6, 244, 84);
+      g.fillStyle = col;
+      g.font = '700 54px "Noto Naskh Arabic", "Noto Sans Arabic", "Geeza Pro", Tahoma, serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.direction = 'rtl';
+      g.fillText(word, 128, 52, 224);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      add(`c_word${i}`, new THREE.PlaneGeometry(1.75, 0.6), std({ map: t, roughness: 1 }), i === 0 ? 2 : 24, false);
+    });
     add('t_door', box(1.6, 1.0, 1.06, 0.95, 0.9, 0.04), std({ roughness: 0.7 }), 16, false);
     add('t_load', mergeGeometries([box(-1.6, 1.6, -0.5, 1.1, 1.0, 1.1), box(-0.5, 1.7, 0.45, 1.1, 1.2, 1.1), box(-1.5, 2.4, 0.3, 1.0, 0.6, 1.4), box(-0.4, 1.5, -0.6, 1.0, 0.8, 1.0)])!, std(), 16);
     // Tarp shelters: an A-frame of blue sheet over a ridge, with a mat under it.
@@ -644,6 +666,15 @@ export class Life3D {
           if (e.kind === 'shrub') {
             this.put('c_shrub', e.x, e.y, 0, 0, 1, 1, 1);
             this.put('c_bloom', e.x, e.y, 0, 0.4, 1, 1, 1, e.col);
+          } else if (e.kind === 'sign' || e.kind === 'shopsign') {
+            // Turned to face out, the way the sign looks (a is the direction it faces on the map).
+            const yaw = Math.atan2(Math.cos(e.a), Math.sin(e.a));
+            const z = e.z ?? 0;
+            this.put('c_' + e.kind, e.x, e.y, z, yaw, 1, 1, 1, e.col);
+            if (e.label != null) {
+              const up = e.kind === 'sign' ? 1.9 : 0;
+              this.put(`c_word${e.label}`, e.x + Math.cos(e.a) * 0.05, e.y + Math.sin(e.a) * 0.05, z + up, yaw, e.kind === 'sign' ? 1.18 : 1, 1, 1);
+            }
           } else if (e.kind === 'wreck') {
             this.put('c_wreck', e.x, e.y, 0, -e.a, 1, 1, 1, e.col);
             this.put('c_rust', e.x, e.y, 0, -e.a, 1, 1, 1);

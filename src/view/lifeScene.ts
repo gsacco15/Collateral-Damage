@@ -41,7 +41,7 @@ export type Ent =
   | { t: 'junk'; x: number; y: number; size: number; seed: number }
   | { t: 'litter'; x: number; y: number; a: number; kind: 0 | 1 | 2; col: string } // 0 a can, 1 a plastic bottle, 2 a bag
   | { t: 'dump'; x: number; y: number; w: number; h: number }
-  | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string; z?: number } // z: up on a roof
+  | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string; z?: number; label?: number } // z: up on a roof; label: which of SIGNS it reads
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
   | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
   | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1 }
@@ -58,7 +58,19 @@ export type Ent =
   | { t: 'bunting'; x0: number; y0: number; x1: number; y1: number; z: number; seed: number } // paper flags on a string, over the souk
   | { t: 'goods'; kind: GoodsKind; x: number; y: number; a: number; col: string; w: number; h: number; col2?: string; hang?: boolean; z?: number }; // the souk's wares (see souk.ts)
 
-export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip' | 'wreck' | 'tyrepile' | 'cactus' | 'shrub' | 'pot' | 'bougain' | 'cart' | 'bike' | 'bench' | 'goal' | 'bag' | 'sign' | 'stovepipe' | 'bedding' | 'washline' | 'ladder';
+/** Painted shop signs, in Dari: what the shop is, and the board's colour. The school's sign reads "maktab". */
+export const SIGNS: [string, string][] = [
+  ['مکتب', '#4f7a8a'], // school
+  ['نانوایی', '#c9a44c'], // bakery
+  ['دواخانه', '#4d7a4a'], // pharmacy
+  ['قصابی', '#9a3b2e'], // butcher
+  ['خیاطی', '#3a5f9a'], // tailor
+  ['چایخانه', '#2e6f73'], // teahouse
+  ['میوه فروشی', '#6f8f4a'], // fruit seller
+  ['دکان', '#b8574a'], // shop
+];
+
+export type Clutter = 'shopsign' | 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip' | 'wreck' | 'tyrepile' | 'cactus' | 'shrub' | 'pot' | 'bougain' | 'cart' | 'bike' | 'bench' | 'goal' | 'bag' | 'sign' | 'stovepipe' | 'bedding' | 'washline' | 'ladder';
 
 export const HULLS: [string, string, string][] = [
   ['#fbfaf6', '#e6e0d3', '#cfc7b6'], // white paper
@@ -91,7 +103,7 @@ interface Fixed {
   pigeons: { x: number; y: number; w: number; h: number; seed: number }[];
   donkeys: { r: Rect; h: boolean; speed: number; phase: number; dir: 1 | -1 }[];
   junk: { x: number; y: number; size: number; seed: number; smoulder: boolean }[];
-  clutter: { kind: Clutter; x: number; y: number; a: number; col: string; z?: number }[];
+  clutter: { kind: Clutter; x: number; y: number; a: number; col: string; z?: number; label?: number }[];
   trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string; door: string; lean: number }[];
   stacks: Building[];
   cafes: { x: number; y: number; evening: boolean; awn: number }[];
@@ -296,7 +308,7 @@ function makeFixed(w: World): Fixed {
       make(x, y, along ? 0 : Math.PI / 2, k);
     }
   };
-  const add = (kind: Clutter, x: number, y: number, a: number, col = '#999', z?: number) => clutter.push({ kind, x, y, a, col, z });
+  const add = (kind: Clutter, x: number, y: number, a: number, col = '#999', z?: number, label?: number) => clutter.push({ kind, x, y, a, col, z, label });
   for (const b of w.buildings) {
     if (b.rects[0].w < 4 || b.rects[0].h < 4) continue;
     const works = b.kind === 'workshop' || b.kind === 'warehouse' || b.kind === 'factory';
@@ -383,7 +395,22 @@ function makeFixed(w: World): Fixed {
   }
   // The school: a worn sign by the gate, school bags dropped by the door, a bench in the shade of the yard's tree,
   // one small goal for football. Warehouse 14: pallets on the apron by the loading doors.
-  add('sign', 266, 475.6, 0, '#4f7a8a');
+  add('sign', 256.5, 475.6, -Math.PI / 2, SIGNS[0][1], undefined, 0); // facing the street, to the north
+  // Shop signs over the doors, on the side that faces the street: a board painted with what the shop sells.
+  for (const b of lived) {
+    if (b.kind !== 'shop' || r() > 0.3) continue;
+    const q = b.rects[0];
+    const sides: [number, number, number][] = [
+      [q.x + q.w / 2, q.y - 0.06, -Math.PI / 2],
+      [q.x + q.w + 0.06, q.y + q.h / 2, 0],
+      [q.x + q.w / 2, q.y + q.h + 0.06, Math.PI / 2],
+      [q.x - 0.06, q.y + q.h / 2, Math.PI],
+    ];
+    const face = sides.find(([x, y, a]) => onRoad(x + Math.cos(a) * 3, y + Math.sin(a) * 3));
+    if (!face) continue;
+    const label = 1 + Math.floor(r() * (SIGNS.length - 1));
+    add('shopsign', face[0], face[1], face[2], SIGNS[label][1], Math.min(2.6, b.h - 0.6), label);
+  }
   for (const [x, c] of [[271.6, '#b8574a'], [272.4, '#3a5f9a'], [273.1, '#c9a44c'], [274.3, '#4d7a4a']] as [number, string][]) add('bag', x, 476 + (x % 1) * 0.3, x, c);
   add('bench', 267.2, 511, Math.PI / 2, '#8a6a4a');
   add('bench', 267.2, 514.5, Math.PI / 2, '#8a6a4a');
@@ -946,7 +973,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
       out.push({ t: 'person', x, y, face: t * 0.1 + k, id: 300 + k });
     }
   for (let k = 0; k < 3; k++) out.push({ t: 'dog', x: 1090 + k * 22 + Math.sin(t * 0.3 + k) * 6, y: 600 + k * 14, a: t * 0.3 + k, col: ['#b89a6a', '#6b5a48', '#d8c8a8'][k], moving: day, lying: !day });
-  for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1) && !(k.z && roofGone(k.x, k.y))) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col, z: k.z });
+  for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1) && !((k.z || k.kind === 'shopsign') && roofGone(k.kind === 'shopsign' ? k.x - Math.cos(k.a) * 0.5 : k.x, k.kind === 'shopsign' ? k.y - Math.sin(k.a) * 0.5 : k.y))) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col, z: k.z, label: k.label });
   // The fountain on the Circus, running from morning until late.
   const rb = c.world.roundabout;
   if (far(rb.x, rb.y)) out.push({ t: 'fountain', x: rb.x, y: rb.y, r: !cut && h >= 6 && h < 23.5 ? 1 : 0 });

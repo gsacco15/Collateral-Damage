@@ -1,7 +1,7 @@
 // The flat map's drawing of the life in the city (see lifeScene): paper boats, fishermen, people by the water,
 // hookah circles and smokers, ducks, swans, dogs and cats, parked cars, buses, scooters, smoke and red lights.
 import type { Walker } from './crowd';
-import { HULLS, type Ent } from './lifeScene';
+import { HULLS, SIGNS, type Ent } from './lifeScene';
 
 export interface Draw2D {
   time: number;
@@ -448,13 +448,37 @@ function clutter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'clutter' }
       g.fillRect(-0.18, 0.05, 0.36, 0.08);
       break;
     case 'sign':
-      // The school's sign on two posts, its paint worn.
-      shadow(2.2, 0.3);
+    case 'shopsign': {
+      // A painted board (the school's on two posts, a shop's over its door) and what it says, in Dari, laid flat
+      // like a paper label so it can be read from above.
+      const wide = e.kind === 'sign' ? 2.2 : 1.8;
+      g.rotate(Math.PI / 2);
+      g.fillStyle = 'rgba(40,30,20,0.2)';
+      g.fillRect(-wide / 2 + 0.15, 0.1, wide, 0.26);
       g.fillStyle = e.col;
-      g.fillRect(-1.1, -0.12, 2.2, 0.24);
-      g.fillStyle = 'rgba(255,255,255,0.3)';
-      g.fillRect(-0.9, -0.05, 1.1, 0.1);
+      g.fillRect(-wide / 2, -0.13, wide, 0.26);
+      g.rotate(-Math.PI / 2 - e.a);
+      if (e.label != null) {
+        // Bigger than life, like a label on a paper model, so the words can be read on the map.
+        const lw = wide * 1.5;
+        const ox = Math.cos(e.a) * 0.9;
+        const oy = Math.sin(e.a) * 0.9;
+        g.fillStyle = 'rgba(40,30,20,0.18)';
+        g.fillRect(ox - lw / 2 + 0.12, oy - 0.45 + 0.12, lw, 0.9);
+        g.fillStyle = 'rgba(250,246,236,0.95)';
+        g.fillRect(ox - lw / 2, oy - 0.45, lw, 0.9);
+        g.strokeStyle = e.col;
+        g.lineWidth = 0.1;
+        g.strokeRect(ox - lw / 2, oy - 0.45, lw, 0.9);
+        g.fillStyle = e.col;
+        g.font = `700 0.62px "Noto Naskh Arabic", "Noto Sans Arabic", "Geeza Pro", Tahoma, "DejaVu Sans", serif`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.direction = 'rtl';
+        g.fillText(SIGNS[e.label][0], ox, oy + 0.03, lw - 0.25);
+      }
       break;
+    }
     case 'stovepipe':
       // A stove's chimney through the roof: a short pipe and its cap, a smudge of soot round it.
       g.fillStyle = 'rgba(40,30,20,0.18)';
