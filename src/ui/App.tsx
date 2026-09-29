@@ -1081,6 +1081,7 @@ export default function App() {
   // Switching views keeps your place: the 3D camera looks at the middle of the flat map, from a height that
   // matches the zoom, and the flat map comes back centred on whatever the 3D camera was looking at.
   const lastView = useRef(view);
+  const tourBack = useRef(false);
   useEffect(() => {
     const was = lastView.current;
     lastView.current = view;
@@ -1091,7 +1092,9 @@ export default function App() {
     if (view === 'model') model.jumpTo(map.view.cx, map.view.cy, K / map.view.zoom);
     else if (was === 'model') {
       const l = model.lookingAt();
-      focusRef.current = null;
+      // Coming back from the briefing's 3D look, the next step's own camera move stands; otherwise stop any flight.
+      if (tourBack.current) tourBack.current = false;
+      else focusRef.current = null;
       map.view.zoom = K / l.dist;
       map.view.cx = l.x;
       map.view.cy = l.y;
@@ -1463,10 +1466,17 @@ export default function App() {
     return () => window.clearTimeout(id);
   }, [intro, guideHint]);
   // The briefing's tour: once, on arrival, the map points at each place in the story and comes back.
+  const tour3d = useRef(false); // the briefing switched to 3D for its last look at the school
   function stopTour() {
     tourTimers.current.forEach(clearTimeout);
     tourTimers.current = [];
     setSpotlight(null);
+    if (tour3d.current) {
+      tour3d.current = false;
+      modelRef.current?.stopOrbit();
+      tourBack.current = true;
+      setView('map');
+    }
   }
   function startTour() {
     const wh = targetOf(world, 'warehouse');
@@ -1484,8 +1494,33 @@ export default function App() {
       const c = mid(depot);
       stops.push([11000, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
     }
-    if (school) stops.push([15000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
-    stops.push([21000, () => setSpotlight(null)]);
+    // Last: the school in 3D, circling slowly over the playground, for the rest of the briefing.
+    if (school && schoolBox)
+      stops.push([
+        15000,
+        () => {
+          setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' });
+          const cx = (schoolBox.x0 + schoolBox.x1) / 2;
+          const cy = (schoolBox.y0 + schoolBox.y1) / 2;
+          focusRef.current = { cx, cy, zoom: 6, dur: 1.2 };
+          if (view === 'model') return modelRef.current?.orbit(cx, cy, 125);
+          tour3d.current = true;
+          // The model may still be building: wait for it, and for the switch to place the camera, then glide in and circle.
+          const wait = (n: number) =>
+            tourTimers.current.push(
+              window.setTimeout(() => {
+                if (modelRef.current) tourTimers.current.push(window.setTimeout(() => modelRef.current?.orbit(cx, cy, 125), 350));
+                else if (n < 60) wait(n + 1);
+              }, 150),
+            );
+          tourTimers.current.push(
+            window.setTimeout(() => {
+              setView('model');
+              wait(0);
+            }, 1300),
+          );
+        },
+      ]);
     tourTimers.current = stops.map(([t, f]) => window.setTimeout(f, t));
   }
   // On the map, pan and zoom; in 3D, glide the camera there too.

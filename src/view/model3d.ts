@@ -404,6 +404,9 @@ export class Model3D {
     this.controls.minPolarAngle = 0.1;
     // Pan across the ground like a map, never down through it.
     this.controls.screenSpacePanning = false;
+    this.controls.autoRotateSpeed = 0.55;
+    // A slow orbit (from the guide) stops the moment someone takes the controls.
+    this.controls.addEventListener('start', () => (this.controls.autoRotate = false));
     this.preset('drone', true);
 
     this.resize();
@@ -423,6 +426,17 @@ export class Model3D {
     if (dir.y < 0.35) dir.y = 0.35;
     dir.normalize();
     this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1: t1.clone().add(dir.multiplyScalar(dist)), k: 0, dur };
+  }
+
+  /** Glide down to a low angle over a spot, then circle it slowly until someone takes the controls. */
+  orbit(x: number, y: number, dist = 120) {
+    const t1 = new THREE.Vector3(x, 4, y);
+    const p1 = t1.clone().add(new THREE.Vector3(-0.7, 0.55, 0.62).normalize().multiplyScalar(dist));
+    this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1, k: 0, dur: 2.4 };
+    this.controls.autoRotate = true;
+  }
+  stopOrbit() {
+    this.controls.autoRotate = false;
   }
 
   /** Cut straight to looking at a spot from a distance, keeping the current angle: used when switching over from the flat map. */
