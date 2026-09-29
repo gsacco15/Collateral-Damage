@@ -251,6 +251,8 @@ export class Model3D {
   private fx = new THREE.Group();
   private people: THREE.InstancedMesh;
   private heads: THREE.InstancedMesh;
+  private wraps: THREE.InstancedMesh; // scarves, turbans, keffiyehs, caps: what's on their heads
+  private brims: THREE.InstancedMesh; // straw hats and cap peaks
   private rings: THREE.InstancedMesh;
   private carBodies: THREE.InstancedMesh;
   private litMats: THREE.MeshStandardMaterial[] = [];
@@ -302,9 +304,13 @@ export class Model3D {
     headGeo.translate(0, 1.48, 0);
     this.people = new THREE.InstancedMesh(bodyGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), 1600);
     this.heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ roughness: 0.8 }), 1600);
+    const wrapGeo = new THREE.SphereGeometry(0.3, 8, 6);
+    this.wraps = new THREE.InstancedMesh(wrapGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), 1600);
+    const brimGeo = new THREE.CylinderGeometry(1, 1, 0.04, 12);
+    this.brims = new THREE.InstancedMesh(brimGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), 800);
     const carGeo = mergeGeometries([boxGeo(0, 0.55, 0, 4.2, 1.1, 1.9), boxGeo(-0.3, 1.35, 0, 2.2, 0.6, 1.7)])!;
     this.carBodies = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ roughness: 0.6 }), 400);
-    for (const m of [this.people, this.heads, this.carBodies]) {
+    for (const m of [this.people, this.heads, this.wraps, this.brims, this.carBodies]) {
       m.castShadow = true;
       m.count = 0;
       m.frustumCulled = false;
@@ -850,8 +856,14 @@ export class Model3D {
     const one = new THREE.Vector3(1.3, 1.3, 1.3);
     const v = new THREE.Vector3();
     let n = 0;
+    let nw = 0;
+    let nb = 0;
     let rings = 0;
     const now = performance.now() / 1000;
+    const hm = new THREE.Matrix4();
+    const hs = new THREE.Vector3();
+    const hq = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
     for (const w of f.walkers) {
       if (w.hurt) {
         if (rings < 800) this.rings.setMatrixAt(rings++, m.makeTranslation(w.x, 0.08, w.y));
@@ -865,8 +877,57 @@ export class Model3D {
       this.people.setColorAt(n, c.set(w.cloth));
       this.heads.setColorAt(n, c.set(w.skin));
       n++;
+      // What's on their head. Facing: the way they're walking.
+      const nx = w.path[0];
+      const face = nx && (nx.x !== w.x || nx.y !== w.y) ? Math.atan2(nx.x - w.x, nx.y - w.y) : w.phase;
+      hq.setFromAxisAngle(up, face);
+      const fx = Math.sin(face);
+      const fz = Math.cos(face);
+      const wrap = (y: number, sx: number, sy: number, back: number, col: string) => {
+        if (nw >= 1600) return;
+        hm.compose(v.set(w.x - fx * back, bob + y, w.y - fz * back), hq, hs.set(sx * 1.3, sy * 1.3, sx * 1.3));
+        this.wraps.setMatrixAt(nw, hm);
+        this.wraps.setColorAt(nw++, c.set(col));
+      };
+      const brim = (y: number, r: number, fwd: number, col: string) => {
+        if (nb >= 800) return;
+        hm.compose(v.set(w.x + fx * fwd, bob + y, w.y + fz * fwd), hq, hs.set(r * 1.3, 1.3, r * 1.3));
+        this.brims.setMatrixAt(nb, hm);
+        this.brims.setColorAt(nb++, c.set(col));
+      };
+      switch (w.wear) {
+        case 'hijab':
+        case 'shawl':
+          wrap(1.44, 1.12, 1.25, 0.05, w.tint);
+          break;
+        case 'abaya':
+          wrap(1.46, 1.14, 1.25, 0.02, '#141215');
+          break;
+        case 'keffiyeh':
+          wrap(1.5, 1.12, 1.05, 0.08, '#efe7de');
+          break;
+        case 'ghutra':
+          wrap(1.5, 1.12, 1.05, 0.08, '#f5f2ea');
+          break;
+        case 'turban':
+          wrap(1.62, 1.2, 0.8, 0, w.tint);
+          break;
+        case 'cap':
+          wrap(1.62, 0.95, 0.45, 0, '#f2eee6');
+          break;
+        case 'straw':
+          brim(1.68, 0.62, 0, '#d8b878');
+          wrap(1.7, 0.85, 0.55, 0, '#cfae6c');
+          break;
+        case 'ballcap':
+          wrap(1.62, 0.98, 0.5, 0, w.tint);
+          brim(1.62, 0.22, 0.28, w.tint);
+          break;
+      }
     }
     this.people.count = this.heads.count = n;
+    this.wraps.count = nw;
+    this.brims.count = nb;
     let k = 0;
     for (const car of f.cars) {
       if (k >= 400) break;
@@ -879,7 +940,7 @@ export class Model3D {
     }
     this.carBodies.count = k;
     this.rings.count = rings;
-    for (const im of [this.people, this.heads, this.rings, this.carBodies]) {
+    for (const im of [this.people, this.heads, this.wraps, this.brims, this.rings, this.carBodies]) {
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
