@@ -180,10 +180,12 @@ export default function App() {
     document.addEventListener('fullscreenchange', off);
     return () => document.removeEventListener('fullscreenchange', off);
   }, []);
+  // The opening card, with its narration, greets you every time you open the site (not on phones, which go straight
+  // into the guide, and not when a link opens a particular view of the map).
   const [intro, setIntro] = useState(() => {
     try {
       if (matchMedia(PHONE).matches) return false;
-      return !localStorage.getItem(INTRO_KEY) && !location.hash;
+      return !location.hash;
     } catch {
       return true;
     }
