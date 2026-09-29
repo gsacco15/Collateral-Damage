@@ -68,6 +68,8 @@ class SoundEngine {
   private master: GainNode | null = null;
   private buses: Partial<Record<Bus, GainNode>> = {};
   mix: Mix = { ...DEFAULT_MIX };
+  /** During the guide: the narrator leads. No radio, no Jev noises, the city turned right down. */
+  quiet = false;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private beds = new Map<Bed, { src: AudioBufferSourceNode; gain: GainNode }>();
   private voiceNode: AudioBufferSourceNode | null = null;
@@ -103,11 +105,16 @@ class SoundEngine {
     this.applyMix();
     this.listeners.forEach((f) => f(this.enabled));
   }
+  setQuiet(q: boolean) {
+    if (q === this.quiet) return;
+    this.quiet = q;
+    this.applyMix();
+  }
   private applyMix() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     if (this.enabled) this.master?.gain.setTargetAtTime(this.mix.master, t, 0.1);
-    for (const b of ['ambience', 'effects', 'voices'] as Bus[]) this.buses[b]?.gain.setTargetAtTime(this.mix[b], t, 0.1);
+    for (const b of ['ambience', 'effects', 'voices'] as Bus[]) this.buses[b]?.gain.setTargetAtTime(this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1), t, 0.4);
   }
 
   /** Must be called from a click or key press the first time, so the browser lets audio start. */
@@ -167,7 +174,7 @@ class SoundEngine {
     this.master.connect(this.ctx.destination);
     for (const b of ['ambience', 'effects', 'voices'] as Bus[]) {
       const g = this.ctx.createGain();
-      g.gain.value = this.mix[b];
+      g.gain.value = this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1);
       g.connect(this.master);
       this.buses[b] = g;
     }
@@ -204,6 +211,7 @@ class SoundEngine {
   }
 
   play(cue: Cue, delay = 0, volume = VOLUME[cue] ?? 0.5) {
+    if (this.quiet && cue.startsWith('jev-')) return;
     if (cue === 'jev-tick') {
       const now = performance.now();
       if (now - this.lastTick < 110) return;
@@ -227,7 +235,7 @@ class SoundEngine {
 
   /** A radio call: squelch, the line through a narrow band-pass with a little grit, squelch. */
   async radio(line: RadioLine, delay = 0) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.quiet) return;
     this.ensure();
     const ctx = this.ctx!;
     const buf = await this.load(line);

@@ -43,6 +43,7 @@ import {
   type Scored,
   type TargetId,
   type WeaponId,
+  type FuzeId,
 } from '../jev';
 import { JevPool, type PoolStatus } from '../jev/pool';
 import type { JobOut } from '../jev/worker';
@@ -54,7 +55,7 @@ import { JevCard } from './jevCard';
 import { placeAt, storyFor, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
-import { sound } from './sound';
+import { sound, type Bed } from './sound';
 import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
 const SEED = 7;
@@ -77,6 +78,7 @@ interface GuideStep {
   pulse?: boolean; // make the reach ring breathe
   drawer?: 'day' | 'jev';
   glow?: 'jev-card'; // softly outline this card so it's clear what the step means
+  demo?: boolean; // replay a recorded search instead of running Jev live
   play?: boolean; // play through the day while on this step
 }
 
@@ -89,7 +91,7 @@ const GUIDE: GuideStep[] = [
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, open: 'approach' },
   { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true },
   { title: 'Who signs off', text: 'Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.', open: 'rules' },
-  { title: 'Let Jev search', text: 'Jev is there to keep collateral damage as low as it can be. It tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel, so it sees the whole range of possible outcomes. It keeps the plan that still destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev' },
+  { title: 'Let Jev search', text: 'Jev is there to keep collateral damage as low as it can be. It tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel, so it sees the whole range of possible outcomes. It keeps the plan that still destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev', demo: true },
   { title: 'Your decision', text: "Authorise strike opens the final decision: the numbers, who signs, the protected places in reach. Hold the red button to release. Afterwards the ruins stay. Pick another building and plan again, or rebuild the city.", open: 'decide' },
 ];
 
@@ -222,6 +224,8 @@ export default function App() {
   const [allowed, setAllowed] = useState<WeaponId[]>(WEAPONS.map((w) => w.id));
   const [log, setLog] = useState<{ t: string; kind: 'info' | 'best' | 'try' | 'step' }[]>([]);
   const [phase, setPhase] = useState<'idle' | 'checklist' | 'search' | 'done'>('idle');
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   const [peek, setPeek] = useState<Scored | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -269,6 +273,7 @@ export default function App() {
     setIntel({});
   }, [scope]);
   useEffect(() => {
+    if (dayPlay) return; // while the day plays, keep the last reading; read again once it stops
     let alive = true;
     const k = scopeKey;
     setReading((r) => (r && r.ok && r.key.target === k.target && r.key.hour === k.hour && r.key.day === k.day && r.key.watched === k.watched ? r : null));
@@ -283,7 +288,7 @@ export default function App() {
       alive = false;
       clearTimeout(id);
     };
-  }, [scope, scopeKey.hour]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scope, scopeKey.hour, dayPlay]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Jev's readings for a set of hours, fetched together; whatever doesn't come back is left to the built-in guess. */
   const readHours = async (hs: number[]) => {
     const got = await Promise.all([...new Set(hs.map((h) => Math.floor(h) % 24))].map((h) => readIntel(intelKey(plan.target, h, plan.day, plan.watched))));
@@ -316,26 +321,40 @@ export default function App() {
       const v = mapRef.current?.view;
       if (!v) return;
       const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4)); // 0 high above, 1 down at the roofs
-      const reach = 70 + (1 - close) * 130; // how far a place carries, in metres
-      const near = (qs: Rect[]) => {
+      const hush = striking ? 0.3 : 1;
+      // One place at a time, and only up close: the nearest place you're looking at, within a short distance.
+      const reach = 25 + close * 35; // metres
+      const dist = (qs: Rect[]) => {
         let d = Infinity;
         for (const q of qs) d = Math.min(d, Math.hypot(Math.max(q.x - v.cx, 0, v.cx - q.x - q.w), Math.max(q.y - v.cy, 0, v.cy - q.y - q.h)));
-        return Math.max(0, 1 - d / reach) * (0.35 + 0.65 * close);
+        return d;
       };
-      const hush = striking ? 0.3 : 1;
-      const water = Math.max(0, 1 - Math.abs(v.cx - riverX(v.cy)) / reach) * (0.35 + 0.65 * close);
-      void sound.ambience({
-        'amb-city-day': day * hush * (0.55 + 0.45 * (1 - close)),
-        'amb-city-night': (1 - day) * hush * (0.55 + 0.45 * (1 - close)),
-        'amb-cell-room': 0.4,
-        'amb-wind': (1 - close) ** 2 * 0.45 * hush,
-        'amb-market': near(zones.market) * day * 0.8 * hush,
-        'amb-park': near(zones.park) * (0.3 + 0.7 * day) * 0.7 * hush,
-        'amb-pitch': near(zones.pitch) * day * 0.6 * hush,
-        'amb-school': near(zones.school) * (plan.day === 'friday' ? 0 : h >= 7.5 && h < 14 ? 0.7 : 0) * hush,
-        'amb-traffic': near(zones.traffic) * busy * 0.55 * hush,
-        'amb-water': water * 0.6 * hush,
-      });
+      const school = plan.day !== 'friday' && h >= 7.5 && h < 14;
+      const candidates: [Bed, number, number][] = [
+        ['amb-market', dist(zones.market), day * 0.8],
+        ['amb-park', dist(zones.park), (0.3 + 0.7 * day) * 0.7],
+        ['amb-pitch', dist(zones.pitch), day * 0.6],
+        ['amb-school', dist(zones.school), school ? 0.6 : 0],
+        ['amb-traffic', dist(zones.traffic), busy * 0.45],
+        ['amb-water', Math.max(0, Math.abs(v.cx - riverX(v.cy)) - world.river.width / 2), 0.55],
+      ];
+      let pick: [Bed, number] | null = null;
+      if (close > 0.3)
+        for (const [bed, d, loud] of candidates) {
+          if (loud <= 0 || d > reach) continue;
+          const lvl = loud * (1 - d / reach) * Math.min(1, (close - 0.3) / 0.3);
+          if (!pick || lvl > pick[1]) pick = [bed, lvl];
+        }
+      const local = pick?.[1] ?? 0;
+      const base = (1 - Math.min(0.65, local * 1.2)) * 0.8; // the city dips under the place you're at
+      const levels: Partial<Record<Bed, number>> = {
+        'amb-city-day': day * base * hush,
+        'amb-city-night': (1 - day) * base * hush,
+        'amb-cell-room': 0.22,
+        'amb-wind': close < 0.12 ? (1 - close / 0.12) * 0.3 * hush : 0,
+      };
+      for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
+      void sound.ambience(levels);
     };
     tick();
     const id = window.setInterval(tick, 700);
@@ -354,8 +373,10 @@ export default function App() {
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
-  // Every change reruns the estimate and the danger field.
+  // Every change reruns the estimate and the danger field. While the day plays, they hold still (the map's
+  // people and the day line still move) and catch up the moment it stops, so nothing stutters.
   useEffect(() => {
+    if (dayPlay) return;
     setComputing(true);
     const id = window.setTimeout(() => {
       setEst(estimate(world, plan, popNow, runs, estSeed));
@@ -363,7 +384,7 @@ export default function App() {
       setComputing(false);
     }, 90);
     return () => clearTimeout(id);
-  }, [world, plan, popNow, runs, estSeed]);
+  }, [world, plan, popNow, runs, estSeed, dayPlay]);
 
   // The day and the options, from a worker so dragging stays smooth.
   const sideWorker = useRef<Worker | null>(null);
@@ -542,7 +563,37 @@ export default function App() {
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const space = useCallback(() => ({ weapons: allowed, hours: WINDOWS[hours] }), [allowed, hours]);
+  // The guide doesn't run Jev live: it replays one recorded search (the warehouse, every plan) into the chart,
+  // with no workers and no sound, so it loads fast and the narrator isn't competing with anything.
+  const demoTimer = useRef(0);
+  const stopDemo = () => window.clearInterval(demoTimer.current);
+  const startDemo = async () => {
+    stopDemo();
+    poolRef.current?.stop();
+    timers.current.forEach(clearTimeout);
+    setLog([]);
+    bestRef.current = undefined;
+    seenCount.current = 0;
+    trailRef.current = [];
+    setResults([]);
+    setSimulated(0);
+    setPhase('search');
+    const rows: [WeaponId, FuzeId, number, Candidate['aim'], number, number, number, number][] = await fetch('/demo/jev-warehouse.json').then((r) => r.json()).catch(() => []);
+    if (!rows.length) return setPhase('idle');
+    const all: Scored[] = rows.map(([weapon, fuze, heading, aim, hour, pk, mean, p90]) => ({ c: { weapon, fuze, heading, aim, hour }, pk, mean, p90 }));
+    pushLog(`A recorded search of ${target.name}: ${all.length.toLocaleString()} plans, each replayed 120 times.`, 'step');
+    let n = 0;
+    const per = Math.ceil(all.length / 80); // about eight seconds
+    demoTimer.current = window.setInterval(() => {
+      n = Math.min(all.length, n + per);
+      setResults(all.slice(0, n));
+      setSimulated(n * 120);
+      setStatus({ running: n < all.length, done: n, total: all.length, busy: n < all.length ? 4 : 0, workers: 4, rate: per * 10 });
+      if (n >= all.length) stopDemo();
+    }, 100);
+  };
   const runJev = () => {
+    if (guide != null) return void startDemo();
     const pool = poolRef.current;
     if (!pool) return;
     timers.current.forEach(clearTimeout);
@@ -951,6 +1002,14 @@ export default function App() {
   };
   const goGuide = (i: number | null) => {
     setGuide(i);
+    stopDemo();
+    if (i != null && GUIDE[i].demo) void startDemo();
+    else if (phaseRef.current !== 'idle' && (i == null || (guide != null && GUIDE[guide].demo))) {
+      // Leaving the demo: clear it, so nothing recorded is mistaken for a live search.
+      setResults([]);
+      setPhase('idle');
+      setLog([]);
+    }
     // "Change the hour" plays through the day; any other step (or leaving the guide) stops it.
     setDayPlay(i != null && !!GUIDE[i].play);
     if (i == null) return sound.stopVoice();
@@ -979,6 +1038,8 @@ export default function App() {
     setPop(null);
     setOutcome(null);
   };
+  // The guide is its own thing: the narrator leads, the rest goes quiet.
+  useEffect(() => sound.setQuiet(guide != null), [guide]);
   // Once the opening card is gone, the Guide button breathes for a few seconds so people know it's there.
   const [guideHint, setGuideHint] = useState(true);
   useEffect(() => {
@@ -2066,7 +2127,7 @@ export default function App() {
               ›
             </button>
           </div>
-          {tab === 'estimate' ? estimateDock : jevDock}
+          {tab === 'estimate' ? <div className={`held-wrap ${dayPlay ? 'held' : ''}`}>{dayPlay && <div className="held-note">Playing the day. The figures catch up when it stops.</div>}{estimateDock}</div> : jevDock}
         </aside>
       </main>
 
