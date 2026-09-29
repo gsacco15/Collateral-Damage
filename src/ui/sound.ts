@@ -115,7 +115,7 @@ class SoundEngine {
 
   constructor() {
     try {
-      this.enabled = localStorage.getItem(KEY) === '1';
+      this.enabled = localStorage.getItem(KEY) !== '0'; // on unless you've turned it off
       const m = JSON.parse(localStorage.getItem(MIX_KEY) ?? 'null');
       if (m) this.mix = { ...DEFAULT_MIX, ...m };
     } catch {

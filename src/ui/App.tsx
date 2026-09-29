@@ -198,6 +198,11 @@ export default function App() {
     const id = window.setTimeout(() => goGuide(0), 600);
     return () => clearTimeout(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The opening card tells itself: its narration is queued as the page opens. Browsers hold all sound until the
+  // first tap or key press, so it starts the moment you touch the page (or straight away, where the browser allows).
+  useEffect(() => {
+    if (intro && sound.enabled) void sound.voice(0);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Closing the opening card: it lifts away and the city clears, then the guide begins.
   const [introLeaving, setIntroLeaving] = useState(false);
   const closeIntro = (step: boolean) => {
