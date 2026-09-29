@@ -29,8 +29,8 @@ import {
   type World,
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
-import { drawCityLife } from './citylife';
-import { drawAnimals, drawRiverLife, type LifeCtx } from './riverlife';
+import { drawLife2D } from './life2d';
+import { lifeScene } from './lifeScene';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
 import { C, hexA, mix, nightness, sun, type Sun } from './paper';
 
@@ -590,32 +590,26 @@ export class MapView {
     }
     if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
-    // Life on the water and in the streets: boats, fishermen, strollers, ducks, swans, dogs, cats.
+    // Life on the water and in the streets (see lifeScene): the same scene the 3D model builds.
     {
       const wpn = weapon(plan.weapon);
-      const life: LifeCtx = {
+      const ents = lifeScene({
         world: this.world,
         time: this.time,
         hour: f.plan.hour,
         night,
-        px,
+        damaged,
         away: shown ? { x: shown.ix, y: shown.iy, r: Math.max(70, wpn.blast * 4) } : null,
         brokenBridge: f.ruins.includes(BRIDGE_RUIN) || (shown?.damaged.includes(BRIDGE_RUIN) ?? false) ? targetOf(this.world, 'bridge').rect : null,
+      });
+      drawLife2D(g, ents, {
+        time: this.time,
+        night,
+        animals: s > 1.1,
+        traffic: s > 0.9,
         figure: (w) => drawFigure(g, w, this.time, sh, night, px),
-      };
-      drawRiverLife(g, life);
-      if (s > 1.1) drawAnimals(g, life);
-      if (s > 0.9)
-        drawCityLife(g, {
-          world: this.world,
-          time: this.time,
-          hour: f.plan.hour,
-          night,
-          damaged,
-          away: life.away,
-          brokenBridge: life.brokenBridge,
-          car: (x, y, horizontal, dir, color, lit) => drawCar(g, { id: -1, x, y, horizontal, dir, lane: 0, from: 0, to: 0, speed: 0, color, hurt: false }, lit ? night : 0, sh, false),
-        });
+        car: (x, y, horizontal, dir, color) => drawCar(g, { id: -1, x, y, horizontal, dir, lane: 0, from: 0, to: 0, speed: 0, color, hurt: false }, 0, sh, false),
+      });
     }
     if (fx) this.drawFx(g, fx, px);
     this.drawSmoke(g, night);
