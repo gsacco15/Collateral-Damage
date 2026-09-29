@@ -121,7 +121,19 @@ export default function App() {
   const [about, setAbout] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [headingDrag, setHeadingDrag] = useState(false);
-  const [theaterOpen, setTheaterOpen] = useState(true);
+  const [panels, setPanelsState] = useState<Panels>(loadPanels);
+  const setPanels = (f: (p: Panels) => Panels) =>
+    setPanelsState((p) => {
+      const n = f(p);
+      try {
+        localStorage.setItem(PANELS_KEY, JSON.stringify(n));
+      } catch {
+        /* private window: fine, just not remembered */
+      }
+      return n;
+    });
+  const [drawerTab, setDrawerTab] = useState<'day' | 'jev'>('day');
+  const [layersOpen, setLayersOpen] = useState(false);
   const [placesOpen, setPlacesOpen] = useState(false);
   const [simulated, setSimulated] = useState(0);
 
@@ -229,7 +241,15 @@ export default function App() {
         setConfirm(false);
         setPop(null);
         setPlacesOpen(false);
+        setLayersOpen(false);
       }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === 'p') setPanels((p) => ({ ...p, plan: !p.plan }));
+      if (k === 'e') setPanels((p) => ({ ...p, side: !p.side }));
+      if (k === 't') setPanels((p) => ({ ...p, drawer: !p.drawer }));
+      if (k === 'f') setPanels(fullMap);
+      if (k === 'l') setLayersOpen((o) => !o);
       if (e.key === '[') setPlanState((p) => ({ ...p, hour: (p.hour + 23.5) % 24 }));
       if (e.key === ']') setPlanState((p) => ({ ...p, hour: (p.hour + 0.5) % 24 }));
       if (e.key === ',') setPlanState((p) => ({ ...p, heading: (p.heading + 345) % 360 }));
@@ -277,7 +297,7 @@ export default function App() {
   }, [speed]);
 
   const bestNow = useMemo(() => best(results, minPk), [results, minPk]);
-  const showTheater = theaterOpen && phase !== 'idle';
+  const showTheater = panels.drawer && drawerTab === 'jev' && phase !== 'idle';
   useEffect(() => {
     if (!showTheater || !theaterCanvas.current) return;
     const t = new JevTheater(theaterCanvas.current);
@@ -341,7 +361,8 @@ export default function App() {
     seenCount.current = 0;
     trailRef.current = [];
     setSimulated(0);
-    setTheaterOpen(true);
+    setDrawerTab('jev');
+    setPanels((p) => ({ ...p, drawer: true, side: true }));
     setPhase('checklist');
     setTab('jev');
     setMobileTab('jev');
@@ -448,7 +469,11 @@ export default function App() {
     if (hh) setPlanState((p) => ({ ...p, hour: Math.min(23.5, +hh[1]) }));
     if (/d=friday/.test(location.hash)) setPlanState((p) => ({ ...p, day: 'friday' }));
     map.clampView();
-    const ro = new ResizeObserver(() => map.resize());
+    // Resizing clears the canvas, so redraw straight away rather than flash blank while a panel slides.
+    const ro = new ResizeObserver(() => {
+      map.resize();
+      if (frameRef.current) map.frame(frameRef.current, 0);
+    });
     ro.observe(canvas);
     let raf = 0;
     let last = performance.now();
@@ -932,9 +957,15 @@ export default function App() {
         <div className="progress">
           <div style={{ width: `${status.total ? (100 * status.done) / status.total : 0}%` }} />
         </div>
-        {phase !== 'idle' && !theaterOpen && (
-          <button className="link" onClick={() => setTheaterOpen(true)}>
-            Watch Jev work on the map
+        {phase !== 'idle' && !showTheater && (
+          <button
+            className="link"
+            onClick={() => {
+              setDrawerTab('jev');
+              setPanels((p) => ({ ...p, drawer: true }));
+            }}
+          >
+            Watch Jev work
           </button>
         )}
         <p className="hint mono">
@@ -1047,12 +1078,34 @@ export default function App() {
             {guide == null ? 'Guide' : 'End guide'}
           </button>
           <Seg small value={view} onChange={setView} options={[['map', 'Map'], ['model', '3D']]} />
+          <div className="panel-toggles" role="group" aria-label="Panels">
+            <button className={panels.plan ? 'on' : ''} onClick={() => setPanels((p) => ({ ...p, plan: !p.plan }))} aria-pressed={panels.plan} title="Plan panel (P)">
+              <PanelIcon side="left" />
+              Plan
+            </button>
+            <button className={panels.drawer ? 'on' : ''} onClick={() => setPanels((p) => ({ ...p, drawer: !p.drawer }))} aria-pressed={panels.drawer} title="Timeline and Jev at work (T)">
+              <PanelIcon side="bottom" />
+              Timeline
+            </button>
+            <button className={panels.side ? 'on' : ''} onClick={() => setPanels((p) => ({ ...p, side: !p.side }))} aria-pressed={panels.side} title="Estimate and Jev (E)">
+              <PanelIcon side="right" />
+              Estimate
+            </button>
+            <button className={`full ${!panels.plan && !panels.side && !panels.drawer ? 'on' : ''}`} onClick={() => setPanels(fullMap)} title="Full map (F)" aria-label="Full map">
+              ⛶
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="main">
-        <aside className="dock left" aria-label="Plan">
-          <div className="dock-title">Plan</div>
+      <main className={`main ${panels.plan ? '' : 'no-left'} ${panels.side ? '' : 'no-right'}`}>
+        <aside className="dock left" aria-label="Plan" hidden={!panels.plan}>
+          <div className="dock-title">
+            Plan
+            <button className="dock-x" onClick={() => setPanels((p) => ({ ...p, plan: false }))} aria-label="Hide the plan panel" title="Hide (P)">
+              ‹
+            </button>
+          </div>
           {planDock}
         </aside>
 
@@ -1083,37 +1136,59 @@ export default function App() {
               {following && <em>Jev testing</em>}
             </div>
 
-            <div className="hud-layers" role="group" aria-label="Map layers">
-              {(
-                [
-                  ['danger', 'Danger'],
-                  ['people', 'People'],
-                  ['pattern', 'Fragments'],
-                  ['circle', 'Circle'],
-                  ['impacts', 'Landings'],
-                  ['protect', 'Protected'],
-                  ['labels', 'Labels'],
-                ] as [keyof Layers, string][]
-              ).map(([k, name]) => (
-                <button key={k} className={layers[k] ? 'on' : ''} onClick={() => setLayers({ ...layers, [k]: !layers[k] })} aria-pressed={layers[k]}>
-                  {name}
-                </button>
-              ))}
+            <div className="hud-layers">
+              <button className={`layers-btn ${layersOpen ? 'on' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen} title="Map layers (L)">
+                Layers <span className="mono">{Object.values(layers).filter(Boolean).length}</span> ▾
+              </button>
+              {layersOpen && (
+                <div className="layers-pop" role="group" aria-label="Map layers">
+                  {(
+                    [
+                      ['danger', 'Danger', 'Chance someone in the open is killed or badly hurt'],
+                      ['people', 'People', 'Everyone Jev expects at this hour'],
+                      ['pattern', 'Fragments', 'Where fragments fly, and the shadows buildings cast'],
+                      ['circle', 'Circle', "The crude circle and what's inside it"],
+                      ['impacts', 'Landings', 'Where each simulated bomb landed'],
+                      ['protect', 'Protected', 'Hospitals, schools, places of worship'],
+                      ['labels', 'Labels', 'Places you have found'],
+                    ] as [keyof Layers, string, string][]
+                  ).map(([k, name, note]) => (
+                    <button key={k} className={layers[k] ? 'on' : ''} onClick={() => setLayers({ ...layers, [k]: !layers[k] })} aria-pressed={layers[k]}>
+                      <i className="tick" aria-hidden>
+                        {layers[k] ? '✓' : ''}
+                      </i>
+                      <span>
+                        <b>{name}</b>
+                        <em>{note}</em>
+                      </span>
+                      {k === 'danger' && layers.danger && (
+                        <span className="mini-legend" aria-hidden>
+                          <span className="ramp">
+                            <i />
+                          </span>
+                          <span className="ramp-ticks">
+                            <span>0</span>
+                            <span>1 in 10</span>
+                            <span>1 in 2</span>
+                            <span>certain</span>
+                          </span>
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {layers.danger && view === 'map' && !outcome && !showTheater && (
-              <div className="hud-legend">
-                <span>Chance someone in the open is killed or badly hurt</span>
-                <div className="ramp">
-                  <i />
-                </div>
-                <div className="ramp-ticks">
-                  <span>0</span>
-                  <span>1 in 10</span>
-                  <span>1 in 2</span>
-                  <span>certain</span>
-                </div>
-              </div>
+            {!panels.plan && (
+              <button className="edge-tab left" onClick={() => setPanels((p) => ({ ...p, plan: true }))} title="Show the plan (P)">
+                Plan ›
+              </button>
+            )}
+            {!panels.side && (
+              <button className="edge-tab right" onClick={() => setPanels((p) => ({ ...p, side: true }))} title="Show the estimate (E)">
+                ‹ {est ? `${est.p90} · ${approval.who}` : 'Estimate'}
+              </button>
             )}
 
             <div className="hud-zoom">
@@ -1178,39 +1253,6 @@ export default function App() {
                       })}
                   </div>
                 ))}
-              </div>
-            )}
-
-            {showTheater && (
-              <div className="theater">
-                <div className="theater-head">
-                  <b>Jev at work</b>
-                  <span className="mono">
-                    {status.workers} workers · {status.done.toLocaleString()}/{status.total.toLocaleString()} plans · {simulated.toLocaleString()} simulated strikes · {status.rate.toFixed(0)} plans/s
-                  </span>
-                  <span className="theater-ctl">
-                    <Seg
-                      small
-                      value={speed}
-                      onChange={setSpeed}
-                      options={[
-                        [2, '1×'],
-                        [4, '4×'],
-                        [6, '16×'],
-                        [8, 'Max'],
-                      ]}
-                    />
-                    {phase === 'search' && (
-                      <button className="btn small" onClick={() => (status.running ? poolRef.current?.pause() : poolRef.current?.resume())}>
-                        {status.running ? 'Pause' : 'Resume'}
-                      </button>
-                    )}
-                    <button className="x" onClick={() => setTheaterOpen(false)} aria-label="Hide Jev at work">
-                      ×
-                    </button>
-                  </span>
-                </div>
-                <canvas ref={theaterCanvas} className="theater-canvas" aria-label="Jev's workers scoring plans in parallel" />
               </div>
             )}
 
@@ -1428,24 +1470,83 @@ export default function App() {
             )}
           </div>
 
-          <div className="timebar">
-            <div className="time-controls">
+          {panels.drawer ? (
+            <div className={`drawer ${drawerTab}`}>
+              <div className="drawer-tabs" role="tablist">
+                <button role="tab" aria-selected={drawerTab === 'day'} className={drawerTab === 'day' ? 'on' : ''} onClick={() => setDrawerTab('day')}>
+                  The day
+                </button>
+                <button role="tab" aria-selected={drawerTab === 'jev'} className={drawerTab === 'jev' ? 'on' : ''} onClick={() => setDrawerTab('jev')}>
+                  Jev at work {phase === 'search' && status.running && <i className="live" />}
+                </button>
+                <button className="dock-x" onClick={() => setPanels((p) => ({ ...p, drawer: false }))} aria-label="Hide the timeline" title="Hide (T)">
+                  ▾
+                </button>
+              </div>
+              {drawerTab === 'day' ? (
+                <div className="timebar">
+                  <div className="time-controls">
               <Seg small value={plan.day} onChange={(day: Day) => setPlan({ day })} options={[['weekday', 'Weekday'], ['friday', 'Friday']]} />
               <button className="btn small" onClick={() => setDayPlay(!dayPlay)} aria-pressed={dayPlay}>
                 {dayPlay ? '❚❚ Pause' : '▶ Play the day'}
               </button>
             </div>
             <Timeline profile={profile} hour={plan.hour} onHour={(h) => setPlan({ hour: h })} day={plan.day === 'friday' ? 'Friday' : 'weekday'} />
-          </div>
+                </div>
+              ) : phase === 'idle' ? (
+                <div className="drawer-empty">
+                  <p>Jev hasn't run yet. It will try every weapon, fuze, direction, aim point and hour in parallel, and you can watch each worker score plans here.</p>
+                  <button className="btn primary small" onClick={() => runJev()}>
+                    Run Jev
+                  </button>
+                </div>
+              ) : (
+                          <div className="theater">
+                <div className="theater-head">
+                  <b>{status.running ? 'Working' : phase === 'search' ? 'Paused' : 'Done'}</b>
+                  <span className="mono">
+                    {status.workers} workers · {status.done.toLocaleString()}/{status.total.toLocaleString()} plans · {simulated.toLocaleString()} simulated strikes · {status.rate.toFixed(0)} plans/s
+                  </span>
+                  <span className="theater-ctl">
+                    <Seg
+                      small
+                      value={speed}
+                      onChange={setSpeed}
+                      options={[
+                        [2, '1×'],
+                        [4, '4×'],
+                        [6, '16×'],
+                        [8, 'Max'],
+                      ]}
+                    />
+                    {phase === 'search' && (
+                      <button className="btn small" onClick={() => (status.running ? poolRef.current?.pause() : poolRef.current?.resume())}>
+                        {status.running ? 'Pause' : 'Resume'}
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <canvas ref={theaterCanvas} className="theater-canvas" aria-label="Jev's workers scoring plans in parallel" />
+              </div>
+              )}
+            </div>
+          ) : (
+            <button className="edge-tab bottom" onClick={() => setPanels((p) => ({ ...p, drawer: true }))} title="Show the timeline (T)">
+              ▴ {fmtHour(plan.hour)} · timeline{phase !== 'idle' ? ' · Jev at work' : ''}
+            </button>
+          )}
         </section>
 
-        <aside className="dock right" aria-label="Estimate and Jev">
+        <aside className="dock right" aria-label="Estimate and Jev" hidden={!panels.side}>
           <div className="tabs">
             <button className={tab === 'estimate' ? 'on' : ''} onClick={() => setTab('estimate')}>
               Estimate {computing && <i className="spin" />}
             </button>
             <button className={tab === 'jev' ? 'on' : ''} onClick={() => setTab('jev')}>
               Jev {phase === 'search' && status.running && <i className="live" />}
+            </button>
+            <button className="dock-x" onClick={() => setPanels((p) => ({ ...p, side: false }))} aria-label="Hide the estimate panel" title="Hide (E)">
+              ›
             </button>
           </div>
           {tab === 'estimate' ? estimateDock : jevDock}
@@ -1465,3 +1566,31 @@ export default function App() {
 }
 
 const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${fuze(c.fuze).name.toLowerCase()}, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;
+
+interface Panels {
+  plan: boolean;
+  side: boolean;
+  drawer: boolean;
+}
+const PANELS_KEY = 'cd.panels';
+function loadPanels(): Panels {
+  const d = { plan: true, side: true, drawer: true };
+  try {
+    return { ...d, ...JSON.parse(localStorage.getItem(PANELS_KEY) ?? '{}') };
+  } catch {
+    return d;
+  }
+}
+/** Hide every panel, or bring them all back if they're already hidden. */
+const fullMap = (p: Panels): Panels => (p.plan || p.side || p.drawer ? { plan: false, side: false, drawer: false } : { plan: true, side: true, drawer: true });
+
+function PanelIcon({ side }: { side: 'left' | 'right' | 'bottom' }) {
+  return (
+    <svg viewBox="0 0 16 12" width="14" height="11" aria-hidden className="picon">
+      <rect x="0.5" y="0.5" width="15" height="11" rx="2" fill="none" stroke="currentColor" />
+      {side === 'left' && <rect x="1.5" y="1.5" width="4" height="9" rx="1" fill="currentColor" />}
+      {side === 'right' && <rect x="10.5" y="1.5" width="4" height="9" rx="1" fill="currentColor" />}
+      {side === 'bottom' && <rect x="1.5" y="7.5" width="13" height="3" rx="1" fill="currentColor" />}
+    </svg>
+  );
+}

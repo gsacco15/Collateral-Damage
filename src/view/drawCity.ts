@@ -2,6 +2,7 @@
 // Used twice: once into a large world-sized cache for smooth panning, and again sharp for the current view.
 import { riverX, rng, shownCount, type Building, type Population, type Rect, type Space, type World } from '../jev';
 import { C, grade, nightness, shade, sun, type Sun } from './paper';
+import { laid } from './textures';
 
 export interface CityOpts {
   hour: number;
@@ -19,10 +20,10 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
   const v = o.view;
 
   // Paper table beyond the city.
-  g.fillStyle = C.street;
+  g.fillStyle = laid(g, 'road', 1, false);
   g.fillRect(v.x - 50, v.y - 50, v.w + 100, v.h + 100);
   // Blocks beyond the edge, so the city doesn't stop at the frame.
-  g.fillStyle = C.pavement;
+  g.fillStyle = laid(g, 'ground', 2);
   for (let bx = -3; bx < 13; bx++)
     for (let by = -3; by < 10; by++) {
       const x = bx * 110 - 50;
@@ -33,10 +34,13 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
   // Blocks.
   for (const bl of w.blocks) {
     if (!visible(v, bl)) continue;
-    g.fillStyle = C.pavement;
+    // A kerb of grey card, then the block: a sheet of paper, sandier in the old town and on Tin Hill.
+    g.fillStyle = laid(g, 'grey', bl.x * 3 + bl.y);
     g.fillRect(bl.x, bl.y, bl.w, bl.h);
-    g.fillStyle = bl.district === 'tinhill' ? '#d9ccb6' : bl.district === 'oldtown' ? '#e3d6c0' : C.ground;
-    g.fillRect(bl.x + 2.6, bl.y + 2.6, bl.w - 5.2, bl.h - 5.2);
+    g.fillStyle = 'rgba(40,30,20,0.12)';
+    g.fillRect(bl.x + 2.6, bl.y + 3.2, bl.w - 5.2, bl.h - 5.2);
+    g.fillStyle = laid(g, bl.district === 'tinhill' || bl.district === 'oldtown' ? 'sand' : 'ground', bl.x + bl.y * 7);
+    g.fill(tornPath({ x: bl.x + 2.6, y: bl.y + 2.6, w: bl.w - 5.2, h: bl.h - 5.2 }, rng(bl.x * 5 + bl.y), 0.5));
   }
   // The canal's quays.
   g.fillStyle = C.quay;
@@ -52,13 +56,13 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
       g.fillRect(q.x, q.y + q.h, q.w, 3);
       g.fillStyle = '#b9b1a6';
       g.fillRect(q.x, q.y - 1.2, q.w, q.h + 2.4);
-      g.fillStyle = C.road;
+      g.fillStyle = laid(g, 'road', 3, false);
       g.fillRect(q.x, q.y + 1, q.w, q.h - 2);
       g.fillStyle = '#e9e2d5';
       g.fillRect(q.x, q.y - 1.2, q.w, 1);
       g.fillRect(q.x, q.y + q.h + 0.2, q.w, 1);
     } else if (rd.kind === 'boulevard') {
-      g.fillStyle = C.road;
+      g.fillStyle = laid(g, 'road', 4, false);
       g.fillRect(q.x, q.y + 1.5, q.w, q.h - 3);
       g.fillStyle = '#c9c0ad';
       g.fillRect(q.x, q.y + q.h / 2 - 2, q.w, 4); // the median
@@ -125,7 +129,12 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
           shadowCtx.arc(cx + (sh.dx * h * k) / 8, cy + (sh.dy * h * k) / 8, q.w / 2, 0, Math.PI * 2);
           shadowCtx.fill();
         }
-      } else for (const q of b.rects) castRect(shadowCtx, q.x, q.y, q.w, q.h, sh.dx * h, sh.dy * h);
+      } else
+        for (const q of b.rects) {
+          castRect(shadowCtx, q.x, q.y, q.w, q.h, sh.dx * h, sh.dy * h);
+          // A soft contact shadow all round, as where a paper box sits on the table.
+          shadowCtx.fillRect(q.x - 0.6, q.y - 0.6, q.w + 1.2, q.h + 1.2);
+        }
     }
     for (const wl of w.walls) if (visible(v, wl)) castRect(shadowCtx, wl.x, wl.y, Math.max(wl.w, 0.5), Math.max(wl.h, 0.5), sh.dx * 2.4, sh.dy * 2.4);
     for (const t of w.trees) {
@@ -157,7 +166,7 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (pattern) {
     g.globalCompositeOperation = 'multiply';
-    g.globalAlpha = 0.85;
+    g.globalAlpha = 0.45;
     g.fillStyle = pattern;
     g.fillRect(0, 0, width, height);
   }
@@ -258,7 +267,7 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
   const r = rng(s.id * 97 + 5);
   switch (s.kind) {
     case 'park': {
-      g.fillStyle = C.grass;
+      g.fillStyle = laid(g, 'grass', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
       g.strokeStyle = '#e4dccb';
       g.lineWidth = 2.2;
@@ -271,7 +280,9 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
       break;
     }
     case 'pitch': {
-      g.fillStyle = '#9fb46f';
+      g.fillStyle = laid(g, 'grass', s.id);
+      g.fillRect(q.x, q.y, q.w, q.h);
+      g.fillStyle = 'rgba(90,120,40,0.18)';
       g.fillRect(q.x, q.y, q.w, q.h);
       for (let i = 0; i < 7; i++) {
         g.fillStyle = i % 2 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)';
@@ -290,14 +301,14 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
       break;
     }
     case 'cemetery': {
-      g.fillStyle = '#d6cfbe';
+      g.fillStyle = laid(g, 'sand', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
       g.fillStyle = '#b9b2a4';
       for (let y = q.y + 4; y < q.y + q.h - 2; y += 4) for (let x = q.x + 3; x < q.x + q.w - 2; x += 3.2) if (r() < 0.7) g.fillRect(x, y, 1.1, 2);
       break;
     }
     case 'market': {
-      g.fillStyle = '#e8dcc4';
+      g.fillStyle = laid(g, 'ground', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
       // Stalls under striped cloth.
       const cols = ['#b85a3c', '#4f7a8a', '#c9a44c', '#7a8a4f'];
@@ -315,7 +326,9 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
     }
     case 'busstation':
     case 'yard': {
-      g.fillStyle = s.kind === 'yard' ? '#a39b91' : '#9d958b';
+      g.fillStyle = laid(g, 'road', s.id);
+      g.fillRect(q.x, q.y, q.w, q.h);
+      g.fillStyle = 'rgba(255,250,240,0.12)';
       g.fillRect(q.x, q.y, q.w, q.h);
       g.strokeStyle = 'rgba(255,255,255,0.45)';
       g.lineWidth = 0.3;
@@ -340,7 +353,7 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
       break;
     }
     case 'playground': {
-      g.fillStyle = '#e2d3b6';
+      g.fillStyle = laid(g, 'sand', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
       g.strokeStyle = 'rgba(255,255,255,0.7)';
       g.lineWidth = 0.35;
@@ -349,7 +362,7 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
     }
     case 'courtyard':
     case 'plaza': {
-      g.fillStyle = s.kind === 'courtyard' ? '#efe7d7' : '#e6dcc8';
+      g.fillStyle = laid(g, s.kind === 'courtyard' ? 'white' : 'ground', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
       if (scale > 1.5) {
         g.strokeStyle = 'rgba(150,130,100,0.18)';
@@ -449,14 +462,21 @@ function drawTree(g: CanvasRenderingContext2D, x: number, y: number, rad: number
   }
   g.closePath();
   g.fill();
-  g.strokeStyle = 'rgba(60,70,30,0.35)';
-  g.lineWidth = 0.12;
-  for (let i = 0; i < 3; i++) {
-    const a = r() * Math.PI * 2;
+  // A crumpled paper ball: facets from an off-centre peak, lit on the sun's side.
+  const px = x - sh.dx * rad * 0.12;
+  const py = y - sh.dy * rad * 0.12;
+  const f = 7;
+  for (let i = 0; i < f; i++) {
+    const a0 = (i / f) * Math.PI * 2 + r() * 0.3;
+    const a1 = ((i + 1) / f) * Math.PI * 2 + r() * 0.3;
+    const facing = Math.cos((a0 + a1) / 2 - Math.atan2(-sh.dy, -sh.dx));
+    g.fillStyle = facing > 0 ? `rgba(235,245,190,${0.1 + facing * 0.14})` : `rgba(30,40,10,${0.06 - facing * 0.12})`;
     g.beginPath();
-    g.moveTo(x + Math.cos(a) * rad * 0.1, y + Math.sin(a) * rad * 0.1);
-    g.lineTo(x + Math.cos(a + 0.4) * rad * 0.8, y + Math.sin(a + 0.4) * rad * 0.8);
-    g.stroke();
+    g.moveTo(px, py);
+    g.lineTo(x + Math.cos(a0) * rad * 0.88, y + Math.sin(a0) * rad * 0.88);
+    g.lineTo(x + Math.cos(a1) * rad * 0.88, y + Math.sin(a1) * rad * 0.88);
+    g.closePath();
+    g.fill();
   }
 }
 
@@ -474,35 +494,7 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
   const lx = -sh.dx;
   const ly = -sh.dy;
   if (damaged) {
-    for (const q of b.rects) {
-      const pr = rng(b.id * 17 + Math.round(q.x));
-      g.fillStyle = b.paper === 'kraft' ? '#8c7454' : b.paper === 'tin' ? '#7d8285' : '#b7b1a6';
-      g.beginPath();
-      const pts = 22;
-      for (let i = 0; i < pts; i++) {
-        const t = i / pts;
-        const side = Math.floor(t * 4);
-        const u = (t * 4) % 1;
-        const j = () => (pr() - 0.5) * Math.min(q.w, q.h) * 0.22;
-        const x = side === 0 ? q.x + q.w * u : side === 1 ? q.x + q.w : side === 2 ? q.x + q.w * (1 - u) : q.x;
-        const y = side === 0 ? q.y : side === 1 ? q.y + q.h * u : side === 2 ? q.y + q.h : q.y + q.h * (1 - u);
-        if (i === 0) g.moveTo(x + j(), y + j());
-        else g.lineTo(x + j(), y + j());
-      }
-      g.closePath();
-      g.fill();
-      for (let i = 0; i < Math.min(40, (q.w * q.h) / 20); i++) {
-        const x = q.x + pr() * q.w;
-        const y = q.y + pr() * q.h;
-        const s = 0.8 + pr() * 3;
-        g.fillStyle = pr() < 0.5 ? face : pr() < 0.5 ? '#6f675d' : '#d9d3c8';
-        g.save();
-        g.translate(x, y);
-        g.rotate(pr() * 6);
-        g.fillRect(-s / 2, -s / 3, s, s * 0.66);
-        g.restore();
-      }
-    }
+    b.rects.forEach((q, qi) => drawRubble(g, q, b.paper, rng(b.id * 17 + qi), sh));
     return;
   }
   if (b.round) {
@@ -526,12 +518,19 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
     g.stroke();
     return;
   }
-  for (const q of b.rects) {
+  b.rects.forEach((q, qi) => {
+    // A sheet of paper with slightly torn edges, lit from the sun's side.
+    const jag = Math.min(0.32, Math.min(q.w, q.h) * 0.035);
+    const path = tornPath(q, rng(b.id * 53 + qi), jag);
+    g.fillStyle = laid(g, b.paper, b.id * 7 + qi);
+    g.fill(path);
     const grd = g.createLinearGradient(q.x + q.w / 2 - lx * q.w * 0.3, q.y + q.h / 2 - ly * q.h * 0.3, q.x + q.w / 2 + lx * q.w * 0.3, q.y + q.h / 2 + ly * q.h * 0.3);
-    grd.addColorStop(0, shade(face, -0.06));
-    grd.addColorStop(1, shade(face, 0.03));
+    grd.addColorStop(0, 'rgba(70,50,30,0.09)');
+    grd.addColorStop(1, 'rgba(255,255,255,0.07)');
     g.fillStyle = grd;
-    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fill(path);
+    g.save();
+    g.clip(path);
 
     if (b.kind === 'warehouse' && b.paper === 'white') {
       // An accordion-folded roof.
@@ -540,7 +539,7 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
       const n = Math.ceil((alongX ? q.w : q.h) / strip);
       for (let i = 0; i < n; i++) {
         const lit = (i % 2 === 0) === (alongX ? lx > 0 : ly > 0);
-        g.fillStyle = lit ? '#fbfaf7' : '#d8d4cb';
+        g.fillStyle = lit ? 'rgba(255,255,255,0.38)' : 'rgba(80,70,55,0.13)';
         if (alongX) g.fillRect(q.x + i * strip, q.y, Math.min(strip, q.x + q.w - (q.x + i * strip)), q.h);
         else g.fillRect(q.x, q.y + i * strip, q.w, Math.min(strip, q.y + q.h - (q.y + i * strip)));
       }
@@ -577,10 +576,21 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
         g.closePath();
         g.fill();
       };
-      tri([q.x, q.y, q.x + q.w, q.y, cx + ridge, cy, cx - ridge, cy], ly > 0 ? shade(face, -0.08) : shade(face, 0.06));
-      tri([q.x, q.y + q.h, q.x + q.w, q.y + q.h, cx + ridge, cy, cx - ridge, cy], ly > 0 ? shade(face, 0.06) : shade(face, -0.08));
-      tri([q.x, q.y, q.x, q.y + q.h, cx - ridge, cy], lx > 0 ? shade(face, -0.1) : shade(face, 0.02));
-      tri([q.x + q.w, q.y, q.x + q.w, q.y + q.h, cx + ridge, cy], lx > 0 ? shade(face, 0.02) : shade(face, -0.1));
+      const lit = 'rgba(255,235,215,0.16)';
+      const dim = 'rgba(80,30,15,0.16)';
+      const dimmer = 'rgba(80,30,15,0.22)';
+      tri([q.x, q.y, q.x + q.w, q.y, cx + ridge, cy, cx - ridge, cy], ly > 0 ? dim : lit);
+      tri([q.x, q.y + q.h, q.x + q.w, q.y + q.h, cx + ridge, cy, cx - ridge, cy], ly > 0 ? lit : dim);
+      tri([q.x, q.y, q.x, q.y + q.h, cx - ridge, cy], lx > 0 ? dimmer : lit);
+      tri([q.x + q.w, q.y, q.x + q.w, q.y + q.h, cx + ridge, cy], lx > 0 ? lit : dimmer);
+      // Rows of tiles.
+      if (scale > 1.5) {
+        g.strokeStyle = 'rgba(90,40,20,0.2)';
+        g.lineWidth = 0.1;
+        g.beginPath();
+        for (let y = q.y + 0.6; y < q.y + q.h; y += 0.6) (g.moveTo(q.x, y), g.lineTo(q.x + q.w, y));
+        g.stroke();
+      }
     } else if (b.kind === 'mosque') {
       // A dome over the prayer hall.
       const cx = q.x + q.w * 0.42;
@@ -609,7 +619,7 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
       g.fill();
     } else if (b.kind === 'stand') {
       for (let i = 0; i < q.w; i += 1.2) {
-        g.fillStyle = i % 2.4 < 1.2 ? '#cfcac1' : '#bcb6ac';
+        g.fillStyle = i % 2.4 < 1.2 ? 'rgba(255,255,255,0.18)' : 'rgba(60,55,50,0.12)';
         g.fillRect(q.x + i, q.y, 1.2, q.h);
       }
     } else {
@@ -630,6 +640,25 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
           g.fillRect(x, q.y, 0.7, 0.6);
           g.fillRect(x, q.y + q.h - 0.6, 0.7, 0.6);
         }
+      }
+      if (q.w * q.h > 120 && r() < 0.7) {
+        // A fold across the sheet: one side catches the light, the other doesn't.
+        const alongX = r() < 0.5;
+        const u = 0.3 + r() * 0.4;
+        const k = (r() - 0.5) * 0.3;
+        g.fillStyle = (alongX ? lx : ly) > 0 ? 'rgba(90,70,50,0.07)' : 'rgba(255,255,255,0.14)';
+        g.beginPath();
+        if (alongX) {
+          const x0 = q.x + q.w * (u + k);
+          const x1 = q.x + q.w * (u - k);
+          g.moveTo(q.x, q.y), g.lineTo(x0, q.y), g.lineTo(x1, q.y + q.h), g.lineTo(q.x, q.y + q.h);
+        } else {
+          const y0 = q.y + q.h * (u + k);
+          const y1 = q.y + q.h * (u - k);
+          g.moveTo(q.x, q.y), g.lineTo(q.x + q.w, q.y), g.lineTo(q.x + q.w, y1), g.lineTo(q.x, y0);
+        }
+        g.closePath();
+        g.fill();
       }
       if (scale > 1.2) {
         g.strokeStyle = kraft ? 'rgba(90,60,30,0.22)' : 'rgba(120,110,100,0.16)';
@@ -667,17 +696,28 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
         for (let x = q.x + 8; x < q.x + q.w - 4; x += 14) g.fillRect(x, q.y + q.h / 2 - 1.2, 2.4, 2.4);
       }
     }
-    // Lit and shaded edges give the box its height.
-    const lw = 0.35;
-    g.fillStyle = 'rgba(255,255,255,0.55)';
-    if (ly < 0) g.fillRect(q.x, q.y, q.w, lw);
-    else g.fillRect(q.x, q.y + q.h - lw, q.w, lw);
-    if (lx < 0) g.fillRect(q.x, q.y, lw, q.h);
-    else g.fillRect(q.x + q.w - lw, q.y, lw, q.h);
+    // A bright paper edge on the sun's side and a darker one away from it give the box its height.
+    const d = 0.32;
+    g.translate(-lx * d * 0.7, -ly * d * 0.7);
+    g.strokeStyle = 'rgba(255,255,255,0.6)';
+    g.lineWidth = d;
+    g.stroke(path);
+    g.translate(lx * d * 1.4, ly * d * 1.4);
+    g.strokeStyle = 'rgba(60,45,30,0.14)';
+    g.stroke(path);
+    g.restore();
     g.strokeStyle = edge;
     g.lineWidth = 0.18;
-    g.strokeRect(q.x, q.y, q.w, q.h);
-  }
+    g.stroke(path);
+    if (b.paper === 'kraft' && scale > 2.5) {
+      // Corrugated cardboard shows at the torn edge.
+      g.strokeStyle = 'rgba(120,80,40,0.35)';
+      g.lineWidth = 0.08;
+      g.setLineDash([0.12, 0.18]);
+      g.strokeRect(q.x + 0.12, q.y + 0.12, q.w - 0.24, q.h - 0.24);
+      g.setLineDash([]);
+    }
+  });
   for (const k of b.roof) {
     g.fillStyle = 'rgba(40,30,20,0.25)';
     if (k.kind === 'tank') {
@@ -701,5 +741,100 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
       g.fillStyle = '#7d7568';
       g.fillRect(k.x, k.y, 2.2, 1.6);
     }
+  }
+}
+
+/** A rectangle whose edges are torn a little, inward only so neighbours never overlap. */
+export function tornPath(q: Rect, r: () => number, jag: number) {
+  const p = new Path2D();
+  const edge = (x0: number, y0: number, x1: number, y1: number, nx: number, ny: number) => {
+    const n = Math.max(2, Math.round(Math.hypot(x1 - x0, y1 - y0) / 1.4));
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      const j = i === 0 ? r() * jag * 0.4 : r() * jag;
+      p.lineTo(x0 + (x1 - x0) * t + nx * j, y0 + (y1 - y0) * t + ny * j);
+    }
+  };
+  p.moveTo(q.x, q.y);
+  edge(q.x, q.y, q.x + q.w, q.y, 0, 1);
+  edge(q.x + q.w, q.y, q.x + q.w, q.y + q.h, -1, 0);
+  edge(q.x + q.w, q.y + q.h, q.x, q.y + q.h, 0, -1);
+  edge(q.x, q.y + q.h, q.x, q.y, 1, 0);
+  p.closePath();
+  return p;
+}
+
+/** A torn scrap of paper: an irregular polygon around (x, y). */
+function scrap(r: () => number, x: number, y: number, w: number, h: number, rot: number) {
+  const p = new Path2D();
+  const n = 7 + Math.floor(r() * 5);
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const k = 0.7 + r() * 0.45;
+    const px = Math.cos(a) * w * 0.5 * k;
+    const py = Math.sin(a) * h * 0.5 * k;
+    const X = x + px * c - py * s;
+    const Y = y + px * s + py * c;
+    if (i) p.lineTo(X, Y);
+    else p.moveTo(X, Y);
+  }
+  p.closePath();
+  return p;
+}
+
+/** A collapsed building: a heap of torn sheets and broken card, grey dust around it. */
+function drawRubble(g: CanvasRenderingContext2D, q: Rect, paper: Building['paper'], r: () => number, sh: Sun) {
+  const cx = q.x + q.w / 2;
+  const cy = q.y + q.h / 2;
+  // Dust and the floor slab.
+  const spread = Math.min(q.w, q.h) * 0.25 + 2;
+  const dust = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(q.w, q.h) / 2 + spread);
+  dust.addColorStop(0, 'rgba(120,112,100,0.55)');
+  dust.addColorStop(0.7, 'rgba(150,142,130,0.35)');
+  dust.addColorStop(1, 'rgba(150,142,130,0)');
+  g.fillStyle = dust;
+  g.fillRect(q.x - spread, q.y - spread, q.w + spread * 2, q.h + spread * 2);
+  g.fillStyle = laid(g, 'grey', Math.round(q.x * 3 + q.y));
+  g.fill(tornPath({ x: q.x + q.w * 0.06, y: q.y + q.h * 0.06, w: q.w * 0.88, h: q.h * 0.88 }, r, Math.min(q.w, q.h) * 0.12));
+  // Sheets, largest first, piling up towards the middle.
+  const n = Math.min(70, Math.max(8, Math.round((q.w * q.h) / 6)));
+  const kinds: Building['paper'][] = [paper, paper, paper, 'grey', paper === 'kraft' ? 'kraft' : 'white'];
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    const reach = 0.5 * (1 - t * 0.6);
+    const x = cx + (r() - 0.5) * 2 * q.w * reach;
+    const y = cy + (r() - 0.5) * 2 * q.h * reach;
+    const size = Math.min(q.w, q.h) * (0.12 + r() * 0.3) * (1 - t * 0.5) + 0.6;
+    const p = scrap(r, x, y, size * (1 + r()), size, r() * Math.PI);
+    const lift = 0.25 + t * 0.9;
+    g.fillStyle = 'rgba(40,30,20,0.28)';
+    g.save();
+    g.translate(sh.dx * lift, sh.dy * lift);
+    g.fill(p);
+    g.restore();
+    g.fillStyle = laid(g, kinds[Math.floor(r() * kinds.length)], i * 13 + Math.round(x));
+    g.fill(p);
+    g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.14)' : 'rgba(60,45,30,0.1)';
+    g.fill(p);
+    g.strokeStyle = 'rgba(255,255,255,0.55)';
+    g.lineWidth = 0.1;
+    g.stroke(p);
+  }
+  // Broken beams and bent card standing up out of the heap.
+  for (let i = 0; i < Math.min(8, 2 + (q.w * q.h) / 60); i++) {
+    const x = cx + (r() - 0.5) * q.w * 0.7;
+    const y = cy + (r() - 0.5) * q.h * 0.7;
+    const len = 1.5 + r() * Math.min(q.w, q.h) * 0.35;
+    const a = r() * Math.PI;
+    g.save();
+    g.translate(x, y);
+    g.rotate(a);
+    g.fillStyle = 'rgba(40,30,20,0.3)';
+    g.fillRect(-len / 2 + sh.dx * 1.4, -0.2 + sh.dy * 1.4, len, 0.4);
+    g.fillStyle = paper === 'kraft' ? '#a7804f' : r() < 0.5 ? '#8d8479' : '#efe9dd';
+    g.fillRect(-len / 2, -0.2, len, 0.4);
+    g.restore();
   }
 }
