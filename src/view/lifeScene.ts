@@ -41,7 +41,7 @@ export type Ent =
   | { t: 'junk'; x: number; y: number; size: number; seed: number }
   | { t: 'litter'; x: number; y: number; a: number; kind: 0 | 1 | 2; col: string } // 0 a can, 1 a plastic bottle, 2 a bag
   | { t: 'dump'; x: number; y: number; w: number; h: number }
-  | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string }
+  | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string; z?: number } // z: up on a roof
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
   | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
   | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1 }
@@ -58,7 +58,7 @@ export type Ent =
   | { t: 'bunting'; x0: number; y0: number; x1: number; y1: number; z: number; seed: number } // paper flags on a string, over the souk
   | { t: 'goods'; kind: GoodsKind; x: number; y: number; a: number; col: string; w: number; h: number; col2?: string; hang?: boolean; z?: number }; // the souk's wares (see souk.ts)
 
-export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip' | 'wreck' | 'tyrepile' | 'cactus' | 'shrub' | 'pot' | 'bougain';
+export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip' | 'wreck' | 'tyrepile' | 'cactus' | 'shrub' | 'pot' | 'bougain' | 'cart' | 'bike' | 'bench' | 'goal' | 'bag' | 'sign' | 'stovepipe' | 'bedding' | 'washline' | 'ladder';
 
 export const HULLS: [string, string, string][] = [
   ['#fbfaf6', '#e6e0d3', '#cfc7b6'], // white paper
@@ -91,7 +91,7 @@ interface Fixed {
   pigeons: { x: number; y: number; w: number; h: number; seed: number }[];
   donkeys: { r: Rect; h: boolean; speed: number; phase: number; dir: 1 | -1 }[];
   junk: { x: number; y: number; size: number; seed: number; smoulder: boolean }[];
-  clutter: { kind: Clutter; x: number; y: number; a: number; col: string }[];
+  clutter: { kind: Clutter; x: number; y: number; a: number; col: string; z?: number }[];
   trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string; door: string; lean: number }[];
   stacks: Building[];
   cafes: { x: number; y: number; evening: boolean; awn: number }[];
@@ -296,7 +296,7 @@ function makeFixed(w: World): Fixed {
       make(x, y, along ? 0 : Math.PI / 2, k);
     }
   };
-  const add = (kind: Clutter, x: number, y: number, a: number, col = '#999') => clutter.push({ kind, x, y, a, col });
+  const add = (kind: Clutter, x: number, y: number, a: number, col = '#999', z?: number) => clutter.push({ kind, x, y, a, col, z });
   for (const b of w.buildings) {
     if (b.rects[0].w < 4 || b.rects[0].h < 4) continue;
     const works = b.kind === 'workshop' || b.kind === 'warehouse' || b.kind === 'factory';
@@ -364,6 +364,31 @@ function makeFixed(w: World): Fixed {
       if (!buildingAt(w, x, y) && !onRoad(x, y)) add('drum', x, y, 0, i % 3 ? '#8a4a2a' : '#2f5f8a');
     }
   }
+  // Street life in the older neighbourhoods, in small clusters rather than everywhere: a handcart outside a
+  // shop, a bicycle leaning by a door; up on the flat roofs, a stove's pipe, bedding rolled up to air, a washing line,
+  // and a ladder against a wall to get up there.
+  const lived = w.buildings.filter((b) => (b.kind === 'home' || b.kind === 'shop') && (b.district === 'oldtown' || b.district === 'quarter' || b.district === 'market') && b.rects[0].w > 5 && b.rects[0].h > 5);
+  for (const b of lived) {
+    const q = b.rects[0];
+    const roll = r();
+    if (b.kind === 'shop' && roll < 0.12) beside(b, 1, (x, y, a) => add('cart', x, y, a, ['#c9a44c', '#6f8f4a', '#b8574a', '#e0d2b0'][Math.floor(r() * 4)]));
+    else if (roll < 0.1) beside(b, 1, (x, y, a) => add('bike', x, y, a, ['#2f5f8a', '#1f1f22', '#b8483a', '#5f8a4a'][Math.floor(r() * 4)]));
+    else if (roll < 0.13) beside(b, 1, (x, y, a) => add('ladder', x, y, a, '#8a6a4a'));
+    const up = r();
+    const rx = q.x + 1.2 + r() * (q.w - 2.4);
+    const ry = q.y + 1.2 + r() * (q.h - 2.4);
+    if (up < 0.1) add('stovepipe', rx, ry, 0, '#6a6560', b.h);
+    else if (up < 0.15) add('bedding', rx, ry, r() < 0.5 ? 0 : Math.PI / 2, ['#b8574a', '#4f7291', '#c9a44c', '#e9e4d8'][Math.floor(r() * 4)], b.h);
+    else if (up < 0.2 && q.w > 6) add('washline', q.x + q.w / 2, q.y + q.h / 2, q.w > q.h ? 0 : Math.PI / 2, ['#e9e4d8', '#b8574a', '#4f7291'][Math.floor(r() * 3)], b.h);
+  }
+  // The school: a worn sign by the gate, school bags dropped by the door, a bench in the shade of the yard's tree,
+  // one small goal for football. Warehouse 14: pallets on the apron by the loading doors.
+  add('sign', 266, 475.6, 0, '#4f7a8a');
+  for (const [x, c] of [[271.6, '#b8574a'], [272.4, '#3a5f9a'], [273.1, '#c9a44c'], [274.3, '#4d7a4a']] as [number, string][]) add('bag', x, 476 + (x % 1) * 0.3, x, c);
+  add('bench', 267.2, 511, Math.PI / 2, '#8a6a4a');
+  add('bench', 267.2, 514.5, Math.PI / 2, '#8a6a4a');
+  add('goal', 283, 496.4, 0, '#f4f1ea');
+  for (const [x, y, a] of [[193, 522.4, 0], [194.6, 522.8, 0.1], [221.5, 522.6, 0], [223.2, 523.2, 0.2]]) add('pallet', x, y, a);
   // Junk: the landfill out in the desert past Tin Hill, mounds of everything the city throws away, a few always
   // smouldering; and smaller heaps where they collect in town, on waste ground by Tin Hill, the camp and the works.
   const junk: Fixed['junk'] = [];
@@ -539,6 +564,10 @@ export function lifeScene(c: SceneCtx): Ent[] {
   const underBridge = (y: number) => c.world.roads.some((r) => r.kind === 'bridge' && Math.abs(r.rect.y + r.rect.h / 2 - y) < r.rect.h / 2 + 4);
   const onBroken = (x: number, y: number) => !!c.brokenBridge && inRect(c.brokenBridge, x, y, 2);
   const alive = (b: Building | null | undefined) => !!b && !c.damaged.has(b.id) && far(b.cx, b.cy);
+  const roofGone = (x: number, y: number) => {
+    const b = buildingAt(c.world, x, y);
+    return !b || c.damaged.has(b.id);
+  };
   const cut = c.world.buildings.some((b) => b.name === 'Power Station' && c.damaged.has(b.id));
   const glow = (x: number, y: number, r: number, a: number, z = 1.2, col = '255,205,120') => out.push({ t: 'glow', x, y, r, a, col, z });
 
@@ -917,7 +946,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
       out.push({ t: 'person', x, y, face: t * 0.1 + k, id: 300 + k });
     }
   for (let k = 0; k < 3; k++) out.push({ t: 'dog', x: 1090 + k * 22 + Math.sin(t * 0.3 + k) * 6, y: 600 + k * 14, a: t * 0.3 + k, col: ['#b89a6a', '#6b5a48', '#d8c8a8'][k], moving: day, lying: !day });
-  for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1)) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col });
+  for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1) && !(k.z && roofGone(k.x, k.y))) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col, z: k.z });
   // The fountain on the Circus, running from morning until late.
   const rb = c.world.roundabout;
   if (far(rb.x, rb.y)) out.push({ t: 'fountain', x: rb.x, y: rb.y, r: !cut && h >= 6 && h < 23.5 ? 1 : 0 });

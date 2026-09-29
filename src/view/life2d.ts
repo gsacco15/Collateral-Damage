@@ -396,6 +396,111 @@ function clutter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'clutter' }
   g.fillStyle = 'rgba(40,30,20,0.22)';
   const shadow = (w: number, h: number) => g.fillRect(-w / 2 + 0.25, -h / 2 + 0.25, w, h);
   switch (e.kind) {
+    case 'cart':
+      // A handcart: a wooden bed piled with its load, two wheels, the handles out front.
+      shadow(1.7, 1);
+      g.fillStyle = '#8a6a4a';
+      g.fillRect(-0.8, -0.45, 1.6, 0.9);
+      g.fillRect(-1.5, -0.35, 0.7, 0.07);
+      g.fillRect(-1.5, 0.28, 0.7, 0.07);
+      g.fillStyle = e.col;
+      g.beginPath();
+      g.ellipse(0, 0, 0.66, 0.34, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#2a2826';
+      g.fillRect(0.05, -0.55, 0.4, 0.1);
+      g.fillRect(0.05, 0.45, 0.4, 0.1);
+      break;
+    case 'bike':
+      g.strokeStyle = e.col;
+      g.lineWidth = 0.08;
+      g.beginPath();
+      g.moveTo(-0.5, 0);
+      g.lineTo(0.5, 0);
+      g.moveTo(0.35, -0.22);
+      g.lineTo(0.35, 0.22);
+      g.stroke();
+      g.fillStyle = '#2a2826';
+      g.fillRect(-0.72, -0.04, 0.34, 0.08);
+      g.fillRect(0.38, -0.04, 0.34, 0.08);
+      break;
+    case 'bench':
+      shadow(1.8, 0.45);
+      g.fillStyle = e.col;
+      g.fillRect(-0.9, -0.2, 1.8, 0.4);
+      g.fillStyle = 'rgba(0,0,0,0.18)';
+      g.fillRect(-0.9, 0.12, 1.8, 0.08);
+      break;
+    case 'goal':
+      // A small goal: two white posts and the bar, the net a faint mesh behind.
+      g.fillStyle = 'rgba(40,30,20,0.18)';
+      g.fillRect(-1.5, 0.1, 3, 0.9);
+      g.strokeStyle = 'rgba(255,255,255,0.45)';
+      g.lineWidth = 0.04;
+      g.strokeRect(-1.5, -0.8, 3, 0.8);
+      g.fillStyle = e.col;
+      g.fillRect(-1.55, -0.06, 3.1, 0.12);
+      break;
+    case 'bag':
+      g.fillStyle = e.col;
+      g.fillRect(-0.18, -0.13, 0.36, 0.26);
+      g.fillStyle = 'rgba(0,0,0,0.2)';
+      g.fillRect(-0.18, 0.05, 0.36, 0.08);
+      break;
+    case 'sign':
+      // The school's sign on two posts, its paint worn.
+      shadow(2.2, 0.3);
+      g.fillStyle = e.col;
+      g.fillRect(-1.1, -0.12, 2.2, 0.24);
+      g.fillStyle = 'rgba(255,255,255,0.3)';
+      g.fillRect(-0.9, -0.05, 1.1, 0.1);
+      break;
+    case 'stovepipe':
+      // A stove's chimney through the roof: a short pipe and its cap, a smudge of soot round it.
+      g.fillStyle = 'rgba(40,30,20,0.18)';
+      g.beginPath();
+      g.arc(0.2, 0.2, 0.45, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = e.col;
+      g.beginPath();
+      g.arc(0, 0, 0.16, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#3a3634';
+      g.beginPath();
+      g.arc(0, 0, 0.08, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'bedding':
+      shadow(1.6, 0.5);
+      g.fillStyle = e.col;
+      g.fillRect(-0.8, -0.25, 1.6, 0.5);
+      g.fillStyle = 'rgba(255,255,255,0.25)';
+      for (let k = -0.6; k < 0.8; k += 0.4) g.fillRect(k, -0.25, 0.08, 0.5);
+      break;
+    case 'washline':
+      g.strokeStyle = 'rgba(70,65,60,0.6)';
+      g.lineWidth = 0.05;
+      g.beginPath();
+      g.moveTo(-2, 0);
+      g.lineTo(2, 0);
+      g.stroke();
+      for (let k = 0; k < 4; k++) {
+        g.fillStyle = k % 2 ? e.col : '#efe9dc';
+        g.fillRect(-1.6 + k * 0.9, -0.05, 0.6, 0.35);
+      }
+      break;
+    case 'ladder':
+      shadow(0.5, 2);
+      g.strokeStyle = e.col;
+      g.lineWidth = 0.07;
+      g.beginPath();
+      g.moveTo(-0.2, -1);
+      g.lineTo(-0.2, 1);
+      g.moveTo(0.2, -1);
+      g.lineTo(0.2, 1);
+      for (let k = -0.8; k <= 0.8; k += 0.4) (g.moveTo(-0.2, k), g.lineTo(0.2, k));
+      g.stroke();
+      break;
     case 'drum':
       shadow(0.7, 0.7);
       g.fillStyle = e.col;

@@ -191,6 +191,19 @@ export class Life3D {
     add('c_bloom', new THREE.IcosahedronGeometry(0.95, 0).scale(1, 0.8, 1).translate(0, 0.9, 0), new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true, transparent: true, opacity: 0.55 }), 40, false);
     add('c_pot', mergeGeometries([new THREE.CylinderGeometry(0.26, 0.18, 0.45, 8).translate(0, 0.22, 0).toNonIndexed(), new THREE.IcosahedronGeometry(0.3, 0).translate(0, 0.62, 0).toNonIndexed()])!, std(), 200);
     add('c_bougain', mergeGeometries([new THREE.IcosahedronGeometry(1, 1).scale(1.7, 1.1, 0.55).translate(0, 1.9, 0).toNonIndexed(), new THREE.IcosahedronGeometry(0.7, 0).scale(1.2, 0.9, 0.5).translate(0.9, 1.1, 0).toNonIndexed()])!, std(), 120);
+    // Street life, roof life, the school's and the warehouse's small things: plain folded-card shapes.
+    const cyl = (r: number, h: number, x: number, y: number, z: number) => new THREE.CylinderGeometry(r, r, h, 6).translate(x, y, z).toNonIndexed();
+    const wheel = (r: number, x: number, y: number, z: number) => new THREE.TorusGeometry(r, 0.035, 4, 12).translate(x, y, z).toNonIndexed();
+    add('c_cart', mergeGeometries([box(0, 0.62, 0, 1.6, 0.08, 0.9), box(0, 0.78, 0.44, 1.6, 0.25, 0.04), box(0, 0.78, -0.44, 1.6, 0.25, 0.04), box(-1.15, 0.62, 0.32, 0.8, 0.05, 0.05), box(-1.15, 0.62, -0.32, 0.8, 0.05, 0.05), new THREE.SphereGeometry(0.62, 7, 4).scale(1, 0.35, 0.6).translate(0, 0.75, 0).toNonIndexed(), wheel(0.34, 0.25, 0.34, 0.5), wheel(0.34, 0.25, 0.34, -0.5)])!, std(), 80);
+    add('c_bike', mergeGeometries([wheel(0.32, -0.52, 0.32, 0), wheel(0.32, 0.52, 0.32, 0), box(0, 0.52, 0, 0.95, 0.04, 0.04), box(0.36, 0.72, 0, 0.04, 0.45, 0.04), box(0.36, 0.95, 0, 0.04, 0.04, 0.45), box(-0.2, 0.78, 0, 0.22, 0.05, 0.1)])!, std({ roughness: 0.6 }), 140);
+    add('c_bench', mergeGeometries([box(0, 0.45, 0, 1.8, 0.06, 0.4), box(0, 0.75, 0.18, 1.8, 0.3, 0.04), box(-0.75, 0.22, 0, 0.06, 0.45, 0.36), box(0.75, 0.22, 0, 0.06, 0.45, 0.36)])!, std(), 10);
+    add('c_goal', mergeGeometries([cyl(0.06, 2, -1.5, 1, 0), cyl(0.06, 2, 1.5, 1, 0), box(0, 2, 0, 3.1, 0.1, 0.1), box(0, 1, -0.9, 3, 2, 0.02)])!, std({ transparent: true, opacity: 0.9 }), 4);
+    add('c_bag', mergeGeometries([box(0, 0.2, 0, 0.34, 0.4, 0.2), box(0, 0.42, 0, 0.2, 0.05, 0.05)])!, std(), 12);
+    add('c_sign', mergeGeometries([cyl(0.05, 2.2, -0.9, 1.1, 0), cyl(0.05, 2.2, 0.9, 1.1, 0), box(0, 1.9, 0, 2.2, 0.75, 0.06)])!, std(), 4);
+    add('c_stovepipe', mergeGeometries([cyl(0.08, 1.3, 0, 0.65, 0), new THREE.ConeGeometry(0.2, 0.18, 6).translate(0, 1.38, 0).toNonIndexed()])!, std({ roughness: 0.6, metalness: 0.3 }), 220);
+    add('c_bedding', new THREE.CylinderGeometry(0.22, 0.22, 1.5, 8).rotateZ(Math.PI / 2).translate(0, 0.22, 0), std(), 140);
+    add('c_washline', mergeGeometries([cyl(0.03, 1.7, -2, 0.85, 0), cyl(0.03, 1.7, 2, 0.85, 0), box(0, 1.65, 0, 4, 0.02, 0.02), ...[-1.4, -0.5, 0.4, 1.3].map((x) => box(x, 1.3, 0, 0.6, 0.7, 0.02))])!, std({ side: THREE.DoubleSide }), 140);
+    add('c_ladder', mergeGeometries([box(0, 1.3, -0.2, 0.05, 2.6, 0.05), box(0, 1.3, 0.2, 0.05, 2.6, 0.05), ...[0.4, 0.9, 1.4, 1.9, 2.4].map((y) => box(0, y, 0, 0.04, 0.04, 0.4))])!.rotateZ(0.22), std(), 90);
     add('t_door', box(1.6, 1.0, 1.06, 0.95, 0.9, 0.04), std({ roughness: 0.7 }), 16, false);
     add('t_load', mergeGeometries([box(-1.6, 1.6, -0.5, 1.1, 1.0, 1.1), box(-0.5, 1.7, 0.45, 1.1, 1.2, 1.1), box(-1.5, 2.4, 0.3, 1.0, 0.6, 1.4), box(-0.4, 1.5, -0.6, 1.0, 0.8, 1.0)])!, std(), 16);
     // Tarp shelters: an A-frame of blue sheet over a ridge, with a mat under it.
@@ -634,7 +647,7 @@ export class Life3D {
           } else if (e.kind === 'wreck') {
             this.put('c_wreck', e.x, e.y, 0, -e.a, 1, 1, 1, e.col);
             this.put('c_rust', e.x, e.y, 0, -e.a, 1, 1, 1);
-          } else this.put('c_' + e.kind, e.x, e.y, 0, -e.a, 1, 1, 1, e.kind === 'pallet' || e.kind === 'tyres' || e.kind === 'tyrepile' || e.kind === 'cactus' ? undefined : e.col);
+          } else this.put('c_' + e.kind, e.x, e.y, e.z ?? 0, -e.a, 1, 1, 1, e.kind === 'pallet' || e.kind === 'tyres' || e.kind === 'tyrepile' || e.kind === 'cactus' ? undefined : e.col);
           break;
         case 'police': {
           const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;

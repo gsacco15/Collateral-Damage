@@ -837,6 +837,7 @@ export function buildCity(seed = 7): World {
     ex.swings.push({ x: yd.x + yd.w - 17, y: yd.y + yd.h - 7, w: 7, h: 2.4 });
     ex.slides.push({ x: yd.x + yd.w - 16, y: yd.y + 2.6, w: 1.8, h: 6 });
     ex.words.push({ x: 290, y: 466.2, text: 'SCHOOL' });
+    trees.push({ x: 271.5, y: 518, r: 2.6, kind: 'round' }); // the yard's old tree, with the benches in its shade
     // The fuel depot: Karim's tanker filling at the pump island, pipes between the tanks.
     ex.tankers.push({ x: 146, y: 648.4, w: 13, h: 3.4 });
     ex.canopies.push({ x: 183.4, y: 640, w: 5.8, h: 9 });

@@ -5,6 +5,7 @@ import { C, grade, nightness, shade, sun, type Sun } from './paper';
 import { brokenLights, powerCut, streetLights } from './streetLights';
 import { brokenPoles, wireEnds, wiring } from './wires';
 import { laid } from './textures';
+import { terrain } from './terrain';
 
 export interface CityOpts {
   hour: number;
@@ -131,6 +132,7 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
       g.fillRect(Math.max(x + 6, -54), Math.max(y + 6, -54), Math.min(98, c.w + 54 - Math.max(x + 6, -54)), Math.min(98, c.h + 54 - Math.max(y + 6, -54)));
     }
   drawDunes(g, w, v);
+  drawTerrain(g, w, v, sh);
   drawDesert(g, w, v, sh);
   // Blocks.
   for (const bl of w.blocks) {
@@ -142,6 +144,25 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
     g.fillRect(bl.x + 2.6, bl.y + 3.2, bl.w - 5.2, bl.h - 5.2);
     g.fillStyle = laid(g, bl.district === 'tinhill' || bl.district === 'oldtown' || bl.district === 'camp' || bl.district === 'kilns' ? 'sand' : 'ground', bl.x + bl.y * 7);
     g.fill(tornPath({ x: bl.x + 2.6, y: bl.y + 2.6, w: bl.w - 5.2, h: bl.h - 5.2 }, rng(bl.x * 5 + bl.y), 0.5));
+    groundPatches(g, bl);
+  }
+  // Dust gathers along the foot of every wall: a soft, slightly darker band on the ground round each building.
+  g.fillStyle = 'rgba(120,92,60,0.1)';
+  for (const b of w.buildings) {
+    if (b.round || !visible(v, b.rects[0])) continue;
+    for (const q of b.rects) g.fillRect(q.x - 0.9, q.y - 0.9, q.w + 1.8, q.h + 1.8);
+  }
+  // Dusty tyre tracks across Warehouse 14's apron, from the loading doors out to the road.
+  if (visible(v, { x: 180, y: 515, w: 60, h: 30 })) {
+    g.strokeStyle = 'rgba(120,95,65,0.22)';
+    g.lineWidth = 0.45;
+    for (const [x0, x1] of [[196, 201], [219, 213]])
+      for (const off of [0, 1.9]) {
+        g.beginPath();
+        g.moveTo(x0 + off, 520.5);
+        g.bezierCurveTo(x0 + off, 526, x1 + off, 527, x1 + off, 533);
+        g.stroke();
+      }
   }
   // The canal's quays.
   g.fillStyle = C.quay;
@@ -1170,6 +1191,13 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
         else g.fillRect(q.x, q.y + i * strip, q.w, Math.min(strip, q.y + q.h - (q.y + i * strip)));
       }
       if (b.name === 'Warehouse 14') {
+        // A couple of patched panels, and rust weeping from the fasteners along the seams.
+        g.fillStyle = 'rgba(150,160,165,0.35)';
+        g.fillRect(q.x + q.w * 0.12, q.y + q.h * 0.18, strip * 2, q.h * 0.3);
+        g.fillStyle = 'rgba(170,110,70,0.22)';
+        g.fillRect(q.x + q.w * 0.7, q.y + q.h * 0.55, strip * 3, q.h * 0.25);
+        g.fillStyle = 'rgba(150,85,45,0.35)';
+        for (let i = 1; i < n; i += 3) for (let k = 0.15; k < 1; k += 0.28) g.fillRect(q.x + i * strip - 0.12, q.y + q.h * k, 0.24, 0.5);
         // Its number, painted big on the roof years ago and fading.
         g.save();
         g.fillStyle = 'rgba(60,50,40,0.42)';
@@ -1616,6 +1644,101 @@ function drawBrokenBridge(g: CanvasRenderingContext2D, q: Rect) {
 }
 
 /** Sand dunes beyond the city: crescent ridges, a lit face towards the sun and a soft shadow behind. */
+/**
+ * A block's open ground isn't one even sheet: a broad patch or two of darker earth or pale gravel, and on big
+ * blocks a path worn across by people cutting through. Painted soft and low, under everything else.
+ */
+function groundPatches(g: CanvasRenderingContext2D, bl: Rect) {
+  const r = rng(Math.round(bl.x * 17 + bl.y * 3));
+  const n = 1 + Math.floor(r() * 2);
+  for (let i = 0; i < n; i++) {
+    const x = bl.x + 6 + r() * (bl.w - 12);
+    const y = bl.y + 6 + r() * (bl.h - 12);
+    const rad = Math.min(bl.w, bl.h) * (0.18 + r() * 0.25);
+    const kind = r();
+    const col = kind < 0.45 ? '140,108,72' : kind < 0.8 ? '232,222,200' : '170,160,145'; // earth, pale gravel, grey stone
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, `rgba(${col},${kind < 0.45 ? 0.2 : 0.28})`);
+    grd.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = grd;
+    g.save();
+    g.translate(x, y);
+    g.scale(1, 0.55 + r() * 0.4);
+    g.translate(-x, -y);
+    g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    g.restore();
+    if (kind >= 0.8) {
+      // Loose stones scattered on the gravel.
+      g.fillStyle = 'rgba(120,110,95,0.35)';
+      for (let k = 0; k < 14; k++) g.fillRect(x + (r() - 0.5) * rad * 1.2, y + (r() - 0.5) * rad * 0.7, 0.35, 0.3);
+    }
+  }
+  if (bl.w * bl.h > 5000 && r() < 0.5) {
+    // A path worn across the block, corner to corner.
+    g.strokeStyle = 'rgba(200,184,150,0.3)';
+    g.lineWidth = 1.4;
+    g.lineCap = 'round';
+    g.beginPath();
+    const fromLeft = r() < 0.5;
+    g.moveTo(bl.x + 4, fromLeft ? bl.y + 4 : bl.y + bl.h - 4);
+    g.quadraticCurveTo(bl.x + bl.w * (0.3 + r() * 0.4), bl.y + bl.h * (0.3 + r() * 0.4), bl.x + bl.w - 4, fromLeft ? bl.y + bl.h - 4 : bl.y + 4);
+    g.stroke();
+    g.lineCap = 'butt';
+  }
+}
+
+/** Beyond the town: low swells of land and rocky outcrops, folded-paper stones with a lit face and a shaded one. */
+function drawTerrain(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) {
+  const { rocks, mounds } = terrain(w);
+  for (const m of mounds) {
+    if (!visible(v, { x: m.x - m.rx, y: m.y - m.rx, w: m.rx * 2, h: m.rx * 2 }, 0)) continue;
+    g.save();
+    g.translate(m.x, m.y);
+    g.rotate(m.rot);
+    const k = Math.min(1, m.h / 10);
+    g.fillStyle = `rgba(150,118,80,${0.12 + 0.08 * k})`;
+    g.beginPath();
+    g.ellipse(sh.dx * m.h * 0.8, sh.dy * m.h * 0.8, m.rx, m.ry, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = `rgba(250,240,218,${0.2 + 0.12 * k})`;
+    g.beginPath();
+    g.ellipse(-sh.dx * m.h * 0.5, -sh.dy * m.h * 0.5, m.rx * 0.85, m.ry * 0.8, 0, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  }
+  for (const o of rocks) {
+    if (!visible(v, { x: o.x - o.r - 20, y: o.y - o.r - 20, w: o.r * 2 + 40, h: o.r * 2 + 40 }, 0)) continue;
+    for (const st of o.stones) {
+      const outline = (ox: number, oy: number, k: number) => {
+        g.beginPath();
+        st.pts.forEach((p, i) => {
+          const a = st.rot + (i / st.pts.length) * Math.PI * 2;
+          const x = st.x + ox + Math.cos(a) * st.s * p * k;
+          const y = st.y + oy + Math.sin(a) * st.s * p * k;
+          if (i) g.lineTo(x, y);
+          else g.moveTo(x, y);
+        });
+        g.closePath();
+      };
+      const tall = st.s * st.tall;
+      g.fillStyle = 'rgba(70,52,34,0.22)';
+      outline(sh.dx * tall, sh.dy * tall, 1);
+      g.fill();
+      g.fillStyle = '#c4b393';
+      outline(0, 0, 1);
+      g.fill();
+      // The face turned to the sun, and a fold down the middle.
+      g.fillStyle = 'rgba(255,248,230,0.45)';
+      outline(-sh.dx * st.s * 0.18, -sh.dy * st.s * 0.18, 0.62);
+      g.fill();
+      g.strokeStyle = 'rgba(95,78,58,0.45)';
+      g.lineWidth = Math.max(0.15, st.s * 0.04);
+      outline(0, 0, 1);
+      g.stroke();
+    }
+  }
+}
+
 function drawDunes(g: CanvasRenderingContext2D, w: World, v: Rect) {
   const r = rng(314);
   for (let i = 0; i < 260; i++) {

@@ -10,6 +10,7 @@ import type { Layers, Outcome } from './map';
 import { grade, nightness, sun } from './paper';
 import { Life3D } from './life3d';
 import { lifeScene } from './lifeScene';
+import { terrain } from './terrain';
 
 export interface Frame3D {
   ruins: number[]; // destroyed by earlier strikes
@@ -168,19 +169,27 @@ function stripesTex(a: string, b: string, n: number) {
 // ---------------------------------------------------------------- geometry helpers
 
 /** Four walls of a box with UVs in world units (tileU metres across, tileV metres up). */
-function wallsGeo(q: Rect, h: number, base: number, tileU: number, tileV: number) {
+/** Four walls. With a tint, the walls carry vertex colours: the building's own wash, a little darker and dustier at the foot. */
+function wallsGeo(q: Rect, h: number, base: number, tileU: number, tileV: number, tint?: [number, number, number]) {
   const pos: number[] = [];
   const uv: number[] = [];
   const nor: number[] = [];
-  const quad = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number) => {
+  const col: number[] = [];
+  const band = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number, ya: number, yb: number, ka: number, kb: number) => {
     const len = Math.hypot(x1 - x0, z1 - z0);
     const u1 = len / tileU;
-    const v1 = h / tileV;
-    const y0 = base;
-    const y1 = base + h;
-    pos.push(x0, y0, z0, x1, y0, z1, x1, y1, z1, x0, y0, z0, x1, y1, z1, x0, y1, z0);
-    uv.push(0, 0, u1, 0, u1, v1, 0, 0, u1, v1, 0, v1);
+    const va = (ya - base) / tileV;
+    const vb = (yb - base) / tileV;
+    pos.push(x0, ya, z0, x1, ya, z1, x1, yb, z1, x0, ya, z0, x1, yb, z1, x0, yb, z0);
+    uv.push(0, va, u1, va, u1, vb, 0, va, u1, vb, 0, vb);
     for (let i = 0; i < 6; i++) nor.push(nx, 0, nz);
+    if (tint) for (const k of [ka, ka, kb, ka, kb, kb]) col.push(tint[0] * k, tint[1] * k * 0.99, tint[2] * k * 0.97);
+  };
+  const quad = (x0: number, z0: number, x1: number, z1: number, nx: number, nz: number) => {
+    if (!tint) return band(x0, z0, x1, z1, nx, nz, base, base + h, 1, 1);
+    const foot = Math.min(1.3, h * 0.3);
+    band(x0, z0, x1, z1, nx, nz, base, base + foot, 0.8, 0.97);
+    band(x0, z0, x1, z1, nx, nz, base + foot, base + h, 0.97, 1);
   };
   const { x, y: z, w, h: d } = q;
   quad(x, z + d, x + w, z + d, 0, 1);
@@ -191,8 +200,19 @@ function wallsGeo(q: Rect, h: number, base: number, tileU: number, tileV: number
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  if (tint) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
+
+// Washes for ordinary walls: warm grey, clay, cream and faded ochre, kept soft so the paper still shows through.
+const WASH: [number, number, number][] = [
+  [1, 1, 1],
+  [0.94, 0.92, 0.89],
+  [1, 0.9, 0.8],
+  [1, 0.97, 0.88],
+  [1, 0.92, 0.74],
+  [0.97, 0.93, 0.87],
+];
 
 function roofGeo(q: Rect, y: number, tile: number) {
   const g = new THREE.PlaneGeometry(q.w, q.h);
@@ -688,6 +708,26 @@ export class Model3D {
     far.position.set(w.w / 2, -0.05, w.h / 2);
     far.receiveShadow = true;
     s.add(far);
+    // Beyond the town: low swells of land and rocky outcrops, the same ones the map shows. Faceted paper stones.
+    {
+      const { rocks, mounds } = terrain(w);
+      const swells = mounds.map((m) => new THREE.SphereGeometry(1, 9, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(m.rx, m.h, m.ry).rotateY(-m.rot).translate(m.x, -0.4, m.y));
+      const land = new THREE.Mesh(mergeGeometries(swells.map((g) => g.toNonIndexed()))!, new THREE.MeshStandardMaterial({ color: '#d6c6a8', roughness: 1, flatShading: true }));
+      land.receiveShadow = true;
+      s.add(land);
+      const stones: THREE.BufferGeometry[] = [];
+      for (const o of rocks)
+        for (const st of o.stones) {
+          const g = new THREE.DodecahedronGeometry(st.s, 0);
+          g.scale(st.pts[0], st.tall, st.pts[1] ?? 1);
+          g.rotateY(st.rot);
+          g.translate(st.x, st.s * st.tall * 0.35, st.y);
+          stones.push(g.toNonIndexed());
+        }
+      const rockMesh = new THREE.Mesh(mergeGeometries(stones)!, new THREE.MeshStandardMaterial({ color: '#bfae8f', roughness: 1, flatShading: true }));
+      rockMesh.castShadow = rockMesh.receiveShadow = true;
+      s.add(rockMesh);
+    }
 
     // Water, a little glossy, just below the quays.
     const half = w.river.width / 2;
@@ -764,7 +804,13 @@ export class Model3D {
       steelGrey: new THREE.MeshStandardMaterial({ color: '#7c7a73', roughness: 0.8, metalness: 0.2 }),
       green: new THREE.MeshStandardMaterial({ color: '#5f6f6a', roughness: 0.9 }),
     };
-    this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall, this.mats.schoolWall] as THREE.MeshStandardMaterial[];
+    // The same papers, washed per building through vertex colours.
+    for (const k of ['whiteWall', 'greyWall', 'kraftWall'] as const) {
+      const m = (this.mats[k] as THREE.MeshStandardMaterial).clone();
+      m.vertexColors = true;
+      this.mats[`${k}T`] = m;
+    }
+    this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall, this.mats.schoolWall, this.mats.whiteWallT, this.mats.greyWallT, this.mats.kraftWallT] as THREE.MeshStandardMaterial[];
     this.buildBuildings(new Set());
 
     // Garden and compound walls.
@@ -1101,9 +1147,25 @@ export class Model3D {
         put(M.door5, new THREE.TorusGeometry(0.4, 0.07, 5, 12, Math.PI * 1.3).rotateZ(-Math.PI * 0.15).translate(cx, b.h + 6.7, cz));
         continue;
       }
+      // Ordinary homes, shops and flats get their own wash, a dusty foot, and now and then a patch of bare brick
+      // where the plaster has come away.
+      const washed = !b.landmark && !b.name && (b.kind === 'home' || b.kind === 'shop' || b.kind === 'apartment' || b.kind === 'villa' || b.kind === 'workshop') && (p === 'white' || p === 'grey' || p === 'kraft');
+      const wash = washed ? WASH[Math.floor(r() * WASH.length)].map((c) => (p === 'kraft' ? 1 - (1 - c) * 0.5 : c)) as [number, number, number] : undefined;
       for (const q of b.rects) {
         const wallTile = b.kind === 'warehouse' || b.kind === 'stand' || b.kind === 'shelter' ? 8 : 4;
-        put(b.kind === 'stand' ? M.stand : b.name === 'Cotton Street School' ? M.schoolWall : wallOf[p], wallsGeo(q, b.h, 0, wallTile, 3.1));
+        if (wash) put(M[`${p}WallT`], wallsGeo(q, b.h, 0, wallTile, 3.1, wash));
+        else put(b.kind === 'stand' ? M.stand : b.name === 'Cotton Street School' ? M.schoolWall : wallOf[p], wallsGeo(q, b.h, 0, wallTile, 3.1));
+        if (wash && p !== 'kraft' && q.w > 4 && q.h > 4 && r() < 0.14) {
+          const side = Math.floor(r() * 4);
+          const along = side < 2 ? q.w : q.h;
+          const u = 1.2 + r() * Math.max(0.1, along - 2.4);
+          const y = 0.8 + r() * Math.max(0.1, b.h - 2.2);
+          const pw = 0.9 + r() * 0.8;
+          const ph = 0.5 + r() * 0.5;
+          const px = side === 0 ? q.x + u : side === 1 ? q.x + u : side === 2 ? q.x - 0.03 : q.x + q.w + 0.03;
+          const pz = side === 0 ? q.y - 0.03 : side === 1 ? q.y + q.h + 0.03 : q.y + u;
+          put(M.brick, boxGeo(px, y, pz, side < 2 ? pw : 0.05, ph, side < 2 ? 0.05 : pw));
+        }
         if (b.kind === 'warehouse' && p === 'white') put(M.fold, foldedGeo(q, b.h));
         if (b.name === 'Warehouse 14' && q === b.rects[0]) {
           const decal = new THREE.Mesh(foldedDecalGeo(q, b.h), new THREE.MeshStandardMaterial({ map: fourteenTex(q.w / q.h), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
