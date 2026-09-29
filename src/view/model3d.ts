@@ -497,6 +497,15 @@ export class Model3D {
       clothB: new THREE.MeshStandardMaterial({ color: '#e9e4d8', roughness: 1, side: THREE.DoubleSide }),
       clothC: new THREE.MeshStandardMaterial({ color: '#4f7291', roughness: 1, side: THREE.DoubleSide }),
       lamp: new THREE.MeshStandardMaterial({ color: '#4d4a46', roughness: 0.6, metalness: 0.3 }),
+      plastic: new THREE.MeshStandardMaterial({ color: '#eeeae2', roughness: 0.7 }),
+      wood: new THREE.MeshStandardMaterial({ color: '#8a6a4a', roughness: 1 }),
+      rail: new THREE.MeshStandardMaterial({ color: '#4a4640', roughness: 0.8 }),
+      door0: new THREE.MeshStandardMaterial({ color: '#2e6f73', roughness: 0.9 }),
+      door1: new THREE.MeshStandardMaterial({ color: '#3a5f9a', roughness: 0.9 }),
+      door2: new THREE.MeshStandardMaterial({ color: '#4d7a4a', roughness: 0.9 }),
+      door3: new THREE.MeshStandardMaterial({ color: '#9a3b2e', roughness: 0.9 }),
+      door4: new THREE.MeshStandardMaterial({ color: '#6b4a33', roughness: 0.9 }),
+      door5: new THREE.MeshStandardMaterial({ color: '#c49a3a', roughness: 0.9 }),
     };
     this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall] as THREE.MeshStandardMaterial[];
     this.buildBuildings(new Set());
@@ -691,16 +700,53 @@ export class Model3D {
       // Lived-in roofs: a satellite dish on some homes and flats, washing on a line on others.
       if ((b.kind === 'home' || b.kind === 'apartment') && b.rects[0].w > 7 && b.rects[0].h > 7) {
         const q = b.rects[0];
+        // A front door in its own colour, on one side.
+        const side = Math.floor(r() * 4);
+        const dm = M[`door${Math.floor(r() * 6)}`];
+        const along = 0.25 + r() * 0.5;
+        if (side === 0) put(dm, boxGeo(q.x + q.w * along, 1.05, q.y + q.h + 0.05, 1.1, 2.1, 0.1));
+        else if (side === 1) put(dm, boxGeo(q.x + q.w * along, 1.05, q.y - 0.05, 1.1, 2.1, 0.1));
+        else if (side === 2) put(dm, boxGeo(q.x - 0.05, 1.05, q.y + q.h * along, 0.1, 2.1, 1.1));
+        else put(dm, boxGeo(q.x + q.w + 0.05, 1.05, q.y + q.h * along, 0.1, 2.1, 1.1));
+        // Balconies on some blocks of flats: a slab and a railing, floor by floor, on one face.
+        if (b.kind === 'apartment' && b.floors >= 3 && r() < 0.35) {
+          const bw = Math.min(3.2, q.w * 0.3);
+          for (let f = 1; f < b.floors; f++) {
+            const y = f * 3.1;
+            for (const u of [0.28, 0.72]) {
+              const x = q.x + q.w * u;
+              put(M.whiteWall, boxGeo(x, y, q.y + q.h + 0.55, bw, 0.18, 1.1));
+              put(M.rail, boxGeo(x, y + 0.5, q.y + q.h + 1.08, bw, 0.9, 0.05));
+            }
+          }
+        }
+        // A table and a couple of chairs on a few flat roofs, for evenings up there.
+        if (b.kind === 'home' && p !== 'terracotta' && r() < 0.14) {
+          const tx = q.x + 2 + r() * (q.w - 4);
+          const tz = q.y + 2 + r() * (q.h - 4);
+          const mat = r() < 0.5 ? M.plastic : M.wood;
+          put(mat, boxGeo(tx, b.h + 0.72, tz, 1.1, 0.06, 1.1));
+          put(mat, boxGeo(tx, b.h + 0.36, tz, 0.12, 0.72, 0.12));
+          for (const [cx, cz] of [
+            [-1, 0],
+            [1, 0],
+            [0, r() < 0.5 ? 1 : -1],
+          ]) {
+            put(mat, boxGeo(tx + cx * 0.95, b.h + 0.23, tz + cz * 0.95, 0.45, 0.46, 0.45));
+            put(mat, boxGeo(tx + cx * 1.15, b.h + 0.6, tz + cz * 1.15, cx ? 0.06 : 0.45, 0.5, cz ? 0.06 : 0.45));
+          }
+        }
         if (r() < 0.3) {
           const dx = q.x + 1.5 + r() * (q.w - 3);
           const dz = q.y + 1.5 + r() * (q.h - 3);
           put(M.dish, new THREE.CylinderGeometry(0.55, 0.15, 0.25, 10, 1, true).rotateX(-0.9).rotateY(r() * 6).translate(dx, b.h + 1.1, dz));
           put(M.line, new THREE.CylinderGeometry(0.04, 0.04, 1, 4).translate(dx, b.h + 0.5, dz));
         }
-        if (r() < 0.22) {
+        if (r() < 0.14) {
           const z = q.y + q.h * (0.3 + r() * 0.4);
-          const x0 = q.x + 1;
-          const x1 = q.x + q.w - 1;
+          const len = Math.min(q.w - 2, 4 + r() * 1.5);
+          const x0 = q.x + 1 + r() * (q.w - 2 - len);
+          const x1 = x0 + len;
           put(M.line, boxGeo((x0 + x1) / 2, b.h + 1.6, z, x1 - x0, 0.03, 0.03));
           put(M.line, boxGeo(x0, b.h + 0.8, z, 0.06, 1.6, 0.06));
           put(M.line, boxGeo(x1, b.h + 0.8, z, 0.06, 1.6, 0.06));
