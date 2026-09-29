@@ -373,6 +373,31 @@ function hookah(g: CanvasRenderingContext2D, x: number, y: number, t: number, se
   wisp(g, x, y - 0.2, t, seed);
 }
 
+const turn = (h: boolean, dir: 1 | -1) => (h ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+
+/** Small flames over a fire pit or an oil drum, with their glow. */
+function fire(g: CanvasRenderingContext2D, x: number, y: number, size: number, flicker: number, night: number) {
+  const r = 7 * size * (1 + flicker * 0.08);
+  const grd = g.createRadialGradient(x, y, 0, x, y, r);
+  grd.addColorStop(0, `rgba(255,150,60,${0.55 * Math.max(0.35, night)})`);
+  grd.addColorStop(1, 'rgba(255,150,60,0)');
+  g.fillStyle = grd;
+  g.fillRect(x - r, y - r, r * 2, r * 2);
+  g.fillStyle = '#5a4030';
+  g.fillRect(x - 0.7 * size, y - 0.12, 1.4 * size, 0.24);
+  g.fillRect(x - 0.12, y - 0.7 * size, 0.24, 1.4 * size);
+  for (let j = 0; j < 4; j++) {
+    const fx = x + (j - 1.5) * 0.3 * size;
+    const hgt = (1.2 + ((j * 7) % 3) * 0.4) * size * (0.8 + 0.2 * Math.sin(flicker * 3 + j));
+    g.fillStyle = j % 2 ? '#ffb347' : '#ff7a2e';
+    g.beginPath();
+    g.moveTo(fx - 0.35 * size, y + 0.2);
+    g.quadraticCurveTo(fx - 0.25 * size, y - hgt * 0.6, fx, y - hgt);
+    g.quadraticCurveTo(fx + 0.25 * size, y - hgt * 0.6, fx + 0.35 * size, y + 0.2);
+    g.fill();
+  }
+}
+
 export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) {
   const t = d.time;
   const n = d.night;
@@ -396,6 +421,53 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       g.arc(e.x, e.y, 0.3, 0, Math.PI * 2);
       g.fill();
     } else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
+    else if (e.t === 'chair') {
+      g.fillStyle = '#8a6a48';
+      g.fillRect(e.x - 0.3, e.y - 0.3, 0.6, 0.6);
+    } else if (e.t === 'police' && d.traffic) {
+      d.car(e.x, e.y, e.h, e.dir, '#f4f2ec');
+      g.save();
+      g.translate(e.x, e.y);
+      g.rotate(turn(e.h, e.dir));
+      g.fillStyle = '#2f5f9a';
+      g.fillRect(-2.1, -0.12, 4.2, 0.24);
+      g.fillStyle = e.flash === 1 ? '#ff3a2a' : '#8a2a22';
+      g.fillRect(-0.35, -0.7, 0.4, 0.7);
+      g.fillStyle = e.flash === 2 ? '#4a8cff' : '#223a6a';
+      g.fillRect(-0.35, 0, 0.4, 0.7);
+      g.restore();
+      if (e.flash) {
+        const col = e.flash === 1 ? '255,60,40' : '70,130,255';
+        const grd = g.createRadialGradient(e.x, e.y, 0, e.x, e.y, 6);
+        grd.addColorStop(0, `rgba(${col},${0.45 * d.night})`);
+        grd.addColorStop(1, `rgba(${col},0)`);
+        g.fillStyle = grd;
+        g.fillRect(e.x - 6, e.y - 6, 12, 12);
+      }
+    } else if (e.t === 'engine' && d.traffic) {
+      g.save();
+      g.translate(e.x, e.y);
+      g.rotate(turn(e.h, e.dir));
+      g.fillStyle = 'rgba(40,30,20,0.25)';
+      g.fillRect(-3.7, -1, 8, 2.6);
+      g.fillStyle = '#c0392b';
+      g.fillRect(-4, -1.25, 8, 2.5);
+      g.fillStyle = '#962a20';
+      g.fillRect(2.6, -1.25, 1.4, 2.5); // the cab
+      g.fillStyle = 'rgba(40,50,62,0.7)';
+      g.fillRect(3.7, -1.05, 0.3, 2.1);
+      // The ladder along the roof.
+      g.strokeStyle = '#d9d4c8';
+      g.lineWidth = 0.14;
+      g.beginPath();
+      g.moveTo(-3.6, -0.45);
+      g.lineTo(2.3, -0.45);
+      g.moveTo(-3.6, 0.45);
+      g.lineTo(2.3, 0.45);
+      for (let k = -3.4; k < 2.3; k += 0.7) g.moveTo(k, -0.45), g.lineTo(k, 0.45);
+      g.stroke();
+      g.restore();
+    }
   }
   for (const e of ents) {
     if (e.t !== 'boat') continue;
@@ -466,6 +538,60 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         break;
       case 'bus':
         if (d.traffic) bus(g, e.x, e.y, e.dir, n, e.col);
+        break;
+      case 'fire':
+        fire(g, e.x, e.y, e.size, e.flicker, n);
+        break;
+      case 'flag':
+        g.strokeStyle = 'rgba(40,30,20,0.35)';
+        g.lineWidth = 0.12;
+        g.beginPath();
+        g.moveTo(e.x, e.y);
+        g.lineTo(e.x + 4, e.y + 3); // the pole's shadow
+        g.stroke();
+        g.fillStyle = '#f4f2ec';
+        g.beginPath();
+        g.moveTo(e.x, e.y);
+        g.quadraticCurveTo(e.x + 1.2, e.y - 0.3 + e.wave * 0.3, e.x + 2.4, e.y);
+        g.lineTo(e.x + 2.4, e.y + 1.4);
+        g.quadraticCurveTo(e.x + 1.2, e.y + 1.1 + e.wave * 0.3, e.x, e.y + 1.4);
+        g.fill();
+        g.fillStyle = '#2e6f73';
+        g.fillRect(e.x, e.y + 0.45, 2.4, 0.5);
+        break;
+      case 'post':
+        g.fillStyle = 'rgba(60,55,50,0.9)';
+        g.beginPath();
+        g.arc(e.x, e.y, 0.3, 0, Math.PI * 2);
+        g.fill();
+        if (e.lit) {
+          const grd = g.createRadialGradient(e.x, e.y, 0, e.x, e.y, 10);
+          grd.addColorStop(0, `rgba(255,222,160,${0.5 * n})`);
+          grd.addColorStop(1, 'rgba(255,222,160,0)');
+          g.fillStyle = grd;
+          g.fillRect(e.x - 10, e.y - 10, 20, 20);
+        }
+        break;
+      case 'antenna':
+        if (!d.traffic) break;
+        g.strokeStyle = 'rgba(70,65,60,0.8)';
+        g.lineWidth = 0.1;
+        g.beginPath();
+        for (let k = 0; k < 3; k++) {
+          const ang = (k / 3) * Math.PI * 2 + 0.4;
+          g.moveTo(e.x, e.y);
+          g.lineTo(e.x + Math.cos(ang) * 1.6, e.y + Math.sin(ang) * 1.6);
+        }
+        g.stroke();
+        g.strokeStyle = 'rgba(40,30,20,0.3)';
+        g.beginPath();
+        g.moveTo(e.x, e.y);
+        g.lineTo(e.x + e.h * 0.35, e.y + e.h * 0.25); // its long shadow on the roof
+        g.stroke();
+        g.fillStyle = '#6a6560';
+        g.beginPath();
+        g.arc(e.x, e.y, 0.35, 0, Math.PI * 2);
+        g.fill();
         break;
       case 'scooter':
         if (d.traffic) scooter(g, e.x, e.y, e.a, e.col, n, e.sway);

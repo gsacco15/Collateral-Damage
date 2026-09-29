@@ -65,6 +65,7 @@ export class Life3D {
   private counts: Record<string, number> = {};
   private pools: THREE.InstancedMesh;
   private poolMat: THREE.MeshBasicMaterial;
+  private dpoolMat!: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, world: World) {
     scene.add(this.group);
@@ -98,6 +99,26 @@ export class Life3D {
     add('smoke', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#b9b4ac', roughness: 1, flatShading: true, transparent: true, opacity: 0.38, depthWrite: false }), 300, false);
     add('beacon', new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2a1a' }), 30, false);
     add('lamp', new THREE.SphereGeometry(0.25, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffe2a8' }), 40, false);
+    add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 6, false);
+    add('engine', mergeGeometries([box(-0.7, 1.4, 0, 6.6, 2.4, 2.5), box(3.3, 1.2, 0, 1.4, 2.0, 2.5)])!, std({ color: '#c0392b', roughness: 0.5, flatShading: false }), 4);
+    add('ladder', mergeGeometries([box(-0.7, 2.7, 0.45, 6, 0.1, 0.1), box(-0.7, 2.7, -0.45, 6, 0.1, 0.1), ...Array.from({ length: 9 }, (_, k) => box(-3.4 + k * 0.7, 2.7, 0, 0.08, 0.08, 0.9))])!, std({ color: '#d9d4c8' }), 4, false);
+    add('pole', new THREE.CylinderGeometry(0.07, 0.09, 1, 6).translate(0, 0.5, 0), std({ color: '#5a5550', roughness: 0.6 }), 40);
+    add('flag', new THREE.PlaneGeometry(2.4, 1.4).translate(1.2, 0, 0), std({ color: '#f4f2ec', side: THREE.DoubleSide, flatShading: false }), 2, false);
+    add('flagband', new THREE.PlaneGeometry(2.4, 0.45).translate(1.2, 0, 0.01), std({ color: '#2e6f73', side: THREE.DoubleSide, flatShading: false }), 2, false);
+    add('log', box(0, 0.15, 0, 1.6, 0.25, 0.25), std({ color: '#5a4030' }), 40, false);
+    add('flame', new THREE.ConeGeometry(0.45, 1.4, 6).translate(0, 0.7, 0), new THREE.MeshBasicMaterial({ color: '#ff8a3a' }), 40, false);
+    add('flamecore', new THREE.ConeGeometry(0.25, 0.9, 6).translate(0, 0.45, 0), new THREE.MeshBasicMaterial({ color: '#ffd27a' }), 40, false);
+    add('posthead', box(0.35, 0, 0, 0.9, 0.2, 0.4), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 40, false);
+    add('mast', mergeGeometries([new THREE.CylinderGeometry(0.06, 0.18, 1, 4).translate(0, 0.5, 0).toNonIndexed(), box(0, 0.55, 0, 0.9, 0.03, 0.03), box(0, 0.75, 0, 0.6, 0.03, 0.03), box(0, 0.35, 0, 0.03, 0.03, 1.1)])!, std({ color: '#8a857e', roughness: 0.6 }), 20);
+    add('chair', mergeGeometries([box(0, 0.45, 0, 0.5, 0.06, 0.5), box(0, 0.75, 0.22, 0.5, 0.6, 0.06), box(0, 0.22, 0, 0.4, 0.45, 0.4)])!, std({ color: '#8a6a48' }), 40, false);
+    add('awning', mergeGeometries([box(0, 2.6, 0, 6, 0.06, 2.6).rotateX(0.22).toNonIndexed(), box(-2.9, 1.25, 1.2, 0.08, 2.5, 0.08), box(2.9, 1.25, 1.2, 0.08, 2.5, 0.08)])!, std({ side: THREE.DoubleSide }), 6);
+    this.dpoolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const dp = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), this.dpoolMat, 80);
+    dp.count = 0;
+    dp.frustumCulled = false;
+    dp.renderOrder = 2;
+    this.group.add(dp);
+    this.meshes.dpool = dp;
 
     // Night: pools of light on the ground under the street lights, and floodlights at the works. Fixed, faded in by the hour.
     this.poolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), color: '#ffd28f', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -185,6 +206,7 @@ export class Life3D {
           break;
         case 'glow':
           this.put('lamp', e.x, e.y, e.z, 0, 1, 1, 1);
+          this.put('dpool', e.x, e.y, 0.12, 0, e.r * 1.4, 1, e.r * 1.4, '#7a5a30');
           break;
         case 'duck':
           this.put('duck', e.x, e.y, 0, yawN(e.a), 1.8 * e.s, e.asleep ? 1.2 * e.s : 1.8 * e.s, 1.8 * e.s, e.drake ? '#8b7358' : '#9a8062');
@@ -217,6 +239,49 @@ export class Life3D {
               const r = (0.5 + u * 2.6) * e.size * Math.min(1, e.strength + 0.2);
               this.put('smoke', e.x + u * 12 * e.size, e.y - u * 5 * e.size, e.z + u * 16 * e.size, u * 3 + k, r, r, r, e.dark > 0.5 ? '#6d6862' : '#c9c4ba');
             }
+          break;
+        case 'police': {
+          const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+          for (const n2 of ['car', 'glass', 'wheels']) this.put(n2, e.x, e.y, 0, yaw, 1, 1, 1, n2 === 'car' ? '#f4f2ec' : undefined);
+          this.put('lightbar', e.x, e.y, 0, yaw, 1, 1, 1, e.flash === 1 ? '#ff3a2a' : e.flash === 2 ? '#4a8cff' : '#6a5a6a');
+          if (e.flash) this.put('dpool', e.x, e.y, 0.14, 0, 7, 1, 7, e.flash === 1 ? '#7a1a10' : '#1a3a8a');
+          break;
+        }
+        case 'engine': {
+          const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+          this.put('engine', e.x, e.y, 0, yaw, 1, 1, 1);
+          this.put('ladder', e.x, e.y, 0, yaw, 1, 1, 1);
+          this.put('wheels', e.x, e.y, 0, yaw, 1.4, 1.2, 1.2);
+          break;
+        }
+        case 'flag':
+          this.put('pole', e.x, e.y, e.z, 0, 1, 6, 1);
+          this.put('flag', e.x, e.y, e.z + 5.1, 0.6 + e.wave * 0.25, 1, 1, 1);
+          this.put('flagband', e.x, e.y, e.z + 5.1, 0.6 + e.wave * 0.25, 1, 1, 1);
+          break;
+        case 'fire': {
+          const k = e.size;
+          this.put('log', e.x, e.y, 0, 0.6, k, k, k, '#5a4030');
+          this.put('log', e.x, e.y, 0, -0.6, k, k, k, '#4a3428');
+          const f = 1 + e.flicker * 0.18;
+          this.put('flame', e.x, e.y, 0.1, e.flicker, k, k * f, k);
+          this.put('flamecore', e.x, e.y, 0.1, -e.flicker, k, k * (2 - f), k);
+          this.put('dpool', e.x, e.y, 0.13, 0, 8 * k * f, 1, 8 * k * f, '#a0501c');
+          break;
+        }
+        case 'post':
+          this.put('pole', e.x, e.y, 0, 0, 1.4, 6.5, 1.4);
+          this.put('posthead', e.x, e.y, 6.4, 0, 1, 1, 1, e.lit ? '#fff0c8' : '#6a6560');
+          if (e.lit) this.put('dpool', e.x, e.y, 0.12, 0, 10, 1, 10, '#6a5a3a');
+          break;
+        case 'antenna':
+          this.put('mast', e.x, e.y, e.z, 0.4, 1.2, e.h, 1.2);
+          break;
+        case 'chair':
+          this.put('chair', e.x, e.y, 0, -e.a + Math.PI / 2, 1, 1, 1);
+          break;
+        case 'awning':
+          this.put('awning', e.x, e.y, 0, -e.a + Math.PI / 2, e.w / 6, 1, 1, e.col);
           break;
         case 'beacon':
           this.put('beacon', e.x, e.y, e.z, 0, e.big ? 1.3 : 1, e.big ? 1.3 : 1, e.big ? 1.3 : 1);

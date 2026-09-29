@@ -30,7 +30,15 @@ export type Ent =
   | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string }
   | { t: 'scooter'; x: number; y: number; a: number; col: string; sway: number }
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number }
-  | { t: 'beacon'; x: number; y: number; z: number; big: boolean };
+  | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
+  | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
+  | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1 }
+  | { t: 'flag'; x: number; y: number; z: number; wave: number }
+  | { t: 'fire'; x: number; y: number; size: number; flicker: number }
+  | { t: 'post'; x: number; y: number; lit: boolean }
+  | { t: 'antenna'; x: number; y: number; z: number; h: number }
+  | { t: 'chair'; x: number; y: number; a: number }
+  | { t: 'awning'; x: number; y: number; a: number; w: number; col: string };
 
 export const HULLS: [string, string, string][] = [
   ['#fbfaf6', '#e6e0d3', '#cfc7b6'], // white paper
@@ -56,8 +64,13 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
-  cafes: { x: number; y: number; evening: boolean }[];
+  cafes: { x: number; y: number; evening: boolean; awn: number }[];
   smokers: { x: number; y: number; face: number; b: Building }[];
+  services: { kind: 'police' | 'engine'; x: number; y: number; h: boolean; dir: 1 | -1; b: Building }[];
+  flag: { x: number; y: number; z: number; b: Building } | null;
+  fires: { x: number; y: number; size: number; camp: boolean }[];
+  posts: { x: number; y: number }[];
+  antennas: { x: number; y: number; z: number; h: number; b: Building }[];
 }
 let fixed: Fixed | null = null;
 let fixedFor: World | null = null;
@@ -135,10 +148,10 @@ function makeFixed(w: World): Fixed {
   // Hookah cafés: on the pavement by the souk, on the boulevard, and on the quay; one is busy in the afternoon too.
   const half = w.river.width / 2;
   const cafes = [
-    { x: 588, y: 366, evening: false },
-    { x: 452, y: 362, evening: true },
-    { x: riverX(500) - half - 7, y: 500, evening: true },
-    { x: riverX(640) + half + 7, y: 640, evening: true },
+    { x: 588, y: 366, evening: false, awn: Math.PI / 2 },
+    { x: 452, y: 362, evening: true, awn: Math.PI / 2 },
+    { x: riverX(500) - half - 7, y: 500, evening: true, awn: Math.PI },
+    { x: riverX(640) + half + 7, y: 640, evening: true, awn: 0 },
   ];
   // Smokers at shop doors: someone stepping out for a cigarette.
   const smokers = pickN(shops, 10).map((b) => {
@@ -150,7 +163,79 @@ function makeFixed(w: World): Fixed {
     const face = side === 0 ? -Math.PI / 2 : side === 1 ? 0 : side === 2 ? Math.PI / 2 : Math.PI;
     return { x, y, face, b };
   });
+  // The police station's patrol cars and the fire station's engines, parked on the street side of each; the flag on City Hall.
+  const byName = (n: string) => w.buildings.find((b) => b.name === n);
+  const services: Fixed['services'] = [];
+  const front = (b: Building) => {
+    // The side facing the nearest street, and a point just outside it.
+    let best: { d: number; x: number; y: number; h: boolean } | null = null;
+    for (const rd of w.roads) {
+      if (rd.kind === 'bridge') continue;
+      const q = rd.rect;
+      const x = Math.max(q.x, Math.min(q.x + q.w, b.cx));
+      const y = Math.max(q.y, Math.min(q.y + q.h, b.cy));
+      const d = Math.hypot(x - b.cx, y - b.cy);
+      if (!best || d < best.d) best = { d, x, y, h: q.w > q.h };
+    }
+    return best!;
+  };
+  const ps = byName('Police Station');
+  if (ps) {
+    const f = front(ps);
+    for (let i = 0; i < 2; i++) services.push({ kind: 'police', x: f.h ? ps.cx - 3 + i * 6 : f.x + (f.x > ps.cx ? -2.5 : 2.5), y: f.h ? f.y + (f.y > ps.cy ? -2.5 : 2.5) : ps.cy - 3 + i * 6, h: f.h, dir: i ? 1 : -1, b: ps });
+  }
+  const fs = byName('Fire Station');
+  if (fs) {
+    const f = front(fs);
+    for (let i = 0; i < 2; i++) services.push({ kind: 'engine', x: f.h ? fs.cx - 5 + i * 10 : f.x + (f.x > fs.cx ? -3 : 3), y: f.h ? f.y + (f.y > fs.cy ? -3 : 3) : fs.cy - 5 + i * 10, h: f.h, dir: 1, b: fs });
+  }
+  const hall = byName('City Hall');
+  const flag = hall ? { x: hall.rects[0].x + 2, y: hall.rects[0].y + hall.rects[0].h - 2, z: hall.h, b: hall } : null;
+  // Fire pits: among the camp's tents, at the desert outpost, oil drums burning on Tin Hill.
+  const fires: Fixed['fires'] = [];
+  const tentsAll = w.buildings.filter((b) => b.kind === 'tent');
+  for (let i = 0; i < Math.min(5, tentsAll.length); i++) {
+    const tb = tentsAll[Math.floor(r() * tentsAll.length)];
+    const q = tb.rects[0];
+    fires.push({ x: q.x + q.w + 2.5, y: q.y + q.h / 2, size: 1, camp: true });
+  }
+  const barracks = w.buildings.find((b) => b.kind === 'barracks');
+  if (barracks) fires.push({ x: barracks.cx, y: barracks.rects[0].y + barracks.rects[0].h + 8, size: 1.2, camp: false });
+  const tin = w.buildings.filter((b) => b.district === 'tinhill');
+  for (let i = 0; i < 3 && tin.length; i++) {
+    const tb = tin[Math.floor(r() * tin.length)];
+    fires.push({ x: tb.rects[0].x - 2.2, y: tb.cy, size: 0.6, camp: false });
+  }
+  // Lamp posts light the car parks and forecourts: the bus station, the school yards, the hospital, City Hall, the police, the mill yard.
+  const posts: Fixed['posts'] = [];
+  const ring = (q: Rect, n: number) => {
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n;
+      posts.push({ x: q.x + q.w * u, y: i % 2 ? q.y + 1 : q.y + q.h - 1 });
+    }
+  };
+  for (const name of ['Bus Station', 'School yard', 'North School yard', 'Office forecourt', 'Mill yard']) {
+    const sp = w.spaces.find((x) => x.name === name);
+    if (sp) ring(sp.rect, name === 'Bus Station' ? 6 : 3);
+  }
+  for (const b of [byName('City Hospital'), hall, ps].filter(Boolean) as Building[]) {
+    const f = front(b);
+    posts.push({ x: f.x + (f.h ? -8 : 0), y: f.y + (f.h ? 0 : -8) }, { x: f.x + (f.h ? 8 : 0), y: f.y + (f.h ? 0 : 8) });
+  }
+  // Antennas with a red light on top: Tower 7's radio mast, the hospital's, and a few on the tallest blocks.
+  const antennas: Fixed['antennas'] = [];
+  const t7 = byName('Tower 7');
+  if (t7) antennas.push({ x: t7.cx, y: t7.cy, z: t7.h, h: 14, b: t7 });
+  const hosp = byName('City Hospital');
+  if (hosp) antennas.push({ x: hosp.rects[2]?.x ?? hosp.cx, y: hosp.cy, z: hosp.h, h: 7, b: hosp });
+  const tall = w.buildings.filter((b) => b.kind === 'apartment' && b.floors >= 5 && b.name !== 'Tower 7').sort((a, b) => b.h - a.h);
+  for (const b of tall.slice(0, 40).filter((_, i) => i % 9 === 0)) antennas.push({ x: b.rects[0].x + 2, y: b.rects[0].y + 2, z: b.h, h: 5 + r() * 3, b });
   return {
+    services,
+    flag,
+    fires,
+    posts,
+    antennas,
     dogs,
     cats,
     bakeries: pickN(shops, 4),
@@ -296,15 +381,42 @@ export function lifeScene(c: SceneCtx): Ent[] {
     }
   }
 
+  // ---- the town's services
+  const blink = Math.floor(t * 2.5) % 2;
+  for (const v of F.services) {
+    if (!alive(v.b) || !far(v.x, v.y)) continue;
+    if (v.kind === 'police') out.push({ t: 'police', x: v.x, y: v.y, h: v.h, dir: v.dir, flash: c.night > 0.4 && v.dir > 0 ? 1 + ((blink + (v.x > 0 ? 0 : 1)) % 2) : 0 });
+    else out.push({ t: 'engine', x: v.x, y: v.y, h: v.h, dir: v.dir });
+  }
+  if (F.flag && alive(F.flag.b) && day) out.push({ t: 'flag', x: F.flag.x, y: F.flag.y, z: F.flag.z, wave: Math.sin(t * 2.3) });
+  // Fire pits after dark (and the camp's at dawn, for breakfast), oil drums on Tin Hill in the small hours.
+  for (const f of F.fires) {
+    const on = f.camp ? h >= 18 || h < 7 : h >= 19 || h < 6;
+    if (!on || !far(f.x, f.y)) continue;
+    out.push({ t: 'fire', x: f.x, y: f.y, size: f.size, flicker: Math.sin(t * 9 + f.x) * 0.5 + Math.sin(t * 13 + f.y) * 0.5 });
+    if (f.camp) for (let k = 0; k < 3; k++) {
+      const ang = (k / 3) * Math.PI * 2 + f.x;
+      out.push({ t: 'person', x: f.x + Math.cos(ang) * 2, y: f.y + Math.sin(ang) * 2, face: ang + Math.PI, id: 200 + Math.round(f.x) + k, sit: true });
+    }
+  }
+  for (const p of F.posts) if (far(p.x, p.y)) out.push({ t: 'post', x: p.x, y: p.y, lit: c.night > 0.25 });
+  for (const a of F.antennas) {
+    if (!alive(a.b)) continue;
+    out.push({ t: 'antenna', x: a.x, y: a.y, z: a.z, h: a.h });
+    if (Math.sin(t * 2.4 + a.x * 0.3) > 0.1) out.push({ t: 'beacon', x: a.x, y: a.y, z: a.z + a.h, big: a.h > 10 });
+  }
+
   // ---- cafés and smokers: a hookah circle at the café tables, someone out for a cigarette at a shop door
   F.cafes.forEach((cf, i) => {
     const open = cf.evening ? h >= 16 || h < 1 : h >= 12 || h < 1;
     if (!open || !far(cf.x, cf.y) || onBroken(cf.x, cf.y)) return;
     out.push({ t: 'table', x: cf.x, y: cf.y });
     out.push({ t: 'hookah', x: cf.x, y: cf.y, seed: i * 3.3 });
+    out.push({ t: 'awning', x: cf.x + Math.cos(cf.awn) * 3.2, y: cf.y + Math.sin(cf.awn) * 3.2, a: cf.awn, w: 6, col: ['#b8574a', '#2e6f73', '#c9a44c', '#3a5f9a'][i % 4] });
     const n = 3 + (i % 2);
     for (let k = 0; k < n; k++) {
       const ang = (k / n) * Math.PI * 2 + i;
+      out.push({ t: 'chair', x: cf.x + Math.cos(ang) * 1.6, y: cf.y + Math.sin(ang) * 1.6, a: ang });
       out.push({ t: 'person', x: cf.x + Math.cos(ang) * 1.5, y: cf.y + Math.sin(ang) * 1.5, face: ang + Math.PI, id: 100 + i * 5 + k, sit: true, smoke: k === Math.floor((t / 6 + i) % n) });
     }
     if (c.night > 0.3) glow(cf.x, cf.y, 4.5, 0.5 * c.night, 1.6);

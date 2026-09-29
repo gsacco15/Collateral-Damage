@@ -1172,6 +1172,15 @@ export function buildCity(seed = 7): World {
     },
   ];
 
+  // ---- The town's services, in three of the Civic Centre's blocks: named only, so nothing else in the city moves.
+  const serve = (x: number, y: number, name: string) => {
+    const b = buildings.find((bb) => bb.district === 'civic' && !bb.name && bb.rects.some((q) => inRect(q, x, y)));
+    if (b) (b.name = name), (b.landmark = true);
+  };
+  serve(305, 20, 'City Hall');
+  serve(378, 211, 'Police Station');
+  serve(342, 161, 'Fire Station');
+
   // ---- Places to discover.
   const districts: District[] = [
     { id: 'terraces', name: 'The Terraces', x: 110, y: 60, blurb: 'Concrete blocks of flats, four to nine floors.' },

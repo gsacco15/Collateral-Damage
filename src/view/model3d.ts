@@ -339,6 +339,12 @@ export class Model3D {
   private bomb: THREE.Mesh;
   private last = performance.now();
   private life!: Life3D;
+  // Lit windows at night, room by room: every window on a windowed wall, and which of them are lit this half hour.
+  private winMesh!: THREE.InstancedMesh;
+  private winMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
+  private wins: { b: Building; x: number; y: number; z: number; yaw: number }[] = [];
+  private winKey = '';
+  private winDamaged = new Set<number>();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -369,6 +375,7 @@ export class Model3D {
 
     this.buildStatic();
     this.life = new Life3D(s, world);
+    this.buildWindows(s);
 
     const bodyGeo = new THREE.CylinderGeometry(0.34, 0.42, 1.25, 7);
     bodyGeo.translate(0, 0.62, 0);
@@ -1202,6 +1209,7 @@ export class Model3D {
     this.light(f.plan.hour);
     this.overlays(f);
     this.damage(f);
+    this.updateWindows(f.plan.hour);
     this.crowd(f);
     {
       const night = nightness(f.plan.hour);
@@ -1228,6 +1236,70 @@ export class Model3D {
     this.placeLabels(f);
   }
 
+  /** Every window position on a windowed wall, laid out exactly as the wall texture tiles them (one per tile, per floor). */
+  private buildWindows(scene: THREE.Scene) {
+    const skip = (b: Building) => b.round || b.kind === 'chimney' || b.kind === 'mast' || b.kind === 'tent' || b.kind === 'greenhouse' || b.kind === 'minaret' || b.kind === 'stand' || b.material === 'canvas' || b.paper === 'tin';
+    for (const b of this.world.buildings) {
+      if (skip(b)) continue;
+      const T = b.kind === 'warehouse' || b.kind === 'shelter' ? 8 : 4;
+      const floors = Math.max(1, Math.floor((b.h - 0.9) / 3.1));
+      for (const q of b.rects) {
+        const faces: [number, number, number, number, number, number][] = [
+          // start x, start z, direction x, direction z, length, yaw
+          [q.x, q.y + q.h, 1, 0, q.w, 0],
+          [q.x + q.w, q.y, -1, 0, q.w, Math.PI],
+          [q.x + q.w, q.y + q.h, 0, -1, q.h, Math.PI / 2],
+          [q.x, q.y, 0, 1, q.h, -Math.PI / 2],
+        ];
+        for (const [sx, sz, dx, dz, len, yaw] of faces) {
+          const nx = Math.sin(yaw) * 0.04;
+          const nz = Math.cos(yaw) * 0.04;
+          for (let k = 0; (k + 0.5) * T + 0.63 <= len; k++)
+            for (let f = 0; f < floors; f++) this.wins.push({ b, x: sx + dx * (k + 0.5) * T + nx, y: f * 3.1 + 1.6, z: sz + dz * (k + 0.5) * T + nz, yaw });
+        }
+      }
+    }
+    this.winMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.25, 1.06), this.winMat, Math.min(this.wins.length, 60000));
+    this.winMesh.count = 0;
+    this.winMesh.frustumCulled = false;
+    scene.add(this.winMesh);
+  }
+
+  /** Which rooms are lit this half hour: busy in the evening, going out after midnight, a few before dawn. */
+  private updateWindows(hour: number) {
+    const hr = ((hour % 24) + 24) % 24;
+    const bucket = Math.floor(hr * 2);
+    const key = `${bucket}|${this.damageKey}`;
+    if (key === this.winKey) return;
+    this.winKey = key;
+    const share = hr >= 18 && hr < 23 ? 0.75 : hr >= 23 || hr < 1 ? 0.45 : hr < 5 ? 0.14 : hr < 7 ? 0.32 : 0.5;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const v = new THREE.Vector3();
+    const one = new THREE.Vector3(1, 1, 1);
+    const c = new THREE.Color();
+    let n = 0;
+    let i = 0;
+    for (const w of this.wins) {
+      i++;
+      if (n >= this.winMesh.instanceMatrix.count) break;
+      const b = w.b;
+      if (this.winDamaged.has(b.id)) continue;
+      const k = b.kind;
+      const lit = k === 'hospital' || k === 'clinic' ? 0.85 : k === 'office' ? (hr >= 18 && hr < 21 ? 0.3 : 0.06) : k === 'shop' ? (hr >= 18 && hr < 23 ? 0.8 : 0.05) : k === 'school' ? 0.03 : k === 'mosque' ? 0.6 : k === 'warehouse' || k === 'factory' || k === 'workshop' || k === 'hall' ? 0.12 : share;
+      const u = Math.abs(Math.sin(i * 12.9898 + bucket * 78.233) * 43758.5453) % 1;
+      if (u >= lit) continue;
+      const tone = (u * 997) % 1;
+      c.set(k === 'hospital' || k === 'clinic' ? '#dcecff' : k === 'mosque' ? '#d8f5dc' : tone < 0.12 ? '#a8bcff' : tone < 0.55 ? '#ffc877' : '#ffdca0');
+      this.winMesh.setMatrixAt(n, m.compose(v.set(w.x, w.y, w.z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), w.yaw), one));
+      this.winMesh.setColorAt(n, c);
+      n++;
+    }
+    this.winMesh.count = n;
+    this.winMesh.instanceMatrix.needsUpdate = true;
+    if (this.winMesh.instanceColor) this.winMesh.instanceColor.needsUpdate = true;
+  }
+
   private light(hour: number) {
     const key = Math.round(hour * 4);
     if (key === this.hourKey) return;
@@ -1244,7 +1316,10 @@ export class Model3D {
     this.hemi.intensity = 0.35 + 0.75 * (1 - night);
     this.hemi.color.set(night > 0.5 ? '#6f7fb0' : '#e3e8ee');
     this.hemi.groundColor.set(night > 0.5 ? '#2a2c3a' : '#b59a74');
-    for (const m of this.litMats) m.emissiveIntensity = night * 1.6;
+    // The old all-or-nothing window glow is off; each room is lit on its own (updateWindows).
+    for (const m of this.litMats) m.emissiveIntensity = 0;
+    this.winMat.opacity = Math.min(1, night * 1.2);
+    this.winMesh.visible = night > 0.05;
     this.lightMat.emissiveIntensity = night * 2.2; // headlights at night
     const sky = new THREE.Color('#e9dcc6').lerp(new THREE.Color('#1f2742'), night).lerp(tint, (1 - night) * gr.s * 0.5);
     this.scene.background = sky;
@@ -1345,6 +1420,7 @@ export class Model3D {
     const key = `${o ? `${o.ix.toFixed(2)},${o.iy.toFixed(2)}` : ''}|${[...ids].join('.')}`;
     if (key === this.damageKey) return;
     this.damageKey = key;
+    this.winDamaged = ids;
     for (const c of this.rubble.children) (c as THREE.Mesh).geometry?.dispose();
     this.rubble.clear();
     this.buildBuildings(ids);
