@@ -1122,7 +1122,14 @@ export class Model3D {
 
   // ---------------------------------------------------------------- per frame
 
+  /** Hidden behind the flat map: skip drawing altogether, so a model built ahead of time costs nothing. */
+  paused = false;
+
   private frame() {
+    if (this.paused) {
+      this.last = performance.now();
+      return;
+    }
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;

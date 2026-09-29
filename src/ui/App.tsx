@@ -291,6 +291,8 @@ export default function App() {
   const [explored, setExplored] = useState(0);
   const [toast, setToast] = useState<Place | null>(null);
   const [view, setView] = useState<'map' | 'model'>('map');
+  const viewRef = useRef(view);
+  viewRef.current = view;
   useEffect(() => setPlace(null), [mapMode, view]); // eslint-disable-line react-hooks/exhaustive-deps
   const [modelReady, setModelReady] = useState(false);
   const [open, setOpen] = useState<Set<StepId>>(new Set(['target', 'weapon', 'approach']));
@@ -1058,8 +1060,19 @@ export default function App() {
     };
   }, [world]);
 
+  // Build the 3D model ahead of time, quietly, while the opening card is up: the briefing ends in 3D,
+  // and the switch should be instant. It stays paused while the flat map is showing.
+  const [want3d, setWant3d] = useState(false);
   useEffect(() => {
-    if (view !== 'model' || modelRef.current) return;
+    const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const id = window.setTimeout(() => (idle ? idle(() => setWant3d(true), { timeout: 2500 }) : setWant3d(true)), 1200);
+    return () => window.clearTimeout(id);
+  }, []);
+  useEffect(() => {
+    if (modelRef.current) modelRef.current.paused = view !== 'model';
+  }, [view, modelReady]);
+  useEffect(() => {
+    if ((view !== 'model' && !want3d) || modelRef.current) return;
     let alive = true;
     import('../view/model3d').then(({ Model3D }) => {
       if (!alive || !canvas3dRef.current || !labels3dRef.current) return;
@@ -1072,12 +1085,13 @@ export default function App() {
         return { world: f.world, plan: f.plan, pop: f.pop, est: f.est, layers: f.layers, circleR: f.circleR, outcome: f.outcome, ruins: f.ruins, strike: st && t != null ? { ...st, t } : null, walkers: m.crowd.visible(), cars: m.crowd.cars };
       };
       modelRef.current = new Model3D(canvas3dRef.current, labels3dRef.current, world, getFrame);
+      modelRef.current.paused = viewRef.current !== 'model';
       setModelReady(true);
     });
     return () => {
       alive = false;
     };
-  }, [view, world]);
+  }, [view, world, want3d]);
   // Switching views keeps your place: the 3D camera looks at the middle of the flat map, from a height that
   // matches the zoom, and the flat map comes back centred on whatever the 3D camera was looking at.
   const lastView = useRef(view);
