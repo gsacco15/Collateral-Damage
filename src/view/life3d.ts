@@ -108,6 +108,15 @@ export class Life3D {
     add('basin', mergeGeometries([new THREE.CylinderGeometry(6.2, 6.4, 0.9, 32, 1, true).translate(0, 0.45, 0).toNonIndexed(), new THREE.RingGeometry(5.8, 6.3, 32).rotateX(-Math.PI / 2).translate(0, 0.9, 0).toNonIndexed(), new THREE.CylinderGeometry(0.7, 1.1, 2.6, 12).translate(0, 1.3, 0).toNonIndexed(), new THREE.CylinderGeometry(2.2, 1.2, 0.4, 16).translate(0, 2.6, 0).toNonIndexed()])!, std({ color: '#e8e1d2', side: THREE.DoubleSide, flatShading: false }), 1);
     add('water', new THREE.CircleGeometry(6, 32).rotateX(-Math.PI / 2).translate(0, 0.62, 0), new THREE.MeshStandardMaterial({ color: '#8fb5c4', roughness: 0.15, metalness: 0.2, emissive: '#a8d4ff', emissiveIntensity: 0 }), 1, false);
     add('drop', new THREE.SphereGeometry(0.16, 5, 4), new THREE.MeshStandardMaterial({ color: '#eef7fb', emissive: '#bfe0ff', emissiveIntensity: 0, roughness: 0.2, transparent: true, opacity: 0.85 }), 60, false);
+    // Yard clutter.
+    add('c_drum', mergeGeometries([new THREE.CylinderGeometry(0.3, 0.3, 0.9, 10).translate(0, 0.45, 0).toNonIndexed(), new THREE.TorusGeometry(0.3, 0.025, 4, 12).rotateX(Math.PI / 2).translate(0, 0.3, 0).toNonIndexed(), new THREE.TorusGeometry(0.3, 0.025, 4, 12).rotateX(Math.PI / 2).translate(0, 0.62, 0).toNonIndexed()])!, std({ roughness: 0.6, metalness: 0.2 }), 400);
+    add('c_gas', mergeGeometries([new THREE.CapsuleGeometry(0.16, 0.45, 3, 8).translate(0, 0.4, 0).toNonIndexed(), new THREE.CylinderGeometry(0.05, 0.05, 0.15, 6).translate(0, 0.8, 0).toNonIndexed()])!, std({ roughness: 0.5 }), 300);
+    add('c_jerry', box(0, 0.25, 0, 0.2, 0.5, 0.36), std({ roughness: 0.7 }), 300);
+    add('c_pallet', mergeGeometries([0, 1, 2, 3, 4].map((k) => box(0, 0.14, -0.44 + k * 0.22, 1.2, 0.04, 0.14)).concat([box(-0.5, 0.06, 0, 0.1, 0.12, 1), box(0, 0.06, 0, 0.1, 0.12, 1), box(0.5, 0.06, 0, 0.1, 0.12, 1)]))!, std({ color: '#b89968' }), 120);
+    add('c_tyres', mergeGeometries([0, 1, 2].map((k) => new THREE.TorusGeometry(0.32, 0.12, 6, 12).rotateX(Math.PI / 2).translate(0, 0.12 + k * 0.24, 0).toNonIndexed()))!, std({ color: '#2a2826' }), 120);
+    add('c_crate', box(0, 0.3, 0, 0.6, 0.6, 0.6), std(), 300);
+    add('c_sacks', new THREE.SphereGeometry(0.35, 7, 5).scale(1, 0.55, 0.7).translate(0, 0.18, 0), std(), 200);
+    add('c_skip', mergeGeometries([box(0, 0.6, 0, 1.9, 1.2, 1.2), box(0, 1.24, -0.3, 1.9, 0.06, 0.62)])!, std({ roughness: 0.6 }), 60);
     add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 6, false);
     add('engine', mergeGeometries([box(-0.7, 1.4, 0, 6.6, 2.4, 2.5), box(3.3, 1.2, 0, 1.4, 2.0, 2.5)])!, std({ color: '#c0392b', roughness: 0.5, flatShading: false }), 4);
     add('ladder', mergeGeometries([box(-0.7, 2.7, 0.45, 6, 0.1, 0.1), box(-0.7, 2.7, -0.45, 6, 0.1, 0.1), ...Array.from({ length: 9 }, (_, k) => box(-3.4 + k * 0.7, 2.7, 0, 0.08, 0.08, 0.9))])!, std({ color: '#d9d4c8' }), 4, false);
@@ -278,6 +287,9 @@ export class Life3D {
           if (night > 0.3) this.put('dpool', e.x, e.y, 0.95, 0, 7, 1, 7, '#cfe6ff');
           break;
         }
+        case 'clutter':
+          this.put('c_' + e.kind, e.x, e.y, 0, -e.a, 1, 1, 1, e.kind === 'pallet' || e.kind === 'tyres' ? undefined : e.col);
+          break;
         case 'police': {
           const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
           for (const n2 of ['car', 'glass', 'wheels']) this.put(n2, e.x, e.y, 0, yaw, 1, 1, 1, n2 === 'car' ? '#f4f2ec' : undefined);

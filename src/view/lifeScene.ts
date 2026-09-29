@@ -32,6 +32,7 @@ export type Ent =
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
   | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string }
   | { t: 'fountain'; x: number; y: number; r: number }
+  | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string }
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
   | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
   | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1 }
@@ -42,6 +43,8 @@ export type Ent =
   | { t: 'chair'; x: number; y: number; a: number }
   | { t: 'moon'; x: number; y: number; a: number }
   | { t: 'awning'; x: number; y: number; a: number; w: number; col: string };
+
+export type Clutter = 'drum' | 'gas' | 'jerry' | 'pallet' | 'tyres' | 'crate' | 'sacks' | 'skip';
 
 export const HULLS: [string, string, string][] = [
   ['#fbfaf6', '#e6e0d3', '#cfc7b6'], // white paper
@@ -67,6 +70,7 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
+  clutter: { kind: Clutter; x: number; y: number; a: number; col: string }[];
   trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string }[];
   stacks: Building[];
   cafes: { x: number; y: number; evening: boolean; awn: number }[];
@@ -247,7 +251,69 @@ function makeFixed(w: World): Fixed {
     lorry: i % 3 === 0,
     load: ['#7fa3b8', '#c99a5e', '#8fa86a', '#e0cfa8', '#d0d4d6'][i % 5],
   }));
+  // Yard clutter along the walls: what each kind of place leaves outside its door.
+  const clutter: Fixed['clutter'] = [];
+  const onRoad = (x: number, y: number) => w.roads.some((rd) => inRect(rd.rect, x, y, 0.8));
+  const drumCol = () => ['#2f5f8a', '#8a4a2a', '#c9a44c', '#3f6a4a', '#7a2a22'][Math.floor(r() * 5)];
+  const beside = (b: Building, n: number, make: (x: number, y: number, a: number, k: number) => void) => {
+    const q = b.rects[0];
+    const side = Math.floor(r() * 4);
+    const u = 0.15 + r() * 0.6;
+    const out0 = 1.1;
+    const bx = side === 0 || side === 2 ? q.x + q.w * u : side === 1 ? q.x + q.w + out0 : q.x - out0;
+    const by = side === 1 || side === 3 ? q.y + q.h * u : side === 0 ? q.y - out0 : q.y + q.h + out0;
+    const along = side === 0 || side === 2;
+    for (let k = 0; k < n; k++) {
+      const x = bx + (along ? k * 0.9 : 0);
+      const y = by + (along ? 0 : k * 0.9);
+      if (buildingAt(w, x, y) || onRoad(x, y)) continue;
+      make(x, y, along ? 0 : Math.PI / 2, k);
+    }
+  };
+  const add = (kind: Clutter, x: number, y: number, a: number, col = '#999') => clutter.push({ kind, x, y, a, col });
+  for (const b of w.buildings) {
+    if (b.rects[0].w < 4 || b.rects[0].h < 4) continue;
+    const works = b.kind === 'workshop' || b.kind === 'warehouse' || b.kind === 'factory';
+    const shop = b.kind === 'shop';
+    const poor = b.district === 'tinhill' || b.district === 'camp';
+    const roll = r();
+    if (works && roll < 0.7) {
+      const pick = r();
+      if (pick < 0.45) beside(b, 2 + Math.floor(r() * 3), (x, y, a) => add('drum', x, y, a, drumCol()));
+      else if (pick < 0.65) beside(b, 1 + Math.floor(r() * 2), (x, y, a) => add('pallet', x, y, a));
+      else if (pick < 0.85) beside(b, 1, (x, y, a) => add('tyres', x, y, a));
+      else beside(b, 2, (x, y, a) => add('crate', x, y, a, '#b08a5e'));
+    } else if (shop && roll < 0.5) {
+      const pick = r();
+      if (pick < 0.4) beside(b, 2 + Math.floor(r() * 2), (x, y, a) => add('crate', x, y, a, ['#b08a5e', '#3a7a9a', '#c24a3a'][Math.floor(r() * 3)]));
+      else if (pick < 0.7) beside(b, 2 + Math.floor(r() * 2), (x, y, a) => add('gas', x, y, a, ['#d0d4d6', '#2f5f8a', '#c9a44c'][Math.floor(r() * 3)]));
+      else beside(b, 2, (x, y, a) => add('sacks', x, y, a, '#e0d2b0'));
+    } else if (poor && roll < 0.35) {
+      if (r() < 0.55) beside(b, 2 + Math.floor(r() * 3), (x, y, a) => add('jerry', x, y, a, ['#e0c64a', '#e9e4d8', '#3a7a9a'][Math.floor(r() * 3)]));
+      else beside(b, 1 + Math.floor(r() * 2), (x, y, a) => add('drum', x, y, a, drumCol()));
+    } else if ((b.kind === 'home' || b.kind === 'apartment') && roll < 0.06) {
+      beside(b, 1, (x, y, a) => add(r() < 0.5 ? 'gas' : 'tyres', x, y, a, '#d0d4d6'));
+    }
+  }
+  // A skip at some street corners, a stack of drums by the depot and the power station.
+  for (const rd of pickN(streets, 26)) {
+    const q = rd.rect;
+    const x = q.w > q.h ? q.x + 6 : q.x - 1.4;
+    const y = q.w > q.h ? q.y - 1.4 : q.y + 6;
+    if (!buildingAt(w, x, y) && !onRoad(x, y)) add('skip', x, y, q.w > q.h ? 0 : Math.PI / 2, ['#3f6a4a', '#2f5f8a', '#6a6560'][Math.floor(r() * 3)]);
+  }
+  for (const name of ['Fuel Depot', 'Power Station']) {
+    const b = w.buildings.find((x) => x.name === name);
+    if (!b) continue;
+    const q = b.rects[0];
+    for (let i = 0; i < 8; i++) {
+      const x = q.x + q.w + 3 + (i % 4) * 0.9;
+      const y = q.y + 2 + Math.floor(i / 4) * 0.9;
+      if (!buildingAt(w, x, y) && !onRoad(x, y)) add('drum', x, y, 0, i % 3 ? '#8a4a2a' : '#2f5f8a');
+    }
+  }
   return {
+    clutter,
     trucks,
     stacks: w.buildings.filter((b) => b.kind === 'chimney'),
     services,
@@ -569,6 +635,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
     if (!far(x, y) || onBroken(x, y)) return;
     out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load });
   });
+  for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1)) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col });
   // The fountain on the Circus, running from morning until late.
   const rb = c.world.roundabout;
   if (far(rb.x, rb.y)) out.push({ t: 'fountain', x: rb.x, y: rb.y, r: h >= 6 && h < 23.5 ? 1 : 0 });

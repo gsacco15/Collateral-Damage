@@ -380,6 +380,91 @@ const shadeHex = (hex: string) => {
   return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
 };
 
+/** Yard clutter, seen from above: oil drums, gas bottles, jerrycans, pallets, tyres, crates, sacks, skips. */
+function clutter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'clutter' }>) {
+  g.save();
+  g.translate(e.x, e.y);
+  g.rotate(e.a);
+  g.fillStyle = 'rgba(40,30,20,0.22)';
+  const shadow = (w: number, h: number) => g.fillRect(-w / 2 + 0.25, -h / 2 + 0.25, w, h);
+  switch (e.kind) {
+    case 'drum':
+      shadow(0.7, 0.7);
+      g.fillStyle = e.col;
+      g.beginPath();
+      g.arc(0, 0, 0.34, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.lineWidth = 0.05;
+      g.beginPath();
+      g.arc(0, 0, 0.26, 0, Math.PI * 2);
+      g.stroke();
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.beginPath();
+      g.arc(0.12, -0.1, 0.05, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'gas':
+      g.fillStyle = e.col;
+      g.beginPath();
+      g.arc(0, 0, 0.2, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#6a6560';
+      g.beginPath();
+      g.arc(0, 0, 0.08, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'jerry':
+      shadow(0.34, 0.46);
+      g.fillStyle = e.col;
+      g.fillRect(-0.17, -0.23, 0.34, 0.46);
+      g.fillStyle = 'rgba(0,0,0,0.3)';
+      g.fillRect(-0.05, -0.23, 0.1, 0.1);
+      break;
+    case 'pallet':
+      shadow(1.2, 1);
+      g.fillStyle = '#b89968';
+      for (let k = 0; k < 5; k++) g.fillRect(-0.6, -0.5 + k * 0.22, 1.2, 0.15);
+      break;
+    case 'tyres':
+      shadow(0.9, 0.9);
+      g.strokeStyle = '#2a2826';
+      g.lineWidth = 0.22;
+      g.beginPath();
+      g.arc(0, 0, 0.34, 0, Math.PI * 2);
+      g.stroke();
+      break;
+    case 'crate':
+      shadow(0.6, 0.6);
+      g.fillStyle = e.col;
+      g.fillRect(-0.3, -0.3, 0.6, 0.6);
+      g.strokeStyle = 'rgba(0,0,0,0.25)';
+      g.lineWidth = 0.05;
+      g.strokeRect(-0.3, -0.3, 0.6, 0.6);
+      break;
+    case 'sacks':
+      g.fillStyle = e.col;
+      g.beginPath();
+      g.ellipse(0, 0, 0.35, 0.24, 0.3, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'skip':
+      shadow(1.9, 1.2);
+      g.fillStyle = e.col;
+      g.fillRect(-0.95, -0.6, 1.9, 1.2);
+      g.fillStyle = 'rgba(255,255,255,0.15)';
+      g.fillRect(-0.95, -0.6, 1.9, 0.5);
+      g.strokeStyle = 'rgba(0,0,0,0.3)';
+      g.lineWidth = 0.06;
+      g.beginPath();
+      g.moveTo(-0.95, 0);
+      g.lineTo(0.95, 0);
+      g.stroke();
+      break;
+  }
+  g.restore();
+}
+
 const turn = (h: boolean, dir: 1 | -1) => (h ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** Small flames over a fire pit or an oil drum, with their glow. */
@@ -428,6 +513,7 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       g.arc(e.x, e.y, 0.3, 0, Math.PI * 2);
       g.fill();
     } else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
+    else if (e.t === 'clutter' && d.traffic) clutter2d(g, e);
     else if (e.t === 'chair') {
       g.fillStyle = '#8a6a48';
       g.fillRect(e.x - 0.3, e.y - 0.3, 0.6, 0.6);
