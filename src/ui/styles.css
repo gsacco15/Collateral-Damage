@@ -1050,3 +1050,11 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .mh-top > span { display: inline-flex; gap: 2px; }
 :root[data-theme='dark'] .mission-hud.small b { color: #eadfc6; }
 .debrief.hurt-standing { box-shadow: var(--float), inset 4px 0 0 var(--critical); }
+/* Authorise while something's missing: dimmed, but still tappable so it can say what's missing. */
+.btn.blocked, .act.blocked { opacity: 0.5; animation: none; }
+.act.strike.blocked:hover { background: var(--critical); }
+.check.lawful { border-radius: 8px; padding: 4px; margin: -4px; transition: background 0.3s; }
+.check.lawful.nudge { animation: nudge 1.6s ease 2; }
+@keyframes nudge { 0%, 100% { background: transparent; } 40% { background: rgba(200, 55, 43, 0.14); box-shadow: 0 0 0 2px rgba(200, 55, 43, 0.5); } }
+.map-note .note-act { margin-left: 10px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--critical); background: transparent; color: var(--critical); font-family: inherit; font-weight: 600; font-size: 12px; cursor: pointer; }
+.map-note .note-act:hover { background: var(--critical); color: #fff; }

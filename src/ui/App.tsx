@@ -1234,9 +1234,19 @@ export default function App() {
     const under = mapRef.current?.buildingAt(x, y) ?? null;
     return targetable(under) ? under : null;
   };
+  // A school's yard reads as part of the school, so a tap on the playground aims at the school building beside it.
+  const yardSchool = (x: number, y: number) => {
+    const yard = world.spaces.find((s) => s.kind === 'playground' && x >= s.rect.x && x <= s.rect.x + s.rect.w && y >= s.rect.y && y <= s.rect.y + s.rect.h);
+    if (!yard) return null;
+    const cx = yard.rect.x + yard.rect.w / 2;
+    const cy = yard.rect.y + yard.rect.h / 2;
+    let best: (typeof world.buildings)[number] | null = null;
+    for (const b of world.buildings) if (b.kind === 'school' && (!best || Math.hypot(b.cx - cx, b.cy - cy) < Math.hypot(best.cx - cx, best.cy - cy))) best = b;
+    return best && Math.hypot(best.cx - cx, best.cy - cy) < 60 ? best : null;
+  };
   const aimAt = (x: number, y: number) => {
     if (onBridge(x, y)) return chooseTarget('bridge');
-    const b = mapRef.current?.buildingAt(x, y) ?? null;
+    const b = mapRef.current?.buildingAt(x, y) ?? yardSchool(x, y);
     if (b && ruins.includes(b.id)) return; // a ruin can't be the target again
     if (b && b.id === target.buildingId) return;
     if (b) return retargetTo(b.id);
@@ -1350,7 +1360,11 @@ export default function App() {
       const f = FIGURES.find((q) => q.id === fig);
       text = fig === 'moto' ? '<b>A red motorbike</b><span>Click to look</span>' : fig === 'samir' ? `<b>${SAMIR.name}</b><span>The courier · click</span>` : `<b>${f!.name}</b><span>${f!.role} · click to talk</span>`;
     }
-    else if (b && mapMode === 'target') {
+    else if (!b && mapMode === 'target' && yardSchool(wx, wy)) {
+      const sb = yardSchool(wx, wy)!;
+      const why = sb.id === target.buildingId ? 'The target' : ruins.includes(sb.id) ? 'Already destroyed' : 'Click to make the school the target · protected site';
+      text = `<b>${placeName(sb)}</b><span>${why}</span>`;
+    } else if (b && mapMode === 'target') {
       const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
     } else if (!b && mapMode === 'target') {
@@ -1967,15 +1981,34 @@ export default function App() {
     flash('Called off. Nothing was released.');
     sound.radio('radio-12-calloff', 0.1);
   };
+  // The lawful tick box, so a blocked Authorise can point straight at it.
+  const lawfulRef = useRef<HTMLLabelElement>(null);
   const authorise = () => {
+    if (!lawful) {
+      // Not blocked silently: say what's missing and bring the tick box into view, lit up for a moment.
+      flash('Not yet confirmed as a lawful objective.', true);
+      setOpen((o) => new Set([...o, 'target']));
+      window.setTimeout(() => {
+        const el = lawfulRef.current;
+        if (!el) return;
+        if (!phone) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('nudge');
+        void el.offsetWidth;
+        el.classList.add('nudge');
+      }, 60);
+      return;
+    }
+    if (!est) return flash('Still estimating. One moment.');
     setConfirm(true);
     sound.radio('radio-02-estimate', 0.3);
   };
   // A short line across the map, for a few seconds.
   const [note, setNote] = useState<string | null>(null);
+  const [noteLawful, setNoteLawful] = useState(false); // the note offers a one-tap "Confirm" for the lawful tick box
   const noteTimer = useRef(0);
-  const flash = (t: string) => {
+  const flash = (t: string, askLawful = false) => {
     setNote(t);
+    setNoteLawful(askLawful);
     window.clearTimeout(noteTimer.current);
     noteTimer.current = window.setTimeout(() => setNote(null), 4200);
   };
@@ -2009,7 +2042,7 @@ export default function App() {
             </span>
           ))}
         </div>
-        <label className="check">
+        <label className="check lawful" ref={lawfulRef}>
           <input type="checkbox" checked={lawful} onChange={(e) => setLawful(e.target.checked)} />
           <span>
             Confirmed lawful military objective
@@ -2158,7 +2191,7 @@ export default function App() {
 
       <Step n={6} title="Decide" summary={lawful ? 'Release, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
         <div className="decide">
-          <button className="btn danger big" onClick={authorise} disabled={!lawful || striking || !est}>
+          <button className={`btn danger big ${!lawful || !est ? 'blocked' : ''}`} onClick={authorise} disabled={striking} aria-disabled={!lawful || !est}>
             Authorise strike…
           </button>
           <button className="btn calm" onClick={callOff} disabled={striking}>
@@ -2565,7 +2598,7 @@ export default function App() {
               <div className={`strike-dock ${strikeOpen ? 'open' : ''}`} role="group" aria-label="Decide">
                 {strikeOpen ? (
                   <>
-                    <button className="act strike pulse" onClick={authorise} disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
+                    <button className={`act strike pulse ${!lawful || !est ? 'blocked' : ''}`} onClick={authorise} aria-disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
                       Authorise strike
                     </button>
                     <button
@@ -2603,6 +2636,17 @@ export default function App() {
             {note && (
               <div className="map-note" role="status">
                 {note}
+                {noteLawful && !lawful && (
+                  <button
+                    className="note-act"
+                    onClick={() => {
+                      setLawful(true);
+                      setNote(null);
+                    }}
+                  >
+                    Confirm it
+                  </button>
+                )}
               </div>
             )}
             {mission.on && !missionEnd && !striking && (
