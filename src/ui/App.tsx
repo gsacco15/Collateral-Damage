@@ -1762,6 +1762,24 @@ export default function App() {
     setMissionEnd({ result, others, names });
     void sound.narrate(ENDINGS[result].voice);
   };
+  // The way in: tucked away at the very bottom of the page (the plan panel's foot on a desktop).
+  const secretBtn = (where: string) => (
+    <div className={`secret-foot ${where}`}>
+      <button
+        className={`mission-btn ${mission.on ? 'on' : ''}`}
+        onClick={() => {
+          if (mission.on) return setMission({ ...mission, on: false });
+          if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }); // back up to the map
+          if (mission.step >= 1 && mission.step < 6) return setMission({ ...mission, on: true });
+          startMission();
+        }}
+        aria-pressed={mission.on}
+        title="A secret mission: find the courier"
+      >
+        <span aria-hidden>✦</span> {mission.on ? 'Put the secret file away' : mission.step >= 1 && mission.step < 6 ? 'Back to the secret file' : 'Secret file'}
+      </button>
+    </div>
+  );
   const pickPlace = (kind: 'b' | 's', id: number) => {
     if (kind === 'b') {
       const b = world.buildings[id];
@@ -2022,6 +2040,7 @@ export default function App() {
         </div>
         <p className="hint">Whether the harm is excessive against the military advantage is a human judgment. The model can't make it.</p>
       </Step>
+      {secretBtn('desk')}
     </div>
   );
 
@@ -2267,18 +2286,6 @@ export default function App() {
           )}
         </nav>
         <div className="top-right">
-          <button
-            className={`mission-btn ${mission.on ? 'on' : ''}`}
-            onClick={() => {
-              if (mission.on) return setMission({ ...mission, on: false });
-              if (mission.step >= 1 && mission.step < 6) return setMission({ ...mission, on: true });
-              startMission();
-            }}
-            aria-pressed={mission.on}
-            title="A secret mission: find the courier"
-          >
-            <span aria-hidden>✦</span> Secret file
-          </button>
           <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
             Explored {explored}/{world.places.length} ▾
           </button>
@@ -3013,6 +3020,7 @@ export default function App() {
         ))}
       </nav>
       <div className="mobile-panel">{mobileTab === 'plan' ? planDock : mobileTab === 'estimate' ? estimateDock : jevDock}</div>
+      {secretBtn('phone')}
     </div>
   );
 }
