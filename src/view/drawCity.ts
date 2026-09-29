@@ -329,6 +329,7 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
       lamp(riverX(y) - 24, y, 6, 0.35);
       lamp(riverX(y) + 24, y, 6, 0.35);
     }
+    for (const l of w.extras.lamps) lamp(l.x, l.y, 6, 0.45);
     g.globalCompositeOperation = 'source-over';
   }
   g.restore();
@@ -544,10 +545,115 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
 /** Around Warehouse 14 and the school, where the story starts: a few small things that make it a real street. */
 function drawOpening(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) {
   const e = w.extras;
-  if (v.x > 330 || v.x + v.w < 150 || v.y > 540 || v.y + v.h < 450) return;
-  // Zebra crossings.
+  if (v.x > 330 || v.x + v.w < 120 || v.y > 660 || v.y + v.h < 450) return;
+  // Zebra crossings, and SCHOOL painted on the road before the gate.
   g.fillStyle = 'rgba(250,248,242,0.85)';
   for (const q of e.stripes) g.fillRect(q.x, q.y, q.w, q.h);
+  g.save();
+  g.fillStyle = 'rgba(250,248,242,0.7)';
+  g.font = '700 2.6px "IBM Plex Sans", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  for (const t of e.words) g.fillText(t.text, t.x, t.y);
+  g.restore();
+  // Street lamps: a post and its shadow.
+  for (const l of e.lamps) {
+    g.strokeStyle = 'rgba(40,30,20,0.25)';
+    g.lineWidth = 0.25;
+    g.beginPath();
+    g.moveTo(l.x, l.y);
+    g.lineTo(l.x + sh.dx * 5, l.y + sh.dy * 5);
+    g.stroke();
+    g.fillStyle = '#4d4a46';
+    g.beginPath();
+    g.arc(l.x, l.y, 0.45, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Bikes at the school gate.
+  g.strokeStyle = 'rgba(50,60,70,0.8)';
+  g.lineWidth = 0.14;
+  for (const b of e.bikes) {
+    g.beginPath();
+    g.arc(b.x, b.y - 0.6, 0.45, 0, Math.PI * 2);
+    g.moveTo(b.x + 0.45, b.y + 0.6);
+    g.arc(b.x, b.y + 0.6, 0.45, 0, Math.PI * 2);
+    g.moveTo(b.x, b.y - 0.6);
+    g.lineTo(b.x, b.y + 0.6);
+    g.stroke();
+  }
+  // The school yard: a basketball hoop with its key painted on the ground, swings, a slide.
+  for (const h of e.hoops) {
+    g.strokeStyle = 'rgba(255,255,255,0.8)';
+    g.lineWidth = 0.14;
+    g.strokeRect(h.x, h.y - 2.4, 5.8, 4.8);
+    g.beginPath();
+    g.arc(h.x + 5.8, h.y, 2.4, -Math.PI / 2, Math.PI / 2);
+    g.stroke();
+    g.fillStyle = 'rgba(40,30,20,0.3)';
+    g.fillRect(h.x + sh.dx * 3, h.y - 0.9 + sh.dy * 3, 0.4, 1.8);
+    g.fillStyle = '#f4f1ea';
+    g.fillRect(h.x, h.y - 0.9, 0.35, 1.8);
+    g.strokeStyle = '#d9622b';
+    g.lineWidth = 0.16;
+    g.beginPath();
+    g.arc(h.x + 0.85, h.y, 0.45, 0, Math.PI * 2);
+    g.stroke();
+  }
+  for (const q of e.swings) {
+    g.fillStyle = 'rgba(40,30,20,0.22)';
+    g.fillRect(q.x + sh.dx * 2.2, q.y + sh.dy * 2.2, q.w, 0.3);
+    g.fillStyle = '#5a6a78';
+    g.fillRect(q.x, q.y, q.w, 0.3);
+    g.fillRect(q.x, q.y - 0.8, 0.3, q.h);
+    g.fillRect(q.x + q.w - 0.3, q.y - 0.8, 0.3, q.h);
+    g.fillStyle = '#c9a44c';
+    g.fillRect(q.x + q.w * 0.3 - 0.4, q.y + 0.9, 0.8, 0.5);
+    g.fillStyle = '#b8574a';
+    g.fillRect(q.x + q.w * 0.68 - 0.4, q.y + 0.9, 0.8, 0.5);
+  }
+  for (const q of e.slides) {
+    g.fillStyle = 'rgba(40,30,20,0.25)';
+    g.fillRect(q.x + sh.dx * 1.5, q.y + sh.dy * 1.5, q.w, q.h);
+    g.fillStyle = '#4f7291';
+    g.fillRect(q.x, q.y, q.w, q.h * 0.35);
+    g.fillStyle = '#d9c26a';
+    g.fillRect(q.x + 0.2, q.y + q.h * 0.35, q.w - 0.4, q.h * 0.65);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(q.x + q.w * 0.45, q.y + q.h * 0.35, 0.25, q.h * 0.65);
+  }
+  // The fuel depot: pipes between the tanks, the pump island, Karim's tanker.
+  g.strokeStyle = '#8f8a82';
+  g.lineWidth = 0.55;
+  for (const [x0, y0, x1, y1] of e.pipes) {
+    g.beginPath();
+    g.moveTo(x0, y0);
+    g.lineTo(x1, y1);
+    g.stroke();
+  }
+  for (const q of e.canopies) {
+    g.fillStyle = 'rgba(40,30,20,0.28)';
+    g.fillRect(q.x + sh.dx * 2, q.y + sh.dy * 2, q.w, q.h);
+    g.fillStyle = '#efe9dd';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = '#b8574a';
+    g.fillRect(q.x, q.y, q.w, 0.6);
+    g.fillRect(q.x, q.y + q.h - 0.6, q.w, 0.6);
+  }
+  for (const q of e.tankers) {
+    g.fillStyle = 'rgba(40,30,20,0.28)';
+    g.fillRect(q.x + sh.dx * 1.8, q.y + sh.dy * 1.8, q.w, q.h);
+    g.fillStyle = '#5f6f6a';
+    g.fillRect(q.x + q.w - 2.6, q.y + 0.2, 2.6, q.h - 0.4);
+    const grd = g.createLinearGradient(0, q.y, 0, q.y + q.h);
+    grd.addColorStop(0, '#fbfaf6');
+    grd.addColorStop(1, '#c9c3b8');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.ellipse(q.x + (q.w - 2.8) / 2, q.y + q.h / 2, (q.w - 2.8) / 2, q.h / 2, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#b8574a';
+    g.fillRect(q.x + 1, q.y + q.h / 2 - 0.2, q.w - 5, 0.4);
+  }
   // Warehouse 14's loading doors, a truck backed up to one, crates by the wall.
   g.fillStyle = '#4a4640';
   for (const q of e.doors) g.fillRect(q.x, q.y, q.w, q.h);
@@ -861,6 +967,16 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
         if (alongX) g.fillRect(q.x + i * strip, q.y, Math.min(strip, q.x + q.w - (q.x + i * strip)), q.h);
         else g.fillRect(q.x, q.y + i * strip, q.w, Math.min(strip, q.y + q.h - (q.y + i * strip)));
       }
+      if (b.name === 'Warehouse 14') {
+        // Its number, painted big on the roof years ago and fading.
+        g.save();
+        g.fillStyle = 'rgba(60,50,40,0.42)';
+        g.font = `700 ${Math.min(q.w, q.h) * 0.62}px "IBM Plex Sans", sans-serif`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText('14', q.x + q.w / 2, q.y + q.h / 2 + 1);
+        g.restore();
+      }
     } else if (b.paper === 'tin' || (b.kind === 'warehouse' && b.paper !== 'white') || b.kind === 'shelter') {
       // Corrugated sheet: fine ridges, a few rusty or patched panels.
       g.strokeStyle = 'rgba(60,64,66,0.22)';
@@ -1045,6 +1161,11 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
           }
           g.stroke();
         }
+      }
+      if (b.name === 'Cotton Street School') {
+        // Painted a warm ochre, so the school stands out from the brick around it.
+        g.fillStyle = 'rgba(232,176,72,0.42)';
+        g.fillRect(q.x, q.y, q.w, q.h);
       }
       if (b.kind === 'hospital' || b.kind === 'clinic') {
         // The protective emblem on the roof.

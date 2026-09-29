@@ -526,6 +526,7 @@ export class Model3D {
       whiteWall: new THREE.MeshStandardMaterial({ map: wallTex('#efece5', false, 1), emissiveMap: wallTex('#000', true, 1), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       greyWall: new THREE.MeshStandardMaterial({ map: wallTex('#c2bcb2', false, 3), emissiveMap: wallTex('#000', true, 3), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       kraftWall: new THREE.MeshStandardMaterial({ map: wallTex('#c89e69', false, 2), emissiveMap: wallTex('#000', true, 2), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
+      schoolWall: new THREE.MeshStandardMaterial({ map: wallTex('#e3b25a', false, 5), emissiveMap: wallTex('#000', true, 5), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       tinWall: new THREE.MeshStandardMaterial({ map: stripesTex('#9aa0a3', '#b3b8ba', 8), roughness: 0.7, metalness: 0.2 }),
       terracottaWall: new THREE.MeshStandardMaterial({ map: wallTex('#f1ece2', false, 4), emissiveMap: wallTex('#000', true, 4), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       whiteRoof: new THREE.MeshStandardMaterial({ map: roofTex('#f1eee8', 4, 14), roughness: 1 }),
@@ -568,7 +569,7 @@ export class Model3D {
       steelGrey: new THREE.MeshStandardMaterial({ color: '#7c7a73', roughness: 0.8, metalness: 0.2 }),
       green: new THREE.MeshStandardMaterial({ color: '#5f6f6a', roughness: 0.9 }),
     };
-    this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall] as THREE.MeshStandardMaterial[];
+    this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall, this.mats.schoolWall] as THREE.MeshStandardMaterial[];
     this.buildBuildings(new Set());
 
     // Garden and compound walls.
@@ -651,6 +652,50 @@ export class Model3D {
       }
       for (const wl of ex.wells) put(M.sandbank, new THREE.CylinderGeometry(1.5, 1.6, 0.8, 12, 1, true).translate(wl.x, 0.4, wl.y));
       for (const q of ex.panels) put(M.tarp, boxGeo(0, 0, 0, q.w, 0.06, q.h).rotateX(-0.5).translate(q.x + q.w / 2, 0.7, q.y + q.h / 2));
+      // The school yard: a hoop on a pole, swings, a slide. Paper-simple.
+      for (const h of ex.hoops) {
+        put(M.lamp, new THREE.CylinderGeometry(0.08, 0.1, 3.2, 6).translate(h.x, 1.6, h.y));
+        put(M.plastic, boxGeo(h.x + 0.25, 3.3, h.y, 0.08, 1.1, 1.8));
+        put(M.door3, new THREE.TorusGeometry(0.28, 0.03, 4, 12).rotateX(Math.PI / 2).translate(h.x + 0.62, 3.05, h.y));
+      }
+      for (const q of ex.swings) {
+        for (const x of [q.x, q.x + q.w]) put(M.rail, boxGeo(x, 1.2, q.y, 0.1, 2.4, 0.1));
+        put(M.rail, boxGeo(q.x + q.w / 2, 2.4, q.y, q.w, 0.1, 0.1));
+        for (const [u, m] of [
+          [0.3, M.door5],
+          [0.68, M.door3],
+        ] as const) {
+          put(M.line, boxGeo(q.x + q.w * u, 1.5, q.y, 0.03, 1.8, 0.03));
+          put(m, boxGeo(q.x + q.w * u, 0.6, q.y, 0.7, 0.06, 0.45));
+        }
+      }
+      for (const q of ex.slides) {
+        put(M.door1, boxGeo(q.x + q.w / 2, 0.9, q.y + q.h * 0.17, q.w, 1.8, q.h * 0.34));
+        put(M.door5, boxGeo(0, 0, 0, q.w - 0.3, 0.08, q.h * 0.72).rotateX(-0.33).translate(q.x + q.w / 2, 1, q.y + q.h * 0.63));
+      }
+      // Street lamps along Cotton Street.
+      for (const l of ex.lamps) {
+        put(M.lamp, new THREE.CylinderGeometry(0.07, 0.1, 5, 5).translate(l.x, 2.5, l.y));
+        put(this.lightMat, boxGeo(l.x, 5, l.y, 0.35, 0.16, 0.5));
+      }
+      // The fuel depot: pipes, the pump island, Karim's tanker.
+      for (const [x0, z0, x1, z1] of ex.pipes) {
+        const len = Math.hypot(x1 - x0, z1 - z0);
+        put(M.tank, new THREE.CylinderGeometry(0.22, 0.22, len, 6).rotateZ(Math.PI / 2).rotateY(-Math.atan2(z1 - z0, x1 - x0)).translate((x0 + x1) / 2, 0.8, (z0 + z1) / 2));
+      }
+      for (const q of ex.canopies) {
+        put(M.plastic, boxGeo(q.x + q.w / 2, 4.2, q.y + q.h / 2, q.w, 0.3, q.h));
+        for (const [dx, dz] of [
+          [0.4, 0.4],
+          [q.w - 0.4, q.h - 0.4],
+        ])
+          put(M.lamp, boxGeo(q.x + dx, 2, q.y + dz, 0.2, 4, 0.2));
+      }
+      for (const q of ex.tankers) {
+        put(M.fuel, new THREE.CylinderGeometry(q.h / 2, q.h / 2, q.w - 3, 14).rotateZ(Math.PI / 2).translate(q.x + (q.w - 3) / 2, 2.1, q.y + q.h / 2));
+        put(M.green, boxGeo(q.x + q.w - 1.3, 1.5, q.y + q.h / 2, 2.6, 2.2, q.h - 0.2));
+        put(M.lamp, boxGeo(q.x + q.w / 2, 0.45, q.y + q.h / 2, q.w - 0.6, 0.7, q.h - 0.6));
+      }
       for (const q of ex.kiosks) {
         put(M.door0, boxGeo(q.x + q.w / 2, 1.1, q.y + q.h / 2, q.w, 2.2, q.h));
         put(M.clothB, boxGeo(q.x + q.w / 2, 2.35, q.y + q.h / 2 + 0.3, q.w + 0.6, 0.1, q.h + 0.9));
@@ -843,7 +888,7 @@ export class Model3D {
       }
       for (const q of b.rects) {
         const wallTile = b.kind === 'warehouse' || b.kind === 'stand' || b.kind === 'shelter' ? 8 : 4;
-        put(b.kind === 'stand' ? M.stand : wallOf[p], wallsGeo(q, b.h, 0, wallTile, 3.1));
+        put(b.kind === 'stand' ? M.stand : b.name === 'Cotton Street School' ? M.schoolWall : wallOf[p], wallsGeo(q, b.h, 0, wallTile, 3.1));
         if (b.kind === 'warehouse' && p === 'white') put(M.fold, foldedGeo(q, b.h));
         else if (p === 'terracotta') put(M.terracottaRoof, hipGeo(q, b.h, Math.min(q.w, q.h) * 0.35));
         else put(b.kind === 'stand' ? M.stand : roofOf[p], roofGeo(q, b.h, 12));

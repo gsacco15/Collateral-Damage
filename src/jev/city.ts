@@ -156,6 +156,15 @@ export interface Extras {
   hopscotch: Rect[];
   rings: { x: number; y: number; r: number }[]; // a game circle painted on the yard
   mural: Rect[];
+  bikes: { x: number; y: number }[];
+  lamps: { x: number; y: number }[]; // street lamps along Cotton Street
+  words: { x: number; y: number; text: string }[]; // painted on the road
+  tankers: Rect[]; // at the fuel depot
+  pipes: [number, number, number, number][];
+  canopies: Rect[]; // the depot's pump island
+  hoops: { x: number; y: number }[]; // a basketball hoop, facing east
+  swings: Rect[];
+  slides: Rect[];
   // Out in the desert: the old camp.
   berms: Rect[]; // sand banks of the old firing range
   tyres: { x: number; y: number }[]; // the old obstacle course
@@ -652,7 +661,7 @@ export function buildCity(seed = 7): World {
   // ---- Landmarks and targets, placed by hand so the city tells its stories.
   const warehouse = special({ kind: 'warehouse', material: 'steel', paper: 'white', rects: [{ x: 188, y: 490, w: 40, h: 30 }], floors: 1, h: 10, district: 'workshops', name: 'Warehouse 14', landmark: true });
   reserved.push({ x: 180, y: 480, w: 54, h: 48 });
-  special({ kind: 'school', material: 'brick', paper: 'kraft', rects: [{ x: 250, y: 477, w: 60, h: 14 }, { x: 250, y: 491, w: 14, h: 30 }], floors: 2, district: 'quarter', name: 'Cotton Street School', landmark: true, protected: true });
+  special({ kind: 'school', material: 'brick', paper: 'kraft', rects: [{ x: 250, y: 477, w: 60, h: 14 }, { x: 250, y: 491, w: 14, h: 30 }], floors: 3, district: 'quarter', name: 'Cotton Street School', landmark: true, protected: true });
   space('playground', { x: 266, y: 494, w: 44, h: 28 }, 'quarter', 'School yard');
   for (const [x, y] of [
     [150, 612],
@@ -788,7 +797,7 @@ export function buildCity(seed = 7): World {
 
   // ---- The outskirts, placed by hand, from their own random stream so the city inside South Road stays as it was.
   cur = ro;
-  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [], doors: [], trucks: [], crates: [], kiosks: [], stripes: [], hopscotch: [], rings: [], mural: [], berms: [], tyres: [], wrecks: [], pens: [], goats: [], wells: [], tracks: [], panels: [] };
+  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [], doors: [], trucks: [], crates: [], kiosks: [], stripes: [], hopscotch: [], rings: [], mural: [], bikes: [], lamps: [], words: [], tankers: [], pipes: [], canopies: [], hoops: [], swings: [], slides: [], berms: [], tyres: [], wrecks: [], pens: [], goats: [], wells: [], tracks: [], panels: [] };
   // The opening scene: Warehouse 14's loading doors, a truck at the bay and crates by the wall; a kiosk on the corner;
   // zebra crossings where the children cross; hopscotch, a game circle and a mural in the school yard. Fixed, not random.
   {
@@ -820,6 +829,17 @@ export function buildCity(seed = 7): World {
     }
     ex.rings.push({ x: yd.x + yd.w * 0.45, y: yd.y + yd.h * 0.62, r: 4 });
     for (let x = yd.x + 1, i = 0; x < yd.x + yd.w - 1; x += 3, i++) ex.mural.push({ x, y: yd.y + yd.h - 0.9, w: 3, h: 0.7 });
+    for (let i = 0; i < 6; i++) ex.bikes.push({ x: 278 + i * 1.3, y: 473.6 });
+    // A basketball hoop at the west end of the yard, swings and a slide at the east end.
+    ex.hoops.push({ x: yd.x + 1.2, y: yd.y + 9 });
+    ex.swings.push({ x: yd.x + yd.w - 17, y: yd.y + yd.h - 7, w: 7, h: 2.4 });
+    ex.slides.push({ x: yd.x + yd.w - 16, y: yd.y + 2.6, w: 1.8, h: 6 });
+    for (let x = 178, i = 0; x < 330; x += 24, i++) ex.lamps.push({ x, y: i % 2 ? 471.6 : 458.4 });
+    ex.words.push({ x: 290, y: 466.2, text: 'SCHOOL' });
+    // The fuel depot: Karim's tanker filling at the pump island, pipes between the tanks.
+    ex.tankers.push({ x: 146, y: 648.4, w: 13, h: 3.4 });
+    ex.canopies.push({ x: 183.4, y: 640, w: 5.8, h: 9 });
+    ex.pipes.push([159, 612, 165, 612], [159, 638, 165, 638], [150, 621, 150, 629], [174, 621, 174, 629], [162, 612, 162, 638], [174, 638, 186, 644]);
   }
   reserved.push({ x: -120, y: RAIL_Y - 6, w: 700, h: 12 });
   // The Kilnworks, north of the line: the flour mill and its silos, the workers' hostel.

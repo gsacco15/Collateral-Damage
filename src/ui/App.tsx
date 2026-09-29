@@ -1140,7 +1140,8 @@ export default function App() {
     endStrike();
     setPop(null);
     setObs({});
-    setLawful(!id.startsWith('b:') && !id.startsWith('g:'));
+    // A picked building, or a protected place of worship, starts unconfirmed: whether it may be struck is for people to decide.
+    setLawful(!id.startsWith('b:') && !id.startsWith('g:') && id !== 'mosque');
     setPlan({ target: id, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored });
     focusRef.current = { cx: a.x + 20, cy: a.y + 10, zoom: 3.2 };
     poolRef.current?.stop();
@@ -1152,6 +1153,7 @@ export default function App() {
   // Picking one of the four briefed targets: go there, and tell its story (in the narrator's voice, if sound is on).
   const pickPreset = (id: TargetId) => {
     chooseTarget(id);
+    if (id === 'mosque') setPlan({ hour: 12.5, day: 'friday' }); // the one hour he is said to be there
     const c = targetCentre(targetOf(world, id));
     const telling = guide == null && id in TARGET_STORIES;
     const offset = telling && !phone; // on a phone the story is only a small title, so no need to make room
@@ -1707,14 +1709,14 @@ export default function App() {
               <div className="stories-pop" role="menu">
                 {(
                   [
-                    ['In the city', (y: number) => y < 700],
-                    ['On the outskirts', (y: number) => y >= 700],
+                    ['In the city', (q: Rect) => q.y < 700 && q.x < world.city.w],
+                    ['Beyond the city', (q: Rect) => q.y >= 700 || q.x >= world.city.w],
                   ] as const
                 ).map(([label, inGroup]) => (
                   <div key={label} className="stories-group">
                     <span className="k">{label}</span>
                     {world.targets
-                      .filter((t) => inGroup(t.rect.y))
+                      .filter((t) => inGroup(t.rect))
                       .map((t) => (
                         <button
                           key={t.id}
