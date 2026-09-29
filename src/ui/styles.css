@@ -32,6 +32,8 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text-1); font-family: var(--sans); font-size: 14px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01'; }
+/* Opened from the home screen, the page runs edge to edge: keep the end of it clear of the home bar. */
+body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 button { font-family: inherit; color: inherit; }
 h3, h4 { margin: 0; }
 a { color: var(--text-1); }
@@ -817,7 +819,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 }
 
 /* The map on its own, filling the screen. */
-.app.mapfull .map { position: fixed !important; inset: 0; z-index: 50; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; }
+.app.mapfull .map { position: fixed !important; inset: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); z-index: 50; width: 100vw; height: auto; min-height: 0; }
 .app.mapfull .top, .app.mapfull .mobile-tabs, .app.mapfull .mobile-panel { visibility: hidden; }
 .hud-zoom .full-btn { font-size: 14px; line-height: 1; }
 
