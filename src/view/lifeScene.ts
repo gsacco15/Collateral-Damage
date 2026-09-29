@@ -32,6 +32,8 @@ export type Ent =
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
   | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string; door: string; lean: number; smoke: number } // janky: odd door, a lean, a puff of exhaust
   | { t: 'fountain'; x: number; y: number; r: number }
+  | { t: 'junk'; x: number; y: number; size: number; seed: number }
+  | { t: 'dump'; x: number; y: number; w: number; h: number }
   | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string }
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
   | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
@@ -70,6 +72,7 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
+  junk: { x: number; y: number; size: number; seed: number; smoulder: boolean }[];
   clutter: { kind: Clutter; x: number; y: number; a: number; col: string }[];
   trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string; door: string; lean: number }[];
   stacks: Building[];
@@ -340,7 +343,31 @@ function makeFixed(w: World): Fixed {
       if (!buildingAt(w, x, y) && !onRoad(x, y)) add('drum', x, y, 0, i % 3 ? '#8a4a2a' : '#2f5f8a');
     }
   }
+  // Junk: the landfill out in the desert past Tin Hill, mounds of everything the city throws away, a few always
+  // smouldering; and smaller heaps where they collect in town, on waste ground by Tin Hill, the camp and the works.
+  const junk: Fixed['junk'] = [];
+  const DUMP = { x: 1050, y: 560, w: 120, h: 100 };
+  for (let i = 0; i < 26; i++) {
+    const x = DUMP.x + 8 + r() * (DUMP.w - 16);
+    const y = DUMP.y + 8 + r() * (DUMP.h - 16);
+    junk.push({ x, y, size: 3 + r() * 5, seed: r() * 1000, smoulder: i % 6 === 0 });
+  }
+  const rough = w.buildings.filter((b) => b.district === 'tinhill' || b.district === 'camp' || b.district === 'workshops' || b.district === 'kilns');
+  for (let i = 0; i < 70 && junk.length < 60; i++) {
+    const b = rough[Math.floor(r() * rough.length)];
+    const q = b.rects[0];
+    const a = r() * Math.PI * 2;
+    const x = b.cx + Math.cos(a) * (Math.max(q.w, q.h) / 2 + 3 + r() * 3);
+    const y = b.cy + Math.sin(a) * (Math.max(q.w, q.h) / 2 + 3 + r() * 3);
+    if (buildingAt(w, x, y) || onRoad(x, y) || w.spaces.some((sp) => inRect(sp.rect, x, y))) continue;
+    junk.push({ x, y, size: 0.9 + r() * 1.1, seed: r() * 1000, smoulder: r() < 0.08 });
+  }
+  // A few bigger heaps just outside town: on the desert edge, by the railway, south of the Kilnworks.
+  for (const [x, y] of [[1020, 300], [1030, 480], [1015, 820], [60, 880], [480, 885], [300, 868]]) {
+    if (!buildingAt(w, x, y) && !onRoad(x, y)) junk.push({ x, y, size: 2.2 + r() * 1.6, seed: r() * 1000, smoulder: r() < 0.4 });
+  }
   return {
+    junk,
     clutter,
     trucks,
     stacks: w.buildings.filter((b) => b.kind === 'chimney'),
@@ -663,6 +690,20 @@ export function lifeScene(c: SceneCtx): Ent[] {
     if (!far(x, y) || onBroken(x, y)) return;
     out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load, door: s.door, lean: s.lean + Math.sin(t * 5 + i) * 0.012, smoke: (t * 1.3 + i * 0.37) % 1 });
   });
+  // The landfill: its trodden ground, the heaps, smoke from the ones burning, people picking it over by day, dogs.
+  out.push({ t: 'dump', x: 1050, y: 560, w: 120, h: 100 });
+  F.junk.forEach((j, i) => {
+    if (!far(j.x, j.y)) return;
+    out.push({ t: 'junk', x: j.x, y: j.y, size: j.size, seed: j.seed });
+    if (j.smoulder) out.push({ t: 'smoke', x: j.x, y: j.y, z: j.size * 0.4, seed: 50 + i, strength: 0.55, dark: 0.65, size: 0.5 + j.size * 0.15 });
+  });
+  if (day)
+    for (let k = 0; k < 5; k++) {
+      const x = 1070 + ((k * 23) % 90) + Math.sin(t * 0.05 + k) * 4;
+      const y = 580 + ((k * 37) % 70) + Math.cos(t * 0.04 + k) * 3;
+      out.push({ t: 'person', x, y, face: t * 0.1 + k, id: 300 + k });
+    }
+  for (let k = 0; k < 3; k++) out.push({ t: 'dog', x: 1090 + k * 22 + Math.sin(t * 0.3 + k) * 6, y: 600 + k * 14, a: t * 0.3 + k, col: ['#b89a6a', '#6b5a48', '#d8c8a8'][k], moving: day, lying: !day });
   for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1)) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col });
   // The fountain on the Circus, running from morning until late.
   const rb = c.world.roundabout;

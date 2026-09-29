@@ -131,6 +131,10 @@ export class Life3D {
     add('c_bougain', mergeGeometries([new THREE.IcosahedronGeometry(1, 1).scale(1.7, 1.1, 0.55).translate(0, 1.9, 0).toNonIndexed(), new THREE.IcosahedronGeometry(0.7, 0).scale(1.2, 0.9, 0.5).translate(0.9, 1.1, 0).toNonIndexed()])!, std(), 120);
     add('t_door', box(1.6, 1.0, 1.06, 0.95, 0.9, 0.04), std({ roughness: 0.7 }), 16, false);
     add('t_load', mergeGeometries([box(-1.6, 1.6, -0.5, 1.1, 1.0, 1.1), box(-0.5, 1.7, 0.45, 1.1, 1.2, 1.1), box(-1.5, 2.4, 0.3, 1.0, 0.6, 1.4), box(-0.4, 1.5, -0.6, 1.0, 0.8, 1.0)])!, std(), 16);
+    // Junk heaps: a lumpy mound, and bits sticking out of it (sheets, a tyre, a crate, a bottle).
+    add('j_mound', new THREE.IcosahedronGeometry(1, 1).scale(1, 0.45, 0.85).translate(0, 0.2, 0), std(), 80);
+    add('j_bit', box(0, 0, 0, 0.9, 0.12, 0.6), std({ roughness: 0.7 }), 1800, false);
+    add('dumpground', new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2).translate(0, 0.06, 0), new THREE.MeshStandardMaterial({ color: '#9a8a72', roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), 1, false);
     add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 6, false);
     add('engine', mergeGeometries([box(-0.7, 1.4, 0, 6.6, 2.4, 2.5), box(3.3, 1.2, 0, 1.4, 2.0, 2.5)])!, std({ color: '#c0392b', roughness: 0.5, flatShading: false }), 4);
     add('ladder', mergeGeometries([box(-0.7, 2.7, 0.45, 6, 0.1, 0.1), box(-0.7, 2.7, -0.45, 6, 0.1, 0.1), ...Array.from({ length: 9 }, (_, k) => box(-3.4 + k * 0.7, 2.7, 0, 0.08, 0.08, 0.9))])!, std({ color: '#d9d4c8' }), 4, false);
@@ -342,6 +346,25 @@ export class Life3D {
               this.put('drop', e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, 2.8 + Math.sin(u * Math.PI) * 3.2 - u * 2, 0, 1, 1, 1);
             }
           if (night > 0.3) this.put('dpool', e.x, e.y, 0.95, 0, 7, 1, 7, '#cfe6ff');
+          break;
+        }
+        case 'dump':
+          this.put('dumpground', e.x + e.w / 2, e.y + e.h / 2, 0, 0.1, e.w * 0.55, 1, e.h * 0.55);
+          break;
+        case 'junk': {
+          let n = e.seed;
+          const r = () => ((n = (n * 9301 + 49297) % 233280) / 233280);
+          const sy = 0.9 + r() * 0.5;
+          this.put('j_mound', e.x, e.y, 0, r() * 6, e.size, e.size * sy, e.size, ['#6e6356', '#7a6e60', '#5f564c'][Math.floor(r() * 3)]);
+          const cols = ['#c9c2b4', '#3a7a9a', '#b8483a', '#e0cfa8', '#2a2826', '#8a4a2a', '#f4f2ec', '#5f8a4a'];
+          for (let k = 0; k < 4 + e.size * 3; k++) {
+            const a = r() * Math.PI * 2;
+            const d = r() * e.size * 0.75;
+            // On the mound's surface, poking out of it.
+            const hgt = e.size * sy * (0.2 + 0.45 * Math.sqrt(Math.max(0, 1 - (d / (e.size * 0.95)) ** 2)));
+            const k2 = 0.5 + e.size * 0.18;
+            this.put('j_bit', e.x + Math.cos(a) * d, e.y + Math.sin(a) * d * 0.85, hgt, r() * 6, (0.6 + r()) * k2, 1 + r() * 2, (0.6 + r()) * k2, cols[Math.floor(r() * cols.length)], (r() - 0.5) * 1.2);
+          }
           break;
         }
         case 'clutter':

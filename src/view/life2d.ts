@@ -532,6 +532,36 @@ function clutter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'clutter' }
   g.restore();
 }
 
+/** A heap of junk from above: a dark mound with bits of everything showing, sheet metal, plastic, cloth, tyres. */
+function junk2d(g: CanvasRenderingContext2D, x: number, y: number, s: number, seed: number) {
+  let n = seed;
+  const r = () => ((n = (n * 9301 + 49297) % 233280) / 233280);
+  g.fillStyle = 'rgba(40,30,20,0.25)';
+  g.beginPath();
+  g.ellipse(x + s * 0.3, y + s * 0.3, s, s * 0.8, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#7a6e60';
+  g.beginPath();
+  for (let k = 0; k <= 10; k++) {
+    const a = (k / 10) * Math.PI * 2;
+    const rr = s * (0.75 + r() * 0.3);
+    if (k === 0) g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.85);
+    else g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.85);
+  }
+  g.fill();
+  const cols = ['#c9c2b4', '#3a7a9a', '#b8483a', '#e0cfa8', '#2a2826', '#8a4a2a', '#f4f2ec', '#5f8a4a'];
+  for (let k = 0; k < 6 + s * 5; k++) {
+    g.fillStyle = cols[Math.floor(r() * cols.length)];
+    const a = r() * Math.PI * 2;
+    const d = r() * s * 0.8;
+    g.save();
+    g.translate(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.85);
+    g.rotate(r() * 3);
+    g.fillRect(-0.3, -0.15, 0.3 + r() * 0.6, 0.2 + r() * 0.3);
+    g.restore();
+  }
+}
+
 const turn = (h: boolean, dir: 1 | -1) => (h ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** Small flames over a fire pit or an oil drum, with their glow. */
@@ -579,7 +609,22 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       g.beginPath();
       g.arc(e.x, e.y, 0.3, 0, Math.PI * 2);
       g.fill();
-    } else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
+    } else if (e.t === 'dump') {
+      // Trodden ground, darker than the sand, with the tracks of the trucks that come to tip.
+      g.fillStyle = 'rgba(120,105,85,0.35)';
+      g.beginPath();
+      g.ellipse(e.x + e.w / 2, e.y + e.h / 2, e.w * 0.55, e.h * 0.55, 0.1, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(90,75,60,0.35)';
+      g.lineWidth = 0.6;
+      g.beginPath();
+      g.moveTo(1004, 610);
+      g.quadraticCurveTo(1030, 604, e.x + 10, e.y + e.h / 2);
+      g.moveTo(1004, 614);
+      g.quadraticCurveTo(1030, 608, e.x + 10, e.y + e.h / 2 + 4);
+      g.stroke();
+    } else if (e.t === 'junk') junk2d(g, e.x, e.y, e.size, e.seed);
+    else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
     else if (e.t === 'clutter' && d.traffic) clutter2d(g, e);
     else if (e.t === 'chair') {
       g.fillStyle = '#8a6a48';
