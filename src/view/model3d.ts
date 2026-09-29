@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { buildingAt, buildingDist, effect, lobe, riverX, rng, structureAt, targetOf, type Building, type Estimate, type Plan, type Population, type Rect, type World } from '../jev';
+import { buildingAt, buildingDist, effect, lobe, riverX, rng, structureAt, targetOf, weapon, type Building, type Estimate, type Plan, type Population, type Rect, type World } from '../jev';
 import type { Car, Walker } from './crowd';
 import { drawCity } from './drawCity';
 import type { Layers, Outcome } from './map';
@@ -296,7 +296,11 @@ export class Model3D {
   private labels = new Map<string, HTMLDivElement>();
   private puffs: { m: THREE.Mesh; v: THREE.Vector3; born: number; grow: number }[] = [];
   private plume: THREE.Mesh[] = []; // the smoke that lingers after a strike
-  private smokeAt: { x: number; z: number; born: number; dark: number } | null = null;
+  private smokeAt: { x: number; z: number; born: number; dark: number; big: number } | null = null;
+  // Fireballs and pressure rings: the bomb's own, and one for each thing it sets off.
+  private balls: { m: THREE.Mesh; x: number; z: number; born: number; lasts: number; size: number }[] = [];
+  private waves: { m: THREE.Mesh; born: number; dur: number; max: number }[] = [];
+  private flashPower = 1100;
   private birds!: THREE.InstancedMesh;
   private scraps: { m: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3 }[] = [];
   private fxKey: Outcome | null = null;
@@ -410,15 +414,15 @@ export class Model3D {
     this.raf = requestAnimationFrame(loop);
   }
 
-  private fly: { t0: THREE.Vector3; t1: THREE.Vector3; p0: THREE.Vector3; p1: THREE.Vector3; k: number } | null = null;
+  private fly: { t0: THREE.Vector3; t1: THREE.Vector3; p0: THREE.Vector3; p1: THREE.Vector3; k: number; dur?: number } | null = null;
 
   /** Glide the camera to look at a spot on the map, keeping the current angle, from a comfortable distance. */
-  flyTo(x: number, y: number, dist = 160) {
+  flyTo(x: number, y: number, dist = 160, dur = 1.1) {
     const t1 = new THREE.Vector3(x, 4, y);
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     if (dir.y < 0.35) dir.y = 0.35;
     dir.normalize();
-    this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1: t1.clone().add(dir.multiplyScalar(dist)), k: 0 };
+    this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1: t1.clone().add(dir.multiplyScalar(dist)), k: 0, dur };
   }
 
   /** Cut straight to looking at a spot from a distance, keeping the current angle: used when switching over from the flat map. */
@@ -1112,7 +1116,7 @@ export class Model3D {
     if (!f) return;
     if (this.fly) {
       const fl = this.fly;
-      fl.k = Math.min(1, fl.k + dt / 1.1);
+      fl.k = Math.min(1, fl.k + dt / (fl.dur ?? 1.1));
       const e = fl.k * fl.k * (3 - 2 * fl.k);
       this.controls.target.lerpVectors(fl.t0, fl.t1, e);
       this.camera.position.lerpVectors(fl.p0, fl.p1, e);
@@ -1428,8 +1432,36 @@ export class Model3D {
       this.burst(s.plan, o);
     }
     const since = t - IMPACT_AT;
-    this.flash.intensity = since > 0 && since < 0.6 ? 1100 * (1 - since / 0.6) : 0;
-    this.flash.position.set(o.ix, 8, o.iy);
+    const mega = !!weapon(s.plan.weapon).special;
+    const fl = mega ? 1.4 : 0.6;
+    this.flash.intensity = since > 0 && since < fl ? this.flashPower * (1 - since / fl) : 0;
+    this.flash.position.set(o.ix, mega ? 60 : 8, o.iy);
+    for (const b of this.balls) {
+      const age = (now - b.born) / 1000;
+      const k = age / b.lasts;
+      if (age < 0 || k >= 1) {
+        b.m.visible = false;
+        continue;
+      }
+      // Swells fast, rises, cools from white-hot through orange to a dull red, and fades.
+      b.m.visible = true;
+      b.m.scale.setScalar(b.size * (0.35 + 1.1 * Math.sqrt(k)));
+      b.m.position.set(b.x, b.size * (0.25 + 0.9 * k), b.z);
+      const mat = b.m.material as THREE.MeshBasicMaterial;
+      mat.color.setRGB(1, 0.95 - 0.55 * Math.min(1, k * 1.6), 0.75 - 0.6 * Math.min(1, k * 2));
+      mat.opacity = 0.95 * (1 - k) ** 0.8;
+    }
+    for (const w of this.waves) {
+      const age = (now - w.born) / 1000;
+      const k = age / w.dur;
+      if (age < 0 || k >= 1) {
+        w.m.visible = false;
+        continue;
+      }
+      w.m.visible = true;
+      w.m.scale.setScalar(Math.max(0.01, w.max * Math.sqrt(k)));
+      (w.m.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - k);
+    }
     for (const p of this.puffs) {
       const age = (now - p.born) / 1000;
       if (age < 0) {
@@ -1469,8 +1501,8 @@ export class Model3D {
       }
       const u = (age * 0.045 + k / this.plume.length) % 1;
       pm.visible = true;
-      pm.position.set(sm.x + u * 70 + Math.sin(u * 5 + k) * 3, 6 + u * 60, sm.z - u * 26);
-      pm.scale.setScalar(3 + u * 15);
+      pm.position.set(sm.x + u * 70 * sm.big + Math.sin(u * 5 + k) * 3, 6 + u * 60 * sm.big, sm.z - u * 26 * sm.big);
+      pm.scale.setScalar((3 + u * 15) * sm.big);
       const mat = pm.material as THREE.MeshStandardMaterial;
       mat.opacity = Math.pow(1 - u, 1.3) * 0.4 * fade;
       mat.color.setScalar((0.5 - sm.dark * 0.2 + u * 0.3) * (1 - night * 0.4));
@@ -1509,10 +1541,18 @@ export class Model3D {
   }
 
   private burst(plan: Plan, o: Outcome) {
-    this.smokeAt = { x: o.ix, z: o.iy, born: performance.now(), dark: o.secondary.length ? 1 : 0.55 };
+    const w = weapon(plan.weapon);
+    const mega = !!w.special;
+    this.smokeAt = { x: o.ix, z: o.iy, born: performance.now(), dark: o.secondary.length ? 1 : 0.55, big: mega ? 4 : 1 };
     const r = rng(Math.round(o.ix * 97 + o.iy));
     const e = effect(plan, structureAt(this.world, o.ix, o.iy));
     const now = performance.now();
+    // The fireball and the pressure ring, sized like the flat map's: the gap between bombs is plain to see.
+    const size = mega ? 150 : 0.6 * 13 * (w.blast / 13) ** 1.45;
+    this.fireball(o.ix, o.iy, now, mega ? 3.2 : 0.9 + size / 30, size);
+    this.wave(now, mega ? 5.5 : 1.3, mega ? 700 : size * 3);
+    this.flashPower = mega ? 60000 : 1100 * (size / 8) ** 1.2;
+    this.flash.distance = mega ? 2600 : Math.max(180, size * 10);
     const puff = (x: number, y: number, z: number, shade: number, v: THREE.Vector3, delay: number, grow: number, size: number) => {
       const geo = new THREE.IcosahedronGeometry(size, 1);
       const pos = geo.attributes.position as THREE.BufferAttribute;
@@ -1524,10 +1564,30 @@ export class Model3D {
       this.fx.add(m);
       this.puffs.push({ m, v, born: now + delay, grow });
     };
+    for (const b of o.blasts) {
+      const big = b.kind === 'fuel' ? 26 : 18;
+      this.fireball(b.x, b.y, now + b.at * 1000, 1.3, big);
+      this.wave(now + b.at * 1000, 1.2, big * 3);
+      for (let i = 0; i < 10; i++) puff(b.x + (r() - 0.5) * 16, 6, b.y + (r() - 0.5) * 16, 0.22 + r() * 0.12, new THREE.Vector3(0.8, 7 + r() * 7, 0), b.at * 1000 + 200 + r() * 600, 1.8, 4);
+    }
     for (let i = 0; i < 16 + Math.round(e.blast); i++) {
       const a = r() * Math.PI * 2;
       const d = r() * e.blast * 0.7;
       puff(o.ix + Math.cos(a) * d, 2 + r() * 6, o.iy + Math.sin(a) * d, 0.72 + r() * 0.26, new THREE.Vector3(Math.cos(a) * 2 + 1.2, 4 + r() * 7, Math.sin(a) * 2 - 0.5), r() * 400, 0.6 + r() * 0.9, 2 + r() * 2.5);
+    }
+    if (mega) {
+      // A column and a spreading cap of dust and smoke, and a wall of dust thrown up as the wave crosses the city.
+      for (let i = 0; i < 40; i++) puff(o.ix + (r() - 0.5) * 30, 10 + i * 4, o.iy + (r() - 0.5) * 30, 0.55 + r() * 0.25, new THREE.Vector3(0.5, 10 + r() * 6, 0), 300 + i * 40, 1.6, 10 + r() * 6);
+      for (let i = 0; i < 60; i++) {
+        const a = r() * Math.PI * 2;
+        const d = 30 + r() * 110;
+        puff(o.ix + Math.cos(a) * d * 0.4, 150 + r() * 60, o.iy + Math.sin(a) * d * 0.4, 0.45 + r() * 0.3, new THREE.Vector3(Math.cos(a) * 6, 3 + r() * 4, Math.sin(a) * 6), 1500 + r() * 1500, 2.2, 18 + r() * 10);
+      }
+      for (let i = 0; i < 90; i++) {
+        const a = r() * Math.PI * 2;
+        const d = 40 + r() * 260;
+        puff(o.ix + Math.cos(a) * d, 3, o.iy + Math.sin(a) * d, 0.7 + r() * 0.2, new THREE.Vector3(Math.cos(a) * 3, 2 + r() * 3, Math.sin(a) * 3), (d / 160) * 1000 + r() * 300, 1.4, 8 + r() * 6);
+      }
     }
     // Dark smoke from whatever else went off.
     for (const id of o.damaged) {
@@ -1537,10 +1597,10 @@ export class Model3D {
       for (let i = 0; i < 8; i++) puff(b.cx + (r() - 0.5) * 14, 4, b.cy + (r() - 0.5) * 14, 0.3 + r() * 0.15, new THREE.Vector3(0.8, 6 + r() * 6, 0), 600 + r() * 900, 1.2, 3);
     }
     const cols = ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc'];
-    for (let i = 0; i < 140; i++) {
+    for (let i = 0; i < (mega ? 420 : 140); i++) {
       const a = r() * Math.PI * 2;
       const g = lobe(plan.heading, Math.sin(a), -Math.cos(a));
-      const v = (6 + r() * 20) * (0.5 + g) * (plan.fuze === 'delay' ? 0.55 : 1);
+      const v = (6 + r() * 20) * (0.5 + g) * (plan.fuze === 'delay' ? 0.55 : 1) * (mega ? 4 : Math.sqrt(size / 8));
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.6 + r() * 1.4, 0.4 + r()), new THREE.MeshStandardMaterial({ color: cols[Math.floor(r() * cols.length)], side: THREE.DoubleSide, roughness: 1 }));
       m.position.set(o.ix, 3, o.iy);
       m.castShadow = true;
@@ -1554,6 +1614,24 @@ export class Model3D {
     this.fx.clear();
     this.puffs = [];
     this.scraps = [];
+    this.balls = [];
+    this.waves = [];
+  }
+
+  private fireball(x: number, z: number, born: number, lasts: number, size: number) {
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 3), new THREE.MeshBasicMaterial({ color: '#fff2c8', transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    m.visible = false;
+    this.fx.add(m);
+    this.balls.push({ m, x, z, born, lasts, size });
+  }
+
+  private wave(born: number, dur: number, max: number) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.93, 1, 96), new THREE.MeshBasicMaterial({ color: '#fffaf0', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 1.5;
+    m.visible = false;
+    this.fx.add(m);
+    this.waves.push({ m, born, dur, max });
   }
 
   // ---------------------------------------------------------------- labels

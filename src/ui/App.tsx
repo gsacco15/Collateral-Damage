@@ -1476,7 +1476,10 @@ export default function App() {
     const whB = wh.buildingId != null ? world.buildings[wh.buildingId] : null;
     const stops: [number, () => void][] = [];
     if (whB) stops.push([800, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
-    if (school) stops.push([7000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
+    // First look at the school: in close, the building and its playground filling the view, for a few seconds.
+    const yard = world.spaces.find((sp) => sp.name === 'School yard');
+    const schoolBox = school && [...school.rects, ...(yard ? [yard.rect] : [])].reduce((u, q) => ({ x0: Math.min(u.x0, q.x), y0: Math.min(u.y0, q.y), x1: Math.max(u.x1, q.x + q.w), y1: Math.max(u.y1, q.y + q.h) }), { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 });
+    if (school && schoolBox) stops.push([7000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo((schoolBox.x0 + schoolBox.x1) / 2, (schoolBox.y0 + schoolBox.y1) / 2 + 3, phone ? 6.4 : 7.6))]);
     if (depot.length) {
       const c = mid(depot);
       stops.push([11000, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
@@ -1518,6 +1521,7 @@ export default function App() {
     const mega = !!weapon(plan.weapon).special;
     // The biggest bomb: start a little further out, so the pull-back after it has somewhere to go.
     focusRef.current = mega ? { cx: plan.aimX, cy: plan.aimY + 10, zoom: 2.4, dur: 1.4 } : { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
+    if (mega && view === 'model') modelRef.current?.flyTo(plan.aimX, plan.aimY, 460, 1.4);
     // Rolling again replaces the last strike; a new strike adds to the ruins.
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     setRuins(before);
@@ -1537,6 +1541,8 @@ export default function App() {
         sound.play('impact-mega');
         sound.play('impact', 0, 0.7);
         focusRef.current = { cx: o.ix + (world.city.w / 2 - o.ix) * 0.35, cy: o.iy + (world.city.h / 2 - o.iy) * 0.35, zoom: 1.05, dur: 6.5 };
+        // In 3D the same: a long, slow pull up and back over the city.
+        if (view === 'model') modelRef.current?.flyTo(o.ix + (world.city.w / 2 - o.ix) * 0.35, o.iy + (world.city.h / 2 - o.iy) * 0.35, 1150, 6.5);
       } else sound.play('impact', 0, 0.45 + 0.55 * Math.min(1, weapon(plan.weapon).blast / 22));
       // Whatever else goes off, a beat later. Fuel is the loudest; several tanks together share the volume.
       const each = 1 / Math.sqrt(Math.max(1, o.blasts.length / 2));
