@@ -138,19 +138,6 @@ a { color: var(--text-1); }
 .guide h4 { font-size: 16px; font-weight: 600; margin-bottom: 4px; letter-spacing: -0.01em; }
 .guide p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
 .guide > div:nth-child(2) { flex: 1; }
-/* The four ways a blast harms: little paper cards, each lit as the narrator names it. */
-.ways { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
-.way { position: relative; padding: 7px 8px 4px; border-radius: 3px; background: #fbfaf6; border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(40, 30, 20, 0.08); opacity: 0.35; transform: translateY(2px); transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.6s ease; }
-.way:nth-child(odd) { rotate: -0.6deg; }
-.way:nth-child(even) { rotate: 0.5deg; }
-.way.lit { opacity: 1; transform: none; }
-.way.now { box-shadow: 0 2px 4px rgba(40, 30, 20, 0.1), 0 8px 18px -8px rgba(40, 30, 20, 0.4); }
-.way b { display: block; font-size: 12px; font-weight: 600; color: #1c1a17; }
-.way small { display: block; font-size: 10.5px; line-height: 1.25; color: #6b655c; }
-.way svg { display: block; width: 100%; height: 34px; margin-top: 2px; fill: none; stroke: #4a4640; stroke-width: 1; stroke-linecap: round; }
-.way svg .f { fill: #7d7870; stroke: none; }
-.way svg .thin { stroke-width: 0.7; stroke: #8c8579; }
-.way svg .fire { fill: var(--hazard); stroke: none; opacity: 0.85; }
 .guide-nav { display: flex; flex-direction: column; gap: 6px; }
 .guide-nav button { font-size: 12.5px; font-weight: 500; padding: 7px 13px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2); cursor: pointer; }
 .guide-nav button.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
@@ -739,12 +726,6 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .guide.compact .guide-nav { flex-direction: row; gap: 3px; }
   .guide.compact .guide-nav button { min-width: 30px; height: 28px; padding: 0 9px; font-size: 14px; line-height: 1; border-radius: 999px; }
   .guide.compact .guide-x { font-size: 12px !important; background: transparent; border-color: transparent; color: var(--text-3); }
-  /* On a phone the four cards float just above the pill, small and see-through. */
-  .guide.compact .ways { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); width: min(300px, calc(100vw - 20px)); gap: 5px; margin: 0; }
-  .guide.compact .way { padding: 4px 5px 2px; background: rgba(251, 250, 246, 0.85); opacity: 0.55; }
-  .guide.compact .way.lit { opacity: 1; }
-  .guide.compact .way b { font-size: 10px; }
-  .guide.compact .way svg { height: 26px; }
   .guide-listen { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line-2); background: transparent; border-radius: 999px; font-size: 13px; line-height: 1; }
   .app.guiding .hud-zoom { display: none; }
   .storycard.chip { width: auto; max-width: calc(100% - 24px); padding: 6px 8px 6px 12px; gap: 0; bottom: 64px; background: rgba(246, 243, 236, 0.72); }

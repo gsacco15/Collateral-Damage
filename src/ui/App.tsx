@@ -1,5 +1,5 @@
 // Collateral Damage: plan a strike on a paper city and watch Jev, the engine, estimate who would be hurt.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   aimPoint,
   approver,
@@ -88,7 +88,7 @@ interface GuideStep {
   text: string;
   plan?: Partial<Plan>;
   layers?: Partial<Layers>;
-  focus?: { cx: number; cy: number; zoom: number };
+  focus?: { cx: number; cy: number; zoom: number; dur?: number };
   open?: StepId;
   tab?: 'estimate' | 'jev';
   pulse?: boolean; // make the reach ring breathe
@@ -97,75 +97,15 @@ interface GuideStep {
   tour?: boolean; // once, on arrival: point at the warehouse, the school, the fuel depot, then back
   demo?: boolean; // replay a recorded search instead of running Jev live
   play?: boolean; // play through the day while on this step
-  ways?: boolean; // show the four ways a blast harms, lit one by one with the narration
-}
-
-// The four ways a blast harms people, drawn as little paper cards. `at` is the share of the narration
-// where each one is spoken, so each card lights as it is named.
-const WAYS: { title: string; sub: string; at: number; art: ReactNode }[] = [
-  {
-    title: 'Blast',
-    sub: 'the pressure wave',
-    at: 0.08,
-    art: (
-      <>
-        <path d="M6 30 q6 -10 0 -20 M11 32 q8 -12 0 -24 M16 34 q10 -14 0 -28" />
-        <Figure x={30} />
-      </>
-    ),
-  },
-  {
-    title: 'Fragments',
-    sub: 'and debris',
-    at: 0.29,
-    art: (
-      <>
-        <rect x={5} y={12} width={4} height={3} className="f" />
-        <rect x={11} y={20} width={3} height={3} className="f" />
-        <rect x={6} y={26} width={4} height={3} className="f" />
-        <path d="M10 13.5 h8 M14 21.5 h8 M10 27.5 h8" className="thin" />
-        <Figure x={30} />
-      </>
-    ),
-  },
-  {
-    title: 'Thrown',
-    sub: 'by the blast',
-    at: 0.4,
-    art: (
-      <>
-        <path d="M4 18 h9 M4 23 h11 M4 28 h8" className="thin" />
-        <g transform="rotate(-70 24 32)">
-          <Figure x={24} />
-        </g>
-        <rect x={38} y={10} width={3} height={26} className="f" />
-      </>
-    ),
-  },
-  {
-    title: 'After',
-    sub: 'fire, smoke, collapse',
-    at: 0.47,
-    art: (
-      <>
-        <path d="M30 8 q4 3 0 6 q-4 3 0 6" className="thin" />
-        <rect x={6} y={28} width={22} height={3} className="f" transform="rotate(-8 17 29)" />
-        <path d="M32 36 q2 -8 5 -10 q-1 5 2 6 q1 -3 3 -4 q1 6 -2 8 z" className="fire" />
-      </>
-    ),
-  },
-];
-
-function Figure({ x }: { x: number }) {
-  // A paper cut-out person, about 24 units tall, feet at y = 36.
-  return <path className="f" d={`M${x} 12 a2.4 2.4 0 1 1 0.01 0 M${x - 2.5} 15 h5 l1 11 h-2 l-0.6 10 h-1.2 l-0.4 -8 l-0.4 8 h-1.2 l-0.6 -10 h-2 z`} />;
+  // Layers to turn on as the narrator reaches them; `at` is the share of the narration spoken so far.
+  cues?: { at: number; layers: Partial<Layers> }[];
 }
 
 const GUIDE: GuideStep[] = [
   { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target', tour: true },
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
-  { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
-  { title: 'Where it would hurt', text: 'A bomb harms in four ways. The red wash adds them up: the chance someone in the open is killed or badly hurt, over hundreds of replays. Fragments run down open streets; buildings cast shadows. Point at any spot to see the odds.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon', ways: true },
+  { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4, dur: 2.8 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
+  { title: 'Where it would hurt', text: "No bomb lands exactly where it's aimed: each replay comes down a little short or wide. The blast is deadly close in and fades within a few dozen metres. Fragments go much further, in straight lines down open streets, until they hit a wall, so one side of a street can be spared and the other not. Put together, over hundreds of replays: the chance someone standing here is killed or badly hurt.", layers: { danger: false, pattern: false, impacts: false }, cues: [{ at: 0.07, layers: { impacts: true } }, { at: 0.43, layers: { pattern: true } }, { at: 0.76, layers: { danger: true } }], focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
   { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, open: 'approach' },
   { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true },
@@ -173,6 +113,22 @@ const GUIDE: GuideStep[] = [
   { title: 'Let Jev search', text: 'Jev is there to keep collateral damage as low as it can be. It tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel, so it sees the whole range of possible outcomes. It keeps the plan that still destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev', demo: true },
   { title: 'Your decision', text: "Authorise strike opens the final decision: the numbers, who signs, the protected places in reach. Hold the red button to release. Afterwards the ruins stay. Pick another building and plan again, or rebuild the city.", open: 'decide' },
 ];
+
+/** Scroll the page to y over `ms`, easing in and out. */
+let glideId = 0;
+function glide(y: number, ms: number) {
+  const id = ++glideId;
+  const from = window.scrollY;
+  const t0 = performance.now();
+  const step = (now: number) => {
+    if (id !== glideId) return;
+    const u = Math.min(1, (now - t0) / ms);
+    const e = u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2;
+    window.scrollTo(0, from + (y - from) * e);
+    if (u < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
 const loadDiscovered = () => {
   try {
@@ -209,7 +165,6 @@ export default function App() {
   const [hover, setHover] = useState<number | null>(null);
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
   const [guide, setGuide] = useState<number | null>(null);
-  const [waysLit, setWaysLit] = useState(-1);
   const guideSeq = useRef(0);
   // Phones: no opening card and no big guide cards; the guide starts at once and the narrator does the telling.
   // A phone in either orientation: narrow when upright, short when turned on its side.
@@ -418,7 +373,7 @@ export default function App() {
   const lastShown = useRef(0);
   const timers = useRef<number[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
-  const focusRef = useRef<{ cx: number; cy: number; zoom: number } | null>(null);
+  const focusRef = useRef<{ cx: number; cy: number; zoom: number; dur?: number } | null>(null);
   const canvas3dRef = useRef<HTMLCanvasElement>(null);
   const labels3dRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<Model3D | null>(null);
@@ -1060,7 +1015,7 @@ export default function App() {
         if (!flight || flight.f !== f) {
           const { s } = map.cam();
           const far = Math.hypot(f.cx - v.cx, f.cy - v.cy) * s + Math.abs(Math.log(f.zoom / v.zoom)) * 350;
-          flight = { f, from: { cx: v.cx, cy: v.cy, zoom: v.zoom }, t: 0, dur: 0.8 + Math.min(1, far / 900) };
+          flight = { f, from: { cx: v.cx, cy: v.cy, zoom: v.zoom }, t: 0, dur: f.dur ?? 0.8 + Math.min(1, far / 900) };
         }
         flight.t += dt;
         const u = Math.min(1, flight.t / flight.dur);
@@ -1425,10 +1380,12 @@ export default function App() {
     // Only the steps about Jev's own panels (its reading of the reports, its search) are worth a trip down the page.
     if (phone && i != null && GUIDE[i].tab && (GUIDE[i].glow || GUIDE[i].demo)) {
       // On a phone the panels sit under the map: glide down to the one this step is about, then back up.
-      const down = () => document.querySelector('.mobile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      const up = () => window.scrollTo({ top: 0, behavior: 'smooth' });
       const demo = !!GUIDE[i].demo;
-      mobileTimers.current = [window.setTimeout(down, demo ? 1200 : 2500), ...(demo ? [] : [window.setTimeout(up, 8000)])];
+      // Jev's search is quick about it; the reading of the reports takes its time, a slow glide each way.
+      const ms = demo ? 700 : 1600;
+      const down = () => glide((document.querySelector('.mobile-tabs')?.getBoundingClientRect().top ?? 0) + window.scrollY, ms);
+      const up = () => glide(0, ms);
+      mobileTimers.current = [window.setTimeout(down, demo ? 1200 : 3200), ...(demo ? [] : [window.setTimeout(up, 10500)])];
       // At Jev's step: the moment the search finishes, try its pick, as if you'd tapped it, and go back up to see it on the map.
       if (demo)
         demoDone.current = (all) => {
@@ -1456,12 +1413,11 @@ export default function App() {
       return sound.stopVoice();
     }
     const g = GUIDE[i];
-    setWaysLit(-1);
     const seq = ++guideSeq.current;
     void sound.voice(i + 1).then((secs) => {
-      if (!g.ways || seq !== guideSeq.current) return;
-      // Light each way as the narrator names it; without narration, one after another.
-      WAYS.forEach((w, k) => mobileTimers.current.push(window.setTimeout(() => setWaysLit(k), secs ? w.at * secs * 1000 : 600 + k * 900)));
+      if (!g.cues || seq !== guideSeq.current) return;
+      // Build the picture up as the narrator gets to each part; without narration, one after another.
+      g.cues.forEach((c, k) => mobileTimers.current.push(window.setTimeout(() => setLayers((l) => ({ ...l, ...c.layers })), secs ? c.at * secs * 1000 : 1500 + k * 2500)));
     });
     if (g.plan) {
       const tgt = g.plan.target ?? plan.target;
@@ -1469,6 +1425,9 @@ export default function App() {
       const a = targetCentre(t);
       setPlan(g.plan.target ? { ...g.plan, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored } : g.plan);
     }
+    // Leaving a step that builds its picture up: finish it, so the next step starts from the whole picture.
+    const was = guide != null ? GUIDE[guide].cues : undefined;
+    if (was) setLayers((l) => Object.assign({ ...l }, ...was.map((x) => x.layers)));
     if (g.layers) setLayers((l) => ({ ...l, ...g.layers }));
     if (g.focus) focusRef.current = g.focus;
     if (g.open) setOpen((o) => new Set([...o, g.open!]));
@@ -2329,19 +2288,6 @@ export default function App() {
                 <div>
                   <h4>{GUIDE[guide].title}</h4>
                   {!phone && <p>{GUIDE[guide].text}</p>}
-                  {GUIDE[guide].ways && (
-                    <div className="ways">
-                      {WAYS.map((w, k) => (
-                        <div key={w.title} className={`way ${k <= waysLit ? 'lit' : ''} ${k === waysLit ? 'now' : ''}`}>
-                          <b>{w.title}</b>
-                          {!phone && <small>{w.sub}</small>}
-                          <svg viewBox="0 0 44 40" aria-hidden="true">
-                            {w.art}
-                          </svg>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 {phone && !soundOn && (
                   <button
