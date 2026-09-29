@@ -1114,3 +1114,5 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .settings .key-row { display: flex; gap: 6px; }
 .settings .key-row input { flex: 1; min-width: 0; font: 12.5px var(--mono); padding: 6px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text-1); }
 .set-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+.jev-needs { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.jev-needs .note-act { margin-left: 0; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--critical); background: transparent; color: var(--critical); font-family: inherit; font-weight: 600; font-size: 12px; cursor: pointer; }

@@ -452,10 +452,16 @@ export function Timeline({ profile, hour, onHour, day }: { profile: { mean: numb
  * Jev's plans: harm across, chance of destroying the target up. Point at a dot to preview it on the map; click or tap
  * one (or step with the arrow keys) to pin it and read it below; using it is a separate button.
  */
-export function Frontier({ results, best, minPk, onPeek, onPick, describe }: { results: Scored[]; best?: Scored; minPk: number; onPeek: (s: Scored | null) => void; onPick: (s: Scored) => void; describe: (s: Scored) => string }) {
+export function Frontier({ results, best, minPk, reset = 0, onPeek, onPick, describe }: { results: Scored[]; best?: Scored; minPk: number; reset?: number; onPeek: (s: Scored | null) => void; onPick: (s: Scored) => void; describe: (s: Scored) => string }) {
   const [ref, W] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<Scored | null>(null);
   const [sel, setSel] = useState<Scored | null>(null);
+  // "Back to my setup": let go of the pinned plan too, so the preview doesn't come straight back.
+  useEffect(() => {
+    if (!reset) return;
+    setSel(null);
+    setHover(null);
+  }, [reset]);
   const show = (h: Scored | null, s: Scored | null) => onPeek(h ?? s);
   const L = 38;
   const R = 12;

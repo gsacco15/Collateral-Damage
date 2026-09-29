@@ -453,6 +453,10 @@ export default function App() {
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const [peek, setPeek] = useState<Scored | null>(null);
+  // The preview bar: shown when a new plan is previewed, gone again after a few seconds; the chart's pinned plan is
+  // cleared with it when you go back to your own setup.
+  const [barUp, setBarUp] = useState(false);
+  const [previewReset, setPreviewReset] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mapRef = useRef<MapView | null>(null);
@@ -1058,6 +1062,12 @@ export default function App() {
     if (guide != null) return void startDemo();
     const pool = poolRef.current;
     if (!pool) return;
+    if (!lawful) {
+      // Not a silent stop down the page: say what's missing, right here, with a one-tap Confirm.
+      flash('Not yet confirmed as a lawful objective.', true);
+      setOpen((o) => new Set([...o, 'target']));
+      return;
+    }
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setLog([]);
@@ -1141,6 +1151,13 @@ export default function App() {
   }
   // The map shows Jev's plan instead of yours: while it searches (if you asked to watch), or while you inspect one.
   const following = !!ghostPlan && ((follow && status.running) || !!peek) && !outcome && !striking;
+  const previewId = following && ghostPlan ? `${ghostPlan.weapon}|${ghostPlan.fuze}|${ghostPlan.heading}|${ghostPlan.hour}|${Math.round(ghostPlan.aimX)}|${Math.round(ghostPlan.aimY)}` : '';
+  useEffect(() => {
+    if (!previewId) return setBarUp(false);
+    setBarUp(true);
+    const id = window.setTimeout(() => setBarUp(false), 4000);
+    return () => window.clearTimeout(id);
+  }, [previewId]);
   const shownPlan = following ? ghostPlan! : plan;
   const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive, marks, behave) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive, marks, behave]);
 
@@ -2496,8 +2513,16 @@ export default function App() {
             <p className="powered">Runs here, on your computer: the simulator, using Jev's reading of who is inside</p>
           </div>
         </div>
+        {!lawful && (
+          <p className="hint warn jev-needs">
+            Jev only plans for a confirmed lawful objective. This target isn't confirmed yet.
+            <button className="note-act" onClick={() => setLawful(true)}>
+              Confirm it
+            </button>
+          </p>
+        )}
         <div className="row">
-          <button className="btn primary" onClick={runJev}>
+          <button className={`btn primary ${!lawful ? 'blocked' : ''}`} onClick={runJev}>
             {phase === 'idle' ? 'Run Jev' : 'Start over'}
           </button>
           {phase === 'search' && (
@@ -2534,7 +2559,7 @@ export default function App() {
           Trade-offs <span className="src">plan search</span>
         </h3>
         <p className="sub">Each dot is a plan. Up is more likely to destroy the target; right is more people hurt. Point at one, tap it, or step with the arrow keys to preview it on the map.</p>
-        <Frontier results={results} best={bestNow} minPk={minPk} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} describe={(s) => describe(s.c)} />
+        <Frontier results={results} best={bestNow} minPk={minPk} reset={previewReset} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} describe={(s) => describe(s.c)} />
         {bestNow && (
           <div className="bestplan">
             <span className="k">Jev's pick</span>
@@ -2830,7 +2855,7 @@ export default function App() {
                 )}
               </div>
             )}
-            {following && (
+            {following && barUp && (
               <div className="preview-bar" role="status">
                 <span>
                   <i aria-hidden /> Previewing Jev's plan: {weapon(shownPlan.weapon).short}, {modeOf(shownPlan.weapon, shownPlan.fuze).name.toLowerCase()}, {fmtHour(shownPlan.hour)}
@@ -2839,6 +2864,8 @@ export default function App() {
                   onClick={() => {
                     setPeek(null);
                     setFollow(false);
+                    setPreviewReset((n) => n + 1);
+                    setBarUp(false);
                   }}
                 >
                   Back to my setup
