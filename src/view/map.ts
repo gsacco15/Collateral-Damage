@@ -73,6 +73,7 @@ export interface MapFrame {
   trail: Plan[]; // the plans Jev tried most recently, newest last
   spotMode: boolean;
   targetMode?: boolean; // clicking picks a new target
+  spotlight?: { ids: number[]; name: string; tone?: 'protect' | 'hazard' | 'target' } | null; // the guide pointing at a place
   retarget?: { x: number; y: number; bid: number | null } | null; // dragging the target onto another building
   hover: number | null;
   selected: number | null;
@@ -463,6 +464,32 @@ export class MapView {
       g.lineWidth = 1.1 * px;
       for (const q of b.rects) g.strokeRect(q.x - 0.6, q.y - 0.6, q.w + 1.2, q.h + 1.2);
     }
+    // The guide pointing at a place: a warm glow that breathes, and its name.
+    if (f.spotlight?.ids.length) {
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * 2.6);
+      const col = f.spotlight.tone === 'protect' ? '45,111,146' : f.spotlight.tone === 'hazard' ? '184,120,26' : '200,55,43';
+      let top = Infinity;
+      let cx = 0;
+      let n = 0;
+      for (const id of f.spotlight.ids) {
+        const b = this.world.buildings[id];
+        if (!b) continue;
+        for (const q of b.rects) {
+          g.fillStyle = `rgba(${col},${0.1 + 0.08 * pulse})`;
+          g.fillRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);
+          g.strokeStyle = `rgba(${col},${0.12 + 0.1 * pulse})`;
+          g.lineWidth = 9 * px;
+          g.strokeRect(q.x - 3, q.y - 3, q.w + 6, q.h + 6);
+          g.strokeStyle = `rgba(${col},${0.65 + 0.3 * pulse})`;
+          g.lineWidth = 2 * px;
+          g.strokeRect(q.x - 1.5, q.y - 1.5, q.w + 3, q.h + 3);
+          top = Math.min(top, q.y);
+        }
+        cx += b.cx;
+        n++;
+      }
+      if (n) label(g, cx / n, top - 14 * px, f.spotlight.name, px, { tone: f.spotlight.tone });
+    }
     // Target mode: the building under the pointer lights up red, ready to be picked.
     if (pick != null && pick !== targetOf(this.world, plan.target).buildingId && this.world.buildings[pick] && !f.ruins.includes(pick)) {
       const b = this.world.buildings[pick];
@@ -614,6 +641,7 @@ export class MapView {
       for (const p of this.world.places) {
         if (p.kind !== 'landmark' || !inView(view, p.x, p.y, 20)) continue;
         const b = p.id.startsWith('b:') ? this.world.buildings[+p.id.slice(2)] : null;
+        if (b && f.spotlight?.ids.includes(b.id)) continue; // the guide's own label is showing
         const top = b ? Math.min(...b.rects.map((q) => q.y)) : p.y;
         if (!this.discovered.has(p.id)) {
           g.save();

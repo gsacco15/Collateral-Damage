@@ -78,12 +78,13 @@ interface GuideStep {
   pulse?: boolean; // make the reach ring breathe
   drawer?: 'day' | 'jev';
   glow?: 'jev-card'; // softly outline this card so it's clear what the step means
+  tour?: boolean; // once, on arrival: point at the warehouse, the school, the fuel depot, then back
   demo?: boolean; // replay a recorded search instead of running Jev live
   play?: boolean; // play through the day while on this step
 }
 
 const GUIDE: GuideStep[] = [
-  { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target' },
+  { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target', tour: true },
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
   { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
   { title: 'Where it would hurt', text: 'The red wash is the chance that someone standing in the open would be killed or badly hurt, over hundreds of replays of the strike. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
@@ -151,6 +152,8 @@ export default function App() {
   // Explore: click a building to see who's inside. Target: click or drag the target onto any building.
   const [mapMode, setMapMode] = useState<'explore' | 'target'>('explore');
   const [strikeOpen, setStrikeOpen] = useState(false);
+  const [spotlight, setSpotlight] = useState<MapFrame['spotlight']>(null);
+  const tourTimers = useRef<number[]>([]);
   const [place, setPlace] = useState<{ story: PlaceStory; x: number; y: number } | null>(null);
   const [retarget, setRetarget] = useState<{ x: number; y: number; bid: number | null } | null>(null);
   const [explored, setExplored] = useState(0);
@@ -744,6 +747,7 @@ export default function App() {
     trail: phase === 'search' || phase === 'done' ? trailRef.current : [],
     spotMode: countMode,
     targetMode: mapMode === 'target',
+    spotlight,
     retarget,
     hover,
     selected: pop?.bid ?? null,
@@ -912,6 +916,7 @@ export default function App() {
   const onDown = (e: React.PointerEvent) => {
     const m = mapRef.current;
     if (!m || striking) return;
+    stopTour(); // touching the map ends the guide's little tour
     const p = localXY(e);
     const w = m.toWorld(p.x, p.y);
     focusRef.current = null;
@@ -1057,6 +1062,8 @@ export default function App() {
   const goGuide = (i: number | null) => {
     setGuide(i);
     stopDemo();
+    stopTour();
+    if (i != null && GUIDE[i].tour) startTour(GUIDE[i].focus);
     if (i != null && GUIDE[i].demo) void startDemo();
     else if (phaseRef.current !== 'idle' && (i == null || (guide != null && GUIDE[guide].demo))) {
       // Leaving the demo: clear it, so nothing recorded is mistaken for a live search.
@@ -1101,6 +1108,28 @@ export default function App() {
     const id = window.setTimeout(() => setGuideHint(false), 9000);
     return () => window.clearTimeout(id);
   }, [intro, guideHint]);
+  // The briefing's tour: once, on arrival, the map points at each place in the story and comes back.
+  function stopTour() {
+    tourTimers.current.forEach(clearTimeout);
+    tourTimers.current = [];
+    setSpotlight(null);
+  }
+  function startTour(home?: { cx: number; cy: number; zoom: number }) {
+    const wh = targetOf(world, 'warehouse');
+    const school = world.buildings.find((b) => b.name === 'Cotton Street School');
+    const depot = world.buildings.filter((b) => b.name === 'Fuel Depot');
+    const mid = (bs: { cx: number; cy: number }[]) => ({ x: bs.reduce((a, b) => a + b.cx, 0) / bs.length, y: bs.reduce((a, b) => a + b.cy, 0) / bs.length });
+    const whB = wh.buildingId != null ? world.buildings[wh.buildingId] : null;
+    const stops: [number, () => void][] = [];
+    if (whB) stops.push([1400, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
+    if (school) stops.push([4600, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
+    if (depot.length) {
+      const c = mid(depot);
+      stops.push([7800, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
+    }
+    stops.push([11000, () => (setSpotlight(null), home && flyTo(home.cx, home.cy, home.zoom))]);
+    tourTimers.current = stops.map(([t, f]) => window.setTimeout(f, t));
+  }
   // On the map, pan and zoom; in 3D, glide the camera there too.
   const flyTo = (x: number, y: number, zoom = 4) => {
     focusRef.current = { cx: x, cy: y, zoom };
