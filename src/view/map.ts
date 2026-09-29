@@ -607,7 +607,6 @@ export class MapView {
         away: shown ? { x: shown.ix, y: shown.iy, r: Math.max(70, wpn.blast * 4) } : null,
         brokenBridge: f.ruins.includes(BRIDGE_RUIN) || (shown?.damaged.includes(BRIDGE_RUIN) ?? false) ? targetOf(this.world, 'bridge').rect : null,
         hush: f.pop.hush,
-        sirens: f.pop.crowds?.filter((q) => q.kind === 'medic').map((q) => ({ x: q.x, y: q.y })),
       });
       drawLife2D(g, ents, {
         time: this.time,
@@ -1719,6 +1718,11 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
   g.ellipse(w.x, w.y + bob, 0.62 * scale, 0.45 * scale, 0, 0, Math.PI * 2);
   g.fill();
   // What marks them out: a medic's red band; a vendor's tray of goods held in front.
+  if (w.role === 'firefighter') {
+    g.fillStyle = '#e0c64a'; // the reflective band
+    g.fillRect(w.x - 0.62 * scale, w.y + bob - 0.12 * scale, 1.24 * scale, 0.1 * scale);
+    g.fillRect(w.x - 0.62 * scale, w.y + bob + 0.06 * scale, 1.24 * scale, 0.1 * scale);
+  }
   if (w.role === 'medic') {
     g.fillStyle = '#c0392b';
     g.fillRect(w.x - 0.62 * scale, w.y + bob - 0.08 * scale, 1.24 * scale, 0.16 * scale);

@@ -263,7 +263,10 @@ export class Life3D {
     add('j_mound', new THREE.IcosahedronGeometry(1, 1).scale(1, 0.45, 0.85).translate(0, 0.2, 0), std(), 80);
     add('j_bit', box(0, 0, 0, 0.9, 0.12, 0.6), std({ roughness: 0.7 }), 1800, false);
     add('dumpground', new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2).translate(0, 0.06, 0), new THREE.MeshStandardMaterial({ color: '#9a8a72', roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), 1, false);
-    add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 6, false);
+    add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 24, false);
+    // A fire hose's water, drop by drop along its arc; and bicycles.
+    add('hosedrop', new THREE.SphereGeometry(0.14, 5, 4), new THREE.MeshStandardMaterial({ color: '#e6f2f8', roughness: 0.2, transparent: true, opacity: 0.85 }), 120, false);
+    add('bike', mergeGeometries([new THREE.TorusGeometry(0.32, 0.035, 4, 12).translate(-0.52, 0.32, 0).toNonIndexed(), new THREE.TorusGeometry(0.32, 0.035, 4, 12).translate(0.52, 0.32, 0).toNonIndexed(), box(0, 0.52, 0, 0.95, 0.04, 0.04), box(0.4, 0.8, 0, 0.04, 0.5, 0.04)])!, std({ color: '#2a2826', roughness: 0.6 }), 40);
     add('engine', mergeGeometries([box(-0.7, 1.4, 0, 6.6, 2.4, 2.5), box(3.3, 1.2, 0, 1.4, 2.0, 2.5)])!, std({ color: '#c0392b', roughness: 0.5, flatShading: false }), 4);
     add('ladder', mergeGeometries([box(-0.7, 2.7, 0.45, 6, 0.1, 0.1), box(-0.7, 2.7, -0.45, 6, 0.1, 0.1), ...Array.from({ length: 9 }, (_, k) => box(-3.4 + k * 0.7, 2.7, 0, 0.08, 0.08, 0.9))])!, std({ color: '#d9d4c8' }), 4, false);
     add('pole', new THREE.CylinderGeometry(0.07, 0.09, 1, 6).translate(0, 0.5, 0), std({ color: '#5a5550', roughness: 0.6 }), 40);
@@ -444,7 +447,7 @@ export class Life3D {
           // The flat map's facing is an angle from east; seated people are drawn a little lower and wider.
           const sy = e.sit ? 0.72 : 1;
           const id = e.id;
-          this.put('body', e.x, e.y, e.sit ? 0.25 : 0, 0, 1.3, 1.3 * sy, 1.3, ['#5b6b7c', '#8a7a5c', '#6e4a3a', '#d8d2c4', '#3f4a3a', '#7d6b8a', '#2f3440'][id % 7]);
+          this.put('body', e.x, e.y, e.sit ? 0.25 : 0, 0, 1.3, 1.3 * sy, 1.3, e.cloth ?? ['#5b6b7c', '#8a7a5c', '#6e4a3a', '#d8d2c4', '#3f4a3a', '#7d6b8a', '#2f3440'][id % 7]);
           this.put('head', e.x, e.y, (e.sit ? 0.25 : 0) - (1 - sy) * 1.9, 0, 1.3, 1.3, 1.3, ['#c8a07a', '#a8805e', '#8a6446', '#d6b08a'][id % 4]);
           if (e.carry) this.put('carried', e.x, e.y, 0, -e.face - Math.PI / 2, 1, 1, 1);
           if (e.smoke) this.put('smoke', e.x + ((time * 0.35) % 1) * 1.5, e.y, 2.2 + ((time * 0.35) % 1) * 1.2, time, 0.18 + ((time * 0.35) % 1) * 0.3, 0.18 + ((time * 0.35) % 1) * 0.3, 0.18 + ((time * 0.35) % 1) * 0.3, '#e8e5de');
@@ -491,8 +494,29 @@ export class Life3D {
         case 'cat':
           this.put('cat', e.x, e.y, e.z, yawN(e.a), 1.8, e.curled ? 0.7 : 1.8, 1.8, e.col);
           break;
-        case 'car':
-          for (const n of ['car', 'glass', 'wheels']) this.put(n, e.x, e.y, 0, e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2, 1, 1, 1, n === 'car' ? e.col : undefined);
+        case 'car': {
+          const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+          for (const n of ['car', 'glass', 'wheels']) this.put(n, e.x, e.y, 0, yaw, 1, 1, 1, n === 'car' ? e.col : undefined);
+          if (e.flash) {
+            this.put('lightbar', e.x, e.y, 0, yaw, 1, 1, 1, e.flash === 1 ? '#ff3a2a' : '#4a8cff');
+            this.put('dpool', e.x, e.y, 0.3, 0, 6, 1, 6, e.flash === 1 ? '#ff4a3a' : '#5a8cff');
+          }
+          break;
+        }
+        case 'hose': {
+          // Drops along a rising arc from the engine to the fire, moving along it.
+          for (let k = 0; k < 14; k++) {
+            const u = (k / 14 + e.ph * 0.9) % 1;
+            const x = e.x0 + (e.x1 - e.x0) * u;
+            const y = e.y0 + (e.y1 - e.y0) * u;
+            this.put('hosedrop', x, y, 2.2 + Math.sin(u * Math.PI) * 2.4 - u * 1.8, 0, 1, 1, 1);
+          }
+          break;
+        }
+        case 'cycle':
+          this.put('bike', e.x, e.y, 0, -e.a, 1, 1, 1);
+          this.put('body', e.x, e.y, 0.55, 0, 1.0, 0.8, 1.0, e.col);
+          this.put('head', e.x, e.y, 0.3, 0, 1.15, 1.15, 1.15, '#231b16');
           break;
         case 'bus':
           {
@@ -691,6 +715,10 @@ export class Life3D {
           const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
           this.put('engine', e.x, e.y, 0, yaw, 1, 1, 1);
           this.put('ladder', e.x, e.y, 0, yaw, 1, 1, 1);
+          if (e.flash) {
+            this.put('lightbar', e.x, e.y, 1.1, yaw, 1.3, 1, 1.6, e.flash === 1 ? '#ff3a2a' : '#4a8cff');
+            this.put('dpool', e.x, e.y, 0.3, 0, 7, 1, 7, e.flash === 1 ? '#ff4a3a' : '#5a8cff');
+          }
           this.put('wheels', e.x, e.y, 0, yaw, 1.4, 1.2, 1.2);
           break;
         }

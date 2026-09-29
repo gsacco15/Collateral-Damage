@@ -72,6 +72,7 @@ import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
 import { SettingsPanel, type StrikeLog } from './Settings';
+import { addResponse, clearResponses, RESPONSE, responseScenes } from '../view/lifeScene';
 import { tallyOf } from './tally';
 import { readIntel } from './jevLive';
 import { addSceneExtra } from '../view/lifeScene';
@@ -357,7 +358,7 @@ export default function App() {
   const [strikeOpen, setStrikeOpen] = useState(false);
   // Ready the strike's sounds while the decision is still open, so they land with the plane, not after it.
   useEffect(() => {
-    if (strikeOpen) sound.preload(['aircraft-approach', 'aircraft-cargo', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda', 'siren-far']);
+    if (strikeOpen) sound.preload(['aircraft-approach', 'aircraft-cargo', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
   }, [strikeOpen]);
   // A briefed target's story, shown (and narrated) when you pick it from the top bar.
   const [story, setStory] = useState<keyof typeof TARGET_STORIES | null>(null);
@@ -608,6 +609,7 @@ export default function App() {
   };
   // Living, after a strike: where people are gathered (the ruin, a school gate, the hospital), for the sound of them.
   const crowdRef = useRef<{ zones: Rect[]; size: number }>({ zones: [], size: 0 });
+  const arrivedRef = useRef(new Set<string>()); // responder arrivals already heard, so each plays once
   useEffect(() => {
     if (!soundOn) return;
     const h = plan.hour;
@@ -679,7 +681,35 @@ export default function App() {
         'amb-wind': close < 0.15 ? (1 - close / 0.15) * 0.35 * hush * (1 - away) : 0,
         'amb-desert': away * 0.5 * hush,
       };
+      // The responders, once they're parked at a strike: a soft siren for a while, the hose while the fire burns, and
+      // each crew pulling up in turn. All of it only when you're close in over the scene, so it never follows you round.
+      let siren = 0;
+      let sirenX = v.cx;
+      let hose = 0;
+      const nearGate = Math.max(0, Math.min(1, (close - 0.25) / 0.35));
+      for (const sc of responseScenes()) {
+        const [a, b, c2, d2] = RESPONSE.siren;
+        const env = sc.t < a || sc.t > d2 ? 0 : sc.t < b ? (sc.t - a) / (b - a) : sc.t < c2 ? 1 : (d2 - sc.t) / (d2 - c2);
+        const dist = Math.hypot(sc.x - v.cx, sc.y - v.cy);
+        const lvl = env * Math.max(0, 1 - dist / 160) * nearGate * 0.3;
+        if (lvl > siren) (siren = lvl), (sirenX = sc.x);
+        const [h0, h1] = RESPONSE.hose;
+        const hEnv = sc.t < h0 || sc.t > h1 ? 0 : Math.min(1, (sc.t - h0) / 2, (h1 - sc.t) / 8);
+        hose = Math.max(hose, hEnv * Math.max(0, 1 - dist / 120) * nearGate * 0.35);
+        // Police, then the fire truck, then the ambulance: one quiet arrival each, a few seconds apart.
+        RESPONSE.arrive.forEach((at, k) => {
+          const key = `${Math.round(sc.x)},${Math.round(sc.y)},${k}`;
+          if (sc.t < at || sc.t > at + 3 || arrivedRef.current.has(key)) return;
+          arrivedRef.current.add(key);
+          const lv = Math.max(0, 1 - dist / 160) * nearGate;
+          if (lv > 0.05) sound.cue('cue-crew', panOf(sc.x), 0.28 * lv);
+        });
+      }
+      levels['amb-hose'] = hose;
+      levels['amb-siren'] = siren;
       const pans: Partial<Record<Bed, number>> = {};
+      if (siren > 0) pans['amb-siren'] = panOf(sirenX);
+      if (hose > 0) pans['amb-hose'] = panOf(sirenX);
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
       if (pick) pans[pick[0]] = pick[2];
       void sound.ambience(levels, pans);
@@ -2205,8 +2235,8 @@ export default function App() {
       // After the blast has settled: one call with the result, then a quiet "stand by".
       sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', verdict + 1.9);
       sound.radio('radio-08-bda', verdict + 2.7);
-      // Living: somewhere across the city, a siren sets off towards it.
-      if (aliveRef.current) sound.play('siren-far', verdict + 1.2, 0.32);
+      // The first responders: they arrive in about half a minute, sirens first (see the ambience, and lifeScene).
+      addResponse(o.ix, o.iy, Math.min(1, 0.3 + o.count / 30 + weapon(plan.weapon).blast / 60));
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, {}, {}, before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));
@@ -2227,6 +2257,8 @@ export default function App() {
     setMarks([]);
     setAfterMoods({});
     setLedger([]);
+    clearResponses();
+    arrivedRef.current.clear();
   }
   // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
   const callOff = () => {

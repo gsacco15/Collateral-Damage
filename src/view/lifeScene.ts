@@ -15,12 +15,11 @@ export interface SceneCtx {
   away: { x: number; y: number; r: number } | null; // near a strike, everything has gone
   brokenBridge: Rect | null;
   hush?: { x: number; y: number; r: number }[] | null; // Living, after a strike: small life has cleared from round it, for a while
-  sirens?: { x: number; y: number }[] | null; // Living, after a strike: where the medics are working (the vehicles stand by)
 }
 
 export type Ent =
   | { t: 'boat'; x: number; y: number; a: number; len: number; hull: number; kind: 'moor' | 'fish' | 'row' | 'motor'; side: number; stroke: number }
-  | { t: 'person'; x: number; y: number; face: number; id: number; wear?: Wear; sit?: boolean; smoke?: boolean; carry?: boolean }
+  | { t: 'person'; x: number; y: number; face: number; id: number; wear?: Wear; sit?: boolean; smoke?: boolean; carry?: boolean; cloth?: string; tint?: string; role?: 'security' | 'medic' | 'firefighter' } // cloth, tint, role: a uniform
   | { t: 'shed'; x: number; y: number; w: number; h: number; door: number } // door: the side it opens on, 0 N 1 E 2 S 3 W
   | { t: 'container'; x: number; y: number; w: number; h: number; col: string }
   | { t: 'forklift'; x: number; y: number; a: number; load: boolean }
@@ -32,9 +31,11 @@ export type Ent =
   | { t: 'swan'; x: number; y: number; a: number }
   | { t: 'dog'; x: number; y: number; a: number; col: string; moving: boolean; lying: boolean }
   | { t: 'cat'; x: number; y: number; a: number; col: string; curled: boolean; z: number }
-  | { t: 'car'; x: number; y: number; h: boolean; dir: 1 | -1; col: string }
+  | { t: 'car'; x: number; y: number; h: boolean; dir: 1 | -1; col: string; flash?: number } // flash: an ambulance's lights
   | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string; v?: boolean } // v: parked nose-in, north-south
   | { t: 'scooter'; x: number; y: number; a: number; col: string; sway: number }
+  | { t: 'cycle'; x: number; y: number; a: number; col: string; pedal: number } // someone on a bicycle, by day
+  | { t: 'hose'; x0: number; y0: number; x1: number; y1: number; ph: number } // a fire hose: water from the engine onto the fire
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
   | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string; door: string; lean: number; smoke: number } // smoke < 0: parked, engine off // janky: odd door, a lean, a puff of exhaust
   | { t: 'fountain'; x: number; y: number; r: number }
@@ -46,7 +47,7 @@ export type Ent =
   | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string; z?: number; label?: number } // z: up on a roof; label: which of SIGNS it reads
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
   | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
-  | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1 }
+  | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1; flash?: number } // flash: 0 off, 1, 2 (alternating lights)
   | { t: 'flag'; x: number; y: number; z: number; wave: number }
   | { t: 'fire'; x: number; y: number; size: number; flicker: number }
   | { t: 'post'; x: number; y: number; lit: boolean }
@@ -98,6 +99,7 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
+  cycles: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
   litter: { x: number; y: number; a: number; kind: 0 | 1 | 2; col: string }[];
   tarps: { x: number; y: number; a: number; col: string; size: number; mat: boolean; fire: boolean }[];
   goats: { cx: number; cy: number; n: number; seed: number }[];
@@ -188,6 +190,8 @@ function makeFixed(w: World): Fixed {
     const q = lot.rect;
     for (let row = 0; row < 3; row++) for (let x = q.x + 4; x < q.x + q.w - 4; x += 3) if (r() < 0.72) parked.push({ x, y: q.y + 8 + row * 11, h: false, d: row % 2 ? 1 : -1, col: CAR_COLS[Math.floor(r() * CAR_COLS.length)] });
   }
+  // People on bicycles, near the kerb, by day: slower than the scooters, and more of them.
+  const cycles = pickN(long, 16).map((rd, i) => ({ r: rd.rect, h: rd.rect.w > rd.rect.h, lane: (r() < 0.5 ? -1 : 1) * (2.2 + r() * 0.8), speed: 3 + r() * 2, phase: r() * 1000, col: ['#5b6b7c', '#8a7a5c', '#d8d2c4', '#6e4a3a', '#3f4a3a', '#b8574a'][i % 6], dir: (r() < 0.5 ? 1 : -1) as 1 | -1 }));
   const scooters = pickN(long, 9).map((rd, i) => ({ r: rd.rect, h: rd.rect.w > rd.rect.h, lane: (r() < 0.5 ? -1 : 1) * (1 + r() * 1.5), speed: 6 + r() * 4, phase: r() * 1000, col: ['#c23b2e', '#2f5f8a', '#e0d6c2', '#1f1f22', '#5f8a4a'][i % 5], dir: (r() < 0.5 ? 1 : -1) as 1 | -1 }));
   // Hookah cafés: on the pavement by the souk, on the boulevard, and on the quay; one is busy in the afternoon too.
   const half = w.river.width / 2;
@@ -555,6 +559,7 @@ function makeFixed(w: World): Fixed {
     beacons,
     parked,
     scooters,
+    cycles,
     cafes,
     smokers,
   };
@@ -570,6 +575,77 @@ function onRiver(c: SceneCtx, speed: number, phase: number, lane: number, down: 
   const x = riverX(y) + lane;
   const dx = riverX(y + s) - riverX(y);
   return { x, y, a: Math.atan2(dx, -s) };
+}
+
+// ---------------------------------------------------------------- after a strike: the first responders, in real time
+
+/**
+ * Each strike's scene, timed in real seconds from the impact: the ruin burns; at about half a minute a patrol car and
+ * a fire engine come in with their lights going, then an ambulance; a small crew gets out (two firefighters at the
+ * fire, two medics, two police); the fire is put out over a minute or so and the smoke thins; after two and a half
+ * minutes they pack up and drive off. Drawn by the flat map and built by the 3D model alike.
+ */
+interface Response {
+  x: number;
+  y: number;
+  sev: number;
+  t0: number;
+}
+const responses: Response[] = [];
+const nowS = () => performance.now() / 1000;
+export const RESPONSE = { siren: [30, 32, 75, 85], hose: [37, 90], arrive: [30, 34, 38], leave: 150, gone: 160, fireOut: [45, 90], smokeGone: 170 };
+export function addResponse(x: number, y: number, sev: number) {
+  responses.push({ x, y, sev, t0: nowS() });
+  if (responses.length > 4) responses.shift();
+}
+export function clearResponses() {
+  responses.length = 0;
+}
+/** The live scenes: where, and how many seconds since the strike (for the sirens). */
+export function responseScenes() {
+  const t = nowS();
+  return responses.filter((r) => t - r.t0 < RESPONSE.smokeGone).map((r) => ({ x: r.x, y: r.y, t: t - r.t0 }));
+}
+function responseEnts(): Ent[] {
+  const out: Ent[] = [];
+  const now = nowS();
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  for (const [i, r] of responses.entries()) {
+    const t = now - r.t0;
+    if (t > RESPONSE.smokeGone) continue;
+    // The fire, and the smoke over it.
+    const [o0, o1] = RESPONSE.fireOut;
+    const burn = t < o0 ? 1 : clamp((o1 - t) / (o1 - o0));
+    if (burn > 0) out.push({ t: 'fire', x: r.x, y: r.y, size: (0.8 + 1.2 * r.sev) * burn, flicker: Math.sin(now * 9 + i) * 0.5 + Math.sin(now * 13 + i * 3) * 0.5 });
+    out.push({ t: 'smoke', x: r.x, y: r.y, z: 2, seed: 70 + i, strength: clamp((RESPONSE.smokeGone - t) / 60) * (0.5 + 0.5 * r.sev), dark: 0.55 * (0.4 + 0.6 * burn), size: 1.2 + r.sev });
+    // The vehicles: each slides in along the street over four seconds, parks with its lights going, and later leaves.
+    const out1 = clamp((t - RESPONSE.leave) / 6);
+    const come = (arrive: number) => clamp((t - arrive + 4) / 4);
+    const blink = Math.floor(now * 3 + i) % 2;
+    const [aPol, aFire, aAmb] = RESPONSE.arrive;
+    const kP = come(aPol);
+    const kF = come(aFire);
+    const kA = come(aAmb);
+    if (kP > 0 && out1 < 1) out.push({ t: 'police', x: r.x + 14 - 70 * (1 - kP) + 70 * out1, y: r.y + 9, h: true, dir: 1, flash: 1 + blink });
+    if (kF > 0 && out1 < 1) out.push({ t: 'engine', x: r.x - 15 + 70 * (1 - kF) - 70 * out1, y: r.y + 10, h: true, dir: -1, flash: 1 + ((blink + 1) % 2) });
+    if (kA > 0 && out1 < 1) out.push({ t: 'car', x: r.x + 12 - 70 * (1 - kA) + 70 * out1, y: r.y - 11, h: true, dir: 1, col: '#f4f2ec', flash: 1 + blink });
+    // The hose: from the engine onto the fire, while it burns and the crew is there.
+    if (t > aFire + 3 && burn > 0.02 && t < RESPONSE.leave) out.push({ t: 'hose', x0: r.x - 11, y0: r.y + 9, x1: r.x + Math.sin(now * 0.5) * 2.5, y1: r.y + Math.cos(now * 0.4) * 2, ph: now });
+    // The crew: a few people, not a crowd.
+    if (t > aFire + 2 && t < RESPONSE.leave) {
+      out.push({ t: 'person', x: r.x - 4, y: r.y + 5, face: -Math.PI / 2 + Math.sin(now * 0.7) * 0.2, id: 900 + i * 10, cloth: '#5a4a32', tint: '#e0c64a', wear: 'cap', role: 'firefighter' });
+      out.push({ t: 'person', x: r.x + 3.5, y: r.y + 5.5, face: -Math.PI / 2 - Math.sin(now * 0.6) * 0.2, id: 901 + i * 10, cloth: '#5a4a32', tint: '#e0c64a', wear: 'cap', role: 'firefighter' });
+    }
+    if (t > aAmb + 2 && t < RESPONSE.leave) {
+      out.push({ t: 'person', x: r.x + 8, y: r.y - 7, face: Math.PI, id: 902 + i * 10, cloth: '#f4f2ec', tint: '#c0392b', wear: 'cap', role: 'medic' });
+      out.push({ t: 'person', x: r.x + 5, y: r.y - 4, face: Math.PI * 0.8, id: 903 + i * 10, cloth: '#f4f2ec', tint: '#c0392b', wear: 'cap', role: 'medic' });
+    }
+    if (t > aPol + 2 && t < RESPONSE.leave) {
+      out.push({ t: 'person', x: r.x + 20, y: r.y + 6, face: 0, id: 904 + i * 10, cloth: '#2c3a55', tint: '#2c3a55', wear: 'cap', role: 'security' });
+      out.push({ t: 'person', x: r.x + 20, y: r.y + 12, face: 0.4, id: 905 + i * 10, cloth: '#2c3a55', tint: '#2c3a55', wear: 'cap', role: 'security' });
+    }
+  }
+  return out;
 }
 
 // Anything else that wants to be in the scene (the secret mission's people) adds itself here.
@@ -990,6 +1066,17 @@ export function lifeScene(c: SceneCtx): Ent[] {
     out.push({ t: 'scooter', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, sway: Math.sin(t * 1.3 + i) * 0.12 });
   });
 
+  F.cycles.forEach((s, i) => {
+    if (!(h >= 6.5 && h < 19.5)) return;
+    const len = s.h ? s.r.w : s.r.h;
+    const u = (((t * s.speed + s.phase) % len) + len) % len;
+    const along = s.dir > 0 ? u : len - u;
+    const x = s.h ? s.r.x + along : s.r.x + s.r.w / 2 + s.lane;
+    const y = s.h ? s.r.y + s.r.h / 2 + s.lane : s.r.y + along;
+    if (!far(x, y) || onBroken(x, y)) return;
+    out.push({ t: 'cycle', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, pedal: t * 4 + i });
+  });
+
   // ---- smoke, and the red lights up high
   F.bakeries.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: b.h + 1, seed: i + 1, strength: bell(h, 3.5, 11) + 0.4 * bell(h, 16, 19.5), dark: 0.25, size: 1 }));
   F.tents.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: 1, seed: i + 7, strength: bell(h, 5.5, 8.5) + bell(h, 17, 20.5), dark: 0.55, size: 0.8 }));
@@ -1008,13 +1095,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
         return !H.some((q) => Math.hypot(e.x - q.x, e.y - q.y) < q.r);
       })
     : out;
-  // The emergency vehicles at a strike: a patrol car with its lights going, a fire engine, a white ambulance.
-  for (const [i, z] of (c.sirens ?? []).entries()) {
-    const blink = Math.floor(t * 3 + i) % 2;
-    kept.push({ t: 'police', x: z.x + 14, y: z.y + 9, h: true, dir: 1, flash: 1 + blink });
-    kept.push({ t: 'engine', x: z.x - 15, y: z.y + 10, h: true, dir: -1 });
-    kept.push({ t: 'car', x: z.x + 12, y: z.y - 11, h: true, dir: -1, col: '#f4f2ec' });
-  }
+  kept.push(...responseEnts());
   for (const f of extras) kept.push(...f(c));
   return kept;
 }

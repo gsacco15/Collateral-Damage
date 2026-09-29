@@ -18,7 +18,72 @@ const SKINS = ['#c8a07a', '#a8805e', '#8a6446', '#d6b08a'];
 const WEARS = ['cap', 'keffiyeh', 'bare', 'turban', 'ghutra', 'bare', 'cap'] as const;
 export function asWalker(e: Extract<Ent, { t: 'person' }>): Walker {
   const id = e.id;
-  return { id: -1000 - id, x: e.x, y: e.y, path: [], speed: 0, skin: SKINS[id % SKINS.length], cloth: CLOTHS[id % CLOTHS.length], wear: e.wear ?? WEARS[id % WEARS.length], tint: ['#e9e4d8', '#6b3a2e', '#2f4f6f', '#c9b58a'][id % 4], phase: e.face, kind: 'transit', zone: null, flee: 0, hurt: false, gone: false };
+  return { id: -1000 - id, x: e.x, y: e.y, path: [], speed: 0, skin: SKINS[id % SKINS.length], cloth: e.cloth ?? CLOTHS[id % CLOTHS.length], wear: e.wear ?? WEARS[id % WEARS.length], tint: e.tint ?? ['#e9e4d8', '#6b3a2e', '#2f4f6f', '#c9b58a'][id % 4], phase: e.face, kind: 'transit', zone: null, flee: 0, hurt: false, gone: false, role: e.role };
+}
+
+/** Emergency lights on a roof: two lamps taking turns, red and blue, and a soft pool of their colour (brighter at night). */
+function lights(g: CanvasRenderingContext2D, x: number, y: number, a: number, flash: number, night: number, fwd: number) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(a);
+  g.fillStyle = flash === 1 ? '#ff3a2a' : '#8a2a22';
+  g.fillRect(fwd - 0.2, -0.7, 0.4, 0.65);
+  g.fillStyle = flash === 2 ? '#4a8cff' : '#223a6a';
+  g.fillRect(fwd - 0.2, 0.05, 0.4, 0.65);
+  g.restore();
+  const col = flash === 1 ? '255,60,40' : '70,130,255';
+  const grd = g.createRadialGradient(x, y, 0, x, y, 6);
+  grd.addColorStop(0, `rgba(${col},${0.12 + 0.38 * night})`);
+  grd.addColorStop(1, `rgba(${col},0)`);
+  g.fillStyle = grd;
+  g.fillRect(x - 6, y - 6, 12, 12);
+}
+
+/** A fire hose: a pale line of water arcing from the engine onto the fire, and spray flicking about where it lands. */
+function hose(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, ph: number) {
+  const mx = (x0 + x1) / 2 + (y1 - y0) * 0.15;
+  const my = (y0 + y1) / 2 - (x1 - x0) * 0.15;
+  g.strokeStyle = 'rgba(214,232,240,0.85)';
+  g.lineWidth = 0.28;
+  g.setLineDash([0.9, 0.5]);
+  g.lineDashOffset = -ph * 6;
+  g.beginPath();
+  g.moveTo(x0, y0);
+  g.quadraticCurveTo(mx, my, x1, y1);
+  g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = 'rgba(230,242,248,0.8)';
+  for (let k = 0; k < 9; k++) {
+    const a = k * 0.7 + ph * 3;
+    const r = 0.6 + ((ph * 2 + k * 0.37) % 1) * 1.8;
+    g.fillRect(x1 + Math.cos(a) * r - 0.08, y1 + Math.sin(a) * r - 0.08, 0.16, 0.16);
+  }
+}
+
+/** Someone on a bicycle, seen from above: the frame and wheels, the rider's back, legs turning. */
+function cycle(g: CanvasRenderingContext2D, x: number, y: number, a: number, col: string, pedal: number) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(a);
+  g.fillStyle = 'rgba(40,30,20,0.2)';
+  g.fillRect(-0.8, 0.05, 1.6, 0.35);
+  g.fillStyle = '#2a2826';
+  g.fillRect(-0.85, -0.05, 0.5, 0.1);
+  g.fillRect(0.35, -0.05, 0.5, 0.1);
+  g.fillRect(-0.4, -0.03, 0.8, 0.06);
+  g.fillStyle = col;
+  g.beginPath();
+  g.ellipse(-0.05, 0, 0.32, 0.4, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#231b16';
+  g.beginPath();
+  g.arc(0.12, 0, 0.2, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = col;
+  const k = Math.sin(pedal) * 0.18;
+  g.fillRect(-0.1 + k, -0.32, 0.12, 0.12);
+  g.fillRect(-0.1 - k, 0.2, 0.12, 0.12);
+  g.restore();
 }
 
 /** A folded paper boat seen from above, bow toward -y: two faces either side of the keel crease, and the folded tent in the middle. */
@@ -913,7 +978,11 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       }
       g.restore();
     } else if (e.t === 'junk') junk2d(g, e.x, e.y, e.size, e.seed);
-    else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
+    else if (e.t === 'car' && d.traffic) {
+      d.car(e.x, e.y, e.h, e.dir, e.col);
+      if (e.flash) lights(g, e.x, e.y, turn(e.h, e.dir), e.flash, d.night, 0.2);
+    } else if (e.t === 'hose') hose(g, e.x0, e.y0, e.x1, e.y1, e.ph);
+    else if (e.t === 'cycle' && d.traffic) cycle(g, e.x, e.y, e.a, e.col, e.pedal);
     else if (e.t === 'clutter' && d.traffic) clutter2d(g, e);
     else if (e.t === 'chair') {
       g.fillStyle = '#8a6a48';
@@ -933,7 +1002,7 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       if (e.flash) {
         const col = e.flash === 1 ? '255,60,40' : '70,130,255';
         const grd = g.createRadialGradient(e.x, e.y, 0, e.x, e.y, 6);
-        grd.addColorStop(0, `rgba(${col},${0.45 * d.night})`);
+        grd.addColorStop(0, `rgba(${col},${0.12 + 0.38 * d.night})`);
         grd.addColorStop(1, `rgba(${col},0)`);
         g.fillStyle = grd;
         g.fillRect(e.x - 6, e.y - 6, 12, 12);
@@ -961,6 +1030,7 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       for (let k = -3.4; k < 2.3; k += 0.7) g.moveTo(k, -0.45), g.lineTo(k, 0.45);
       g.stroke();
       g.restore();
+      if (e.flash) lights(g, e.x, e.y, turn(e.h, e.dir), e.flash, d.night, 2.9);
     }
   }
   for (const e of ents) {

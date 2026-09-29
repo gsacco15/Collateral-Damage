@@ -48,7 +48,7 @@ export interface Walker {
   gone: boolean;
   d?: number; // Living: the district a pavement walker belongs to
   crowd?: string; // Living, after a strike: which crowd they're part of (at the ruin, a school gate, the hospital)
-  role?: 'security' | 'medic' | 'vendor' | 'unhoused' | 'elderly' | 'displaced' | 'visitor' | 'aid'; // Living: who they are, drawn with what marks them out
+  role?: 'security' | 'medic' | 'vendor' | 'unhoused' | 'elderly' | 'displaced' | 'visitor' | 'aid' | 'firefighter'; // Living: who they are, drawn with what marks them out
 }
 
 export interface Car {

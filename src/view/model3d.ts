@@ -1403,7 +1403,6 @@ export class Model3D {
           away: o ? { x: o.ix, y: o.iy, r: Math.max(70, weapon(f.plan.weapon).blast * 4) } : null,
           brokenBridge: damaged.has(BRIDGE_RUIN) ? targetOf(this.world, 'bridge').rect : null,
           hush: f.pop.hush,
-          sirens: f.pop.crowds?.filter((q) => q.kind === 'medic').map((q) => ({ x: q.x, y: q.y })),
         }),
         clock,
         night,
