@@ -183,8 +183,8 @@ export default function App() {
   };
   const [talk, setTalk] = useState<Talk | null>(null);
   const [specialIdx, setSpecialIdx] = useState(0);
-  // The closing debrief, after a strike that destroys Warehouse 14 or touches the school.
-  const [debrief, setDebrief] = useState<{ kind: 'hurt' | 'empty' | 'spared'; count: number; inSchool: number } | null>(null); // which special weapon the bottom slot shows
+  // The closing debrief, after a strike that hits Warehouse 14 or touches the school.
+  const [debrief, setDebrief] = useState<{ kind: keyof typeof DEBRIEF; count: number; inSchool: number } | null>(null);
   // Dark mode: a switch at the foot of the page, remembered in this browser.
   const [dark, setDark] = useState(() => {
     try {
@@ -1887,16 +1887,19 @@ export default function App() {
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
-      // The debrief: when the strike destroys Warehouse 14 or touches the school, a closing word on the story. Not in
+      // The debrief: when the strike hits Warehouse 14 (destroyed or not) or touches the school, a closing word on the story. Not in
       // the guide (it tells its own), and not at the end of the secret file.
       const schoolB = world.buildings.find((b) => b.name === 'Cotton Street School');
       const whId = targetOf(world, 'warehouse').buildingId;
       const inSchool = schoolB ? (o.hurtSlots[schoolB.id]?.length ?? 0) : 0;
       const schoolHit = !!schoolB && (o.damaged.includes(schoolB.id) || inSchool > 0);
-      const whHit = whId != null && o.damaged.includes(whId);
+      // Warehouse 14 is the heart of the story: any strike that lands on it or hurts anyone in it counts, destroyed or not.
+      const whB = whId != null ? world.buildings[whId] : null;
+      const whDown = whId != null && o.damaged.includes(whId);
+      const whHit = !!whB && (whDown || (o.hurtSlots[whB.id]?.length ?? 0) > 0 || whB.rects.some((q) => o.ix >= q.x - 3 && o.ix <= q.x + q.w + 3 && o.iy >= q.y - 3 && o.iy <= q.y + q.h + 3));
       const missionEnd = missionRef.current.on && missionRef.current.step === 5;
       if (guide == null && !missionEnd && (whHit || schoolHit)) {
-        const kind = inSchool > 0 ? 'hurt' : schoolHit ? 'empty' : 'spared';
+        const kind: keyof typeof DEBRIEF = inSchool > 0 ? (whDown ? 'hurt' : 'hurt-standing') : schoolHit ? 'empty' : whDown ? 'spared' : 'standing';
         window.setTimeout(() => {
           setDebrief({ kind, count: o.count, inSchool });
           void sound.feature(`voice/debrief-${kind}`);
@@ -3212,6 +3215,8 @@ export default function App() {
 const DEBRIEF = {
   hurt: 'Warehouse 14 is gone. Across Cotton Street, the school was not empty. The report will say the target was destroyed. It will also list the children by name, because someone has to. The estimate said this could happen, and it was signed anyway. That is what collateral damage means: not an accident, but a number someone accepted before it happened.',
   empty: 'The strike reached Cotton Street School, but the classrooms were empty. The hour was chosen well, or the luck was good. Tomorrow the children come back to broken windows, and a teacher will try to explain. The estimate is only ever about people. Buildings get rebuilt. Most of the time.',
+  'hurt-standing': 'Warehouse 14 is still standing. The school across Cotton Street was not spared. The children inside will be counted, and named. And the target will be struck again tomorrow. That is the worst of it: harm, with nothing gained for it.',
+  standing: "The strike hit Warehouse 14, but it's still standing. Whatever was stored inside may still be there, and the planners will be asked to go again. Across Cotton Street, the school wasn't touched. Every second strike is another estimate, another signature, and another chance for the numbers to go the other way.",
   spared: "Warehouse 14 is destroyed. Across Cotton Street, the school is still standing, and no one inside it was hurt. This time the choices held: the weapon, the hour, the angle of approach. It isn't only luck. Sometimes it's a planner who asked, before anything else: who else is here, right now?",
 };
 
