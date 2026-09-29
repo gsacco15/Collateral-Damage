@@ -823,7 +823,7 @@ export default function App() {
         const note = moodNote(world, r.districts);
         if (note.length && moodNoted.current !== cityKeyId) {
           moodNoted.current = cityKeyId;
-          flash(`Jev reads the city: ${note.join(' · ')}.`);
+          flash(`Jev's read of this hour: ${note.join('; ')}. The people on the map and the estimate follow it.`);
         }
       });
     }, 400);
@@ -1572,7 +1572,9 @@ export default function App() {
     let named: PlaceStory;
     const who = outcome ? personAtPoint(px, py, wx, wy) : '';
     const fig = !who ? figureUnder(px, py, wx, wy) : null;
+    const passer = !who && !fig && mapMode === 'explore' ? passerAt(px, py, wx, wy) : '';
     if (who) text = who;
+    else if (passer) text = passer;
     else if (fig) {
       const f = FIGURES.find((q) => q.id === fig);
       text = fig === 'moto' ? '<b>A red motorbike</b><span>Click to look</span>' : fig === 'samir' ? `<b>${SAMIR.name}</b><span>The courier · click</span>` : `<b>${f!.name}</b><span>${f!.role} · click to talk</span>`;
@@ -1624,6 +1626,16 @@ export default function App() {
     const here = placeAt(world, h.w.x, h.w.y);
     return personLine(personOut(h.w, plan.hour, here.named ? here.title : undefined), here.named ? here.title : undefined);
   };
+  // Zoomed right in: someone walking by under the pointer, and who they are.
+  const passerAt = (px: number, py: number, wx: number, wy: number) => {
+    const m = mapRef.current;
+    if (!m) return '';
+    const r = Math.abs(m.toWorld(px + (phone ? 14 : 7), py).x - wx);
+    const w = m.walkerAt(wx, wy, r);
+    if (!w) return '';
+    const here = placeAt(world, w.x, w.y);
+    return personLine(personOut(w, plan.hour, here.named ? here.title : undefined), here.named ? here.title : undefined);
+  };
   const onUp = (e: React.PointerEvent) => {
     fingers.current.delete(e.pointerId);
     if (pinch.current) {
@@ -1659,7 +1671,8 @@ export default function App() {
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
         const w = m.toWorld(p.x, p.y);
         // After a strike, tapping a red ring says who it was (phones have no hover).
-        const who = outcome && !striking ? personAtPoint(p.x, p.y, w.x, w.y) : '';
+        const fig0 = figureUnder(p.x, p.y, w.x, w.y);
+        const who = striking ? '' : (outcome ? personAtPoint(p.x, p.y, w.x, w.y) : '') || (!fig0 ? passerAt(p.x, p.y, w.x, w.y) : '');
         const el = tipRef.current;
         if (who && el) {
           el.innerHTML = who;

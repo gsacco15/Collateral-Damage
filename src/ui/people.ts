@@ -101,6 +101,7 @@ export function personOut(w: Walker, hour: number, place?: string): Person {
   // Living: the groups outside the usual pattern, and those who came after a strike, say who they were.
   const group = w.role ?? w.crowd?.split('@')[0];
   if (group === 'security') return named(r, false, between(r, 20, 50), pick(r, ['a police officer at the cordon', 'a police officer on duty at the checkpoint']));
+  if (group === 'firefighter') return named(r, false, between(r, 22, 50), pick(r, ['a firefighter, putting out the fire', 'a firefighter, holding the hose']));
   if (group === 'medic') return named(r, female, between(r, 22, 55), pick(r, ['a medic, treating the wounded', 'a paramedic, carrying a stretcher']));
   if (group === 'vendor') return named(r, female, between(r, 14, 70), pick(r, ['selling tea from a flask', 'selling sweets from a tray', 'selling phone cards and cigarettes']));
   if (group === 'unhoused') return named(r, female, between(r, 12, 80), pick(r, ['sleeping rough, with nowhere else to go', 'living on the street since the war took the house']));

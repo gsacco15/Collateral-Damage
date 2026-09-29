@@ -130,6 +130,19 @@ export class MapView {
     }
     return best;
   }
+  /** Close enough to tell one person from the next: only then can you point at someone to see who they are. */
+  static readonly PEOPLE_ZOOM = 8;
+  /** The person on foot nearest (x, y), within r metres, when zoomed right in. */
+  walkerAt(x: number, y: number, r: number): Walker | null {
+    if (this.view.zoom < MapView.PEOPLE_ZOOM) return null;
+    let best: Walker | null = null;
+    let bd = r;
+    for (const w of this.crowd.visible()) {
+      const d = Math.hypot(w.x - x, w.y - y);
+      if (d < bd) (bd = d), (best = w);
+    }
+    return best;
+  }
   view: ViewState = { cx: 225, cy: 470, zoom: 3 };
   crowd: Crowd;
   discovered = new Set<string>();

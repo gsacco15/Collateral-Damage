@@ -167,12 +167,15 @@ export function readAfter(res: { answers: Record<string, unknown> }): AfterMood 
   return { help: q('help'), close: q('close'), pickup: q('pickup'), hospital: q('hospital'), quiet: q('quiet') };
 }
 
-/** A few words on what Jev changed, for a note on the map: the strongest departures from normal. */
+/** In plain words, what Jev changed: the strongest departures from a normal hour, grouped by district. */
 export function moodNote(w: World, b: Behaviour['districts']) {
-  const words: [number, string][] = [];
+  const words: [number, string, string][] = [];
   const name = (id: string) => w.districts.find((d) => d.id === id)?.name ?? id;
-  const WHAT: Record<keyof DistrictMood, [string, string]> = { street: ['streets quieter', 'streets busier'], work: ['fewer at work', 'more at work'], school: ['fewer at school', 'more at school'], market: ['markets quieter', 'markets busier'], prayer: ['fewer at prayer', 'more at prayer'] };
-  for (const [id, m] of Object.entries(b)) for (const [k, v] of Object.entries(m!) as [keyof DistrictMood, number][]) if (v !== 1) words.push([Math.abs(Math.log(v)), `${name(id)}: ${WHAT[k][v < 1 ? 0 : 1]}`]);
+  const WHAT: Record<keyof DistrictMood, [string, string]> = { street: ['fewer people out on the streets', 'more people out on the streets'], work: ['fewer at work', 'more at work'], school: ['fewer children at school', 'more children at school'], market: ['quieter shops and stalls', 'busier shops and stalls'], prayer: ['fewer at the mosque', 'more at the mosque'] };
+  for (const [id, m] of Object.entries(b)) for (const [k, v] of Object.entries(m!) as [keyof DistrictMood, number][]) if (v !== 1) words.push([Math.abs(Math.log(v)), name(id), WHAT[k][v < 1 ? 0 : 1]]);
   words.sort((a, c) => c[0] - a[0]);
-  return words.slice(0, 2).map((x) => x[1]);
+  const top = words.slice(0, 2);
+  const byPlace = new Map<string, string[]>();
+  for (const [, place, what] of top) byPlace.set(place, [...(byPlace.get(place) ?? []), what]);
+  return [...byPlace].map(([place, what]) => `in ${place}, ${what.join(' and ')} than usual`);
 }
