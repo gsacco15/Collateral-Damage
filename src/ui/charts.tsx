@@ -448,9 +448,15 @@ export function Timeline({ profile, hour, onHour, day }: { profile: { mean: numb
 
 // ---------------------------------------------------------------- Jev's trade-offs
 
-export function Frontier({ results, best, minPk, onPeek, onPick }: { results: Scored[]; best?: Scored; minPk: number; onPeek: (s: Scored | null) => void; onPick: (s: Scored) => void }) {
+/**
+ * Jev's plans: harm across, chance of destroying the target up. Point at a dot to preview it on the map; click or tap
+ * one (or step with the arrow keys) to pin it and read it below; using it is a separate button.
+ */
+export function Frontier({ results, best, minPk, onPeek, onPick, describe }: { results: Scored[]; best?: Scored; minPk: number; onPeek: (s: Scored | null) => void; onPick: (s: Scored) => void; describe: (s: Scored) => string }) {
   const [ref, W] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<Scored | null>(null);
+  const [sel, setSel] = useState<Scored | null>(null);
+  const show = (h: Scored | null, s: Scored | null) => onPeek(h ?? s);
   const L = 38;
   const R = 12;
   const H = 170;
@@ -488,20 +494,40 @@ export function Frontier({ results, best, minPk, onPeek, onPick }: { results: Sc
         width={W}
         height={H + 40}
         onPointerMove={(e) => {
+          if (e.pointerType !== 'mouse') return; // touch: a tap pins instead
           const s = pick(e);
           setHover(s);
-          onPeek(s);
+          show(s, sel);
         }}
         onPointerLeave={() => {
           setHover(null);
-          onPeek(null);
+          show(null, sel);
         }}
         onClick={(e) => {
           const s = pick(e);
-          if (s) onPick(s);
+          setSel(s);
+          show(null, s);
         }}
-        role="img"
-        aria-label={`${results.length} plans. Best: planning figure ${best?.p90 ?? 'none'}.`}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (!sorted.length) return;
+          const i = sel ? sorted.indexOf(sel) : -1;
+          let n = -2;
+          if (e.key === 'ArrowRight' || e.key === 'ArrowDown') n = Math.min(sorted.length - 1, i + 1);
+          else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') n = Math.max(0, i < 0 ? 0 : i - 1);
+          else if (e.key === 'Home') n = 0;
+          else if (e.key === 'End') n = sorted.length - 1;
+          else if (e.key === 'Escape') n = -1;
+          if (n === -2) return;
+          e.preventDefault();
+          const s = n < 0 ? null : sorted[n];
+          setSel(s);
+          show(null, s);
+        }}
+        onBlur={() => show(hover, sel)}
+        role="listbox"
+        aria-label={`${results.length} plans. Best: planning figure ${best?.p90 ?? 'none'}. Use the arrow keys to step through them.`}
+        aria-activedescendant={undefined}
       >
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
@@ -522,6 +548,7 @@ export function Frontier({ results, best, minPk, onPeek, onPick }: { results: Sc
         {front.length > 1 && <polyline points={front.map((s) => `${x(s.p90)},${y(s.pk)}`).join(' ')} className="front" />}
         {best && <circle cx={x(best.p90)} cy={y(best.pk)} r={7} className="best" />}
         {hover && <circle cx={x(hover.p90)} cy={y(hover.pk)} r={5} className="hov" />}
+        {sel && <circle cx={x(sel.p90)} cy={y(sel.pk)} r={6.5} className="sel" />}
         {[0, 0.25, 0.5, 0.75, 1].map((f) => (
           <text key={f} x={x(maxX * f)} y={H + 28} textAnchor="middle" className="tick">
             {Math.round(maxX * f)}
@@ -533,14 +560,35 @@ export function Frontier({ results, best, minPk, onPeek, onPick }: { results: Sc
       </svg>
       {hover && (
         <Tip x={x(hover.p90)} y={y(hover.pk)} width={W}>
-          <b>
-            {hover.c.weapon} · {hover.c.fuze} · {fmtHour(hover.c.hour)}
-          </b>
+          <b>{describe(hover)}</b>
           <span>
             planning figure {hover.p90} · mean {hover.mean.toFixed(1)}
           </span>
-          <span>target destroyed {pct(hover.pk)} · click to use</span>
+          <span>target destroyed {pct(hover.pk)} · click to pin</span>
         </Tip>
+      )}
+      {sel && (
+        <div className="pinned" role="status">
+          <span className="k">Selected plan</span>
+          <b>{describe(sel)}</b>
+          <span>
+            Planning figure {sel.p90} · expected {sel.mean.toFixed(1)} · target destroyed {pct(sel.pk)}
+          </span>
+          <div className="pinned-acts">
+            <button className="btn primary small" onClick={() => onPick(sel)}>
+              Use this plan
+            </button>
+            <button
+              className="btn small"
+              onClick={() => {
+                setSel(null);
+                onPeek(null);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
       )}
       <div className="legend small">
         <span>

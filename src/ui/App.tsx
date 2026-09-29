@@ -1018,7 +1018,8 @@ export default function App() {
       trailRef.current = [...trailRef.current.slice(-13), ghostPlan];
     }
   }
-  const following = follow && !!ghostPlan && (status.running || !!peek) && !outcome && !striking;
+  // The map shows Jev's plan instead of yours: while it searches (if you asked to watch), or while you inspect one.
+  const following = !!ghostPlan && ((follow && status.running) || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
   const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins]);
 
@@ -1898,7 +1899,7 @@ export default function App() {
         const kind = inSchool > 0 ? 'hurt' : schoolHit ? 'empty' : 'spared';
         window.setTimeout(() => {
           setDebrief({ kind, count: o.count, inSchool });
-          void sound.narrate(`voice/debrief-${kind}`);
+          void sound.feature(`voice/debrief-${kind}`);
         }, (stampDelay(o) + 4.2) * 1000);
       }
       // The secret file: was the courier there, and did it reach him?
@@ -1943,6 +1944,7 @@ export default function App() {
   };
   /** Clear the last strike's effects, keeping the ruins. */
   function endStrike() {
+    if (debrief) sound.stopVoice(true);
     setDebrief(null);
     mapRef.current?.clearStrike();
     strikeRef.current = null;
@@ -2283,8 +2285,8 @@ export default function App() {
         <h3>
           Trade-offs <span className="src">plan search</span>
         </h3>
-        <p className="sub">Each dot is a plan. Up is more likely to destroy the target; right is more people hurt. Hover to preview it on the map.</p>
-        <Frontier results={results} best={bestNow} minPk={minPk} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} />
+        <p className="sub">Each dot is a plan. Up is more likely to destroy the target; right is more people hurt. Point at one, tap it, or step with the arrow keys to preview it on the map.</p>
+        <Frontier results={results} best={bestNow} minPk={minPk} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} describe={(s) => describe(s.c)} />
         {bestNow && (
           <div className="bestplan">
             <span className="k">Jev's pick</span>
@@ -2620,7 +2622,7 @@ export default function App() {
                   className="talk-x"
                   aria-label="Close"
                   onClick={() => {
-                    sound.stopVoice();
+                    sound.stopVoice(true);
                     setDebrief(null);
                   }}
                 >

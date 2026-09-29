@@ -159,7 +159,42 @@ class SoundEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     if (this.enabled) this.master?.gain.setTargetAtTime(this.mix.master * HEADROOM, t, 0.1);
-    for (const b of ['ambience', 'effects', 'voices'] as Bus[]) this.buses[b]?.gain.setTargetAtTime(this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1), t, 0.4);
+    for (const b of ['ambience', 'effects', 'voices'] as Bus[]) this.buses[b]?.gain.setTargetAtTime(this.level(b), t, this.ducked ? 0.6 : 0.4);
+  }
+  /** A bus's level: the mix, less the ambience while the guide talks, less everything else under a feature narration. */
+  private level(b: Bus) {
+    const duck = this.ducked ? (b === 'ambience' ? 0.3 : b === 'effects' ? 0.45 : 1) : 1;
+    return this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1) * duck;
+  }
+  // A feature narration (the closing debrief): everything else ducks under it, and no other voice may start.
+  private ducked = false;
+  private held = false;
+  private release() {
+    if (!this.held) return;
+    this.held = false;
+    this.ducked = false;
+    this.applyMix();
+  }
+  /** Play a narration that holds the floor: other sound ducks, other speech waits; levels come back after. */
+  async feature(name: string): Promise<number> {
+    this.stopVoice(true);
+    if (!this.enabled) return 0;
+    this.ensure();
+    this.held = true;
+    this.ducked = true;
+    this.applyMix();
+    const seq = this.voiceSeq;
+    const r = await this.start(name, 1);
+    if (!r || seq !== this.voiceSeq) {
+      if (r) r.src.stop();
+      if (seq === this.voiceSeq) this.release();
+      return 0;
+    }
+    this.voiceNode = r.src;
+    r.src.onended = () => {
+      if (this.voiceNode === r.src) this.release();
+    };
+    return r.src.buffer?.duration ?? 0;
   }
 
   /** Must be called from a click or key press the first time, so the browser lets audio start. */
@@ -229,7 +264,7 @@ class SoundEngine {
     this.distance.connect(this.master);
     for (const b of ['ambience', 'effects', 'voices'] as Bus[]) {
       const g = this.ctx.createGain();
-      g.gain.value = this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1);
+      g.gain.value = this.level(b);
       g.connect(b === 'ambience' ? this.distance : this.master);
       this.buses[b] = g;
     }
@@ -297,7 +332,7 @@ class SoundEngine {
 
   /** A radio call: squelch, the line through a narrow band-pass with a little grit, squelch. */
   async radio(line: RadioLine, delay = 0) {
-    if (!this.enabled || this.quiet) return;
+    if (!this.enabled || this.quiet || this.held) return;
     this.ensure();
     const ctx = this.ctx!;
     const buf = await this.load(line);
@@ -335,6 +370,7 @@ class SoundEngine {
   }
   /** Play one narration (a file under voice/), stopping any other. Resolves with its length in seconds, or 0. */
   async narrate(name: string): Promise<number> {
+    if (this.held) return 0; // a feature narration has the floor
     this.stopVoice();
     if (!this.enabled) return 0;
     const seq = this.voiceSeq;
@@ -352,7 +388,10 @@ class SoundEngine {
     this.voiceNode = r.src;
     return r.src.buffer?.duration ?? 0;
   }
-  stopVoice() {
+  /** Stop the narration. A feature narration only stops when asked for by name (force), e.g. its card is closed. */
+  stopVoice(force = false) {
+    if (this.held && !force) return;
+    this.release();
     this.voiceSeq++;
     try {
       this.voiceNode?.stop();

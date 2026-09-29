@@ -67,6 +67,23 @@ export function TalkCard({ talk, onClose }: { talk: Talk; onClose: () => void })
 /** The file: who to find next, where and when, and every clue so far. */
 export function MissionHud({ s, hour, onGo, onBrief, onNew, onHide }: { s: MissionState; hour: number; onGo: () => void; onBrief: () => void; onNew: () => void; onHide: () => void }) {
   const [open, setOpen] = useState(false);
+  // Folded or open, remembered in this browser; folded to begin with on a phone, where the map is small.
+  const [small, setSmall] = useState(() => {
+    try {
+      const v = localStorage.getItem('cd-mission-fold');
+      return v ? v === '1' : matchMedia('(max-width: 760px)').matches;
+    } catch {
+      return false;
+    }
+  });
+  const fold = (v: boolean) => {
+    setSmall(v);
+    try {
+      localStorage.setItem('cd-mission-fold', v ? '1' : '0');
+    } catch {
+      /* no storage */
+    }
+  };
   const c = current(s);
   const meet = MEETS[s.meet] ?? MEETS[0];
   let title = '';
@@ -81,13 +98,39 @@ export function MissionHud({ s, hour, onGo, onBrief, onNew, onHide }: { s: Missi
     where = `${c.where}, ${c.when}`;
     here = inHours(hour, c.from, c.to);
   }
+  // Folded, the file is one compact row: what to do next, whether they're there now, and a way to open it.
+  if (small) {
+    const label = s.step === 0 ? 'A new file' : s.step === 6 ? (s.result === 'clean' ? 'File closed' : 'File closed, at a cost') : title;
+    return (
+      <div className="mission-hud small" role="region" aria-label="Secret file">
+        <span className="mh-star" aria-hidden>
+          ✦
+        </span>
+        <b>{label}</b>
+        {c && <span className={`mh-dot ${here ? 'yes' : ''}`} title={here ? 'There now' : 'Not there at this hour'} />}
+        {c && (
+          <button className="mh-go" onClick={onGo}>
+            Go
+          </button>
+        )}
+        <button className="mh-x" onClick={() => fold(false)} aria-label="Open the secret file" aria-expanded={false} title="Open the file">
+          ▾
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="mission-hud" role="region" aria-label="Secret file">
       <div className="mh-top">
         <span className="k">Secret file · The Courier</span>
-        <button className="mh-x" onClick={onHide} aria-label="Put the file away" title="Put the file away (it keeps your place)">
-          ×
-        </button>
+        <span>
+          <button className="mh-x" onClick={() => fold(true)} aria-label="Fold the file to one line" aria-expanded title="Fold it to one line">
+            ▴
+          </button>
+          <button className="mh-x" onClick={onHide} aria-label="Put the file away" title="Put the file away (it keeps your place)">
+            ×
+          </button>
+        </span>
       </div>
       {s.step === 0 && (
         <>
