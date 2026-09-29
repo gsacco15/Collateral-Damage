@@ -68,6 +68,16 @@ const DISCOVERED_KEY = 'cd.discovered';
 const INTRO_KEY = 'cd.intro';
 const SESSION_START = performance.now();
 const PHONE = '(max-width: 760px), (max-height: 520px)';
+/** Which prayer, if any, it is around now: loud ones (dawn, Friday noon) and softer ones through the day. */
+function prayerNow(h: number, day: string): '' | 'dawn' | 'friday' | 'noon' | 'afternoon' | 'sunset' | 'night' {
+  if (h >= 5 && h < 6) return 'dawn';
+  if (day === 'friday' && h >= 11.5 && h < 12.5) return 'friday';
+  if (h >= 12.5 && h < 13) return 'noon';
+  if (h >= 15.5 && h < 16) return 'afternoon';
+  if (h >= 18.5 && h < 19) return 'sunset';
+  if (h >= 20 && h < 20.5) return 'night';
+  return '';
+}
 let lastTrain = 0;
 type StepId = 'target' | 'weapon' | 'approach' | 'intel' | 'rules' | 'decide';
 
@@ -381,6 +391,7 @@ export default function App() {
       groves: world.blocks.filter((q) => q.district === 'groves'),
       rail: [{ x: world.extras.rail.x0, y: world.extras.rail.y - 3, w: world.extras.rail.x1 - world.extras.rail.x0, h: 6 }],
       desert: [{ x: world.city.w + 40, y: -300, w: world.w - world.city.w + 300, h: world.h + 600 }],
+      mosque: [...rects((x) => x.kind === 'mosque', world.buildings), ...world.spaces.filter((s) => s.name === 'Mosque courtyard').map((s) => s.rect)],
       taps: world.spaces.filter((q) => q.kind === 'plaza' && q.district === 'camp').map((q) => q.rect),
       bricks: rects((x) => x.kind === 'brickyard', world.spaces),
       pump: world.buildings.filter((b) => b.name === 'Pump House').flatMap((b) => b.rects),
@@ -437,6 +448,8 @@ export default function App() {
         ['amb-industry', near(zones.industry), (0.5 + 0.5 * busy) * 0.4],
         ['amb-camp', near(zones.camp), (0.45 + 0.55 * day) * 0.45],
         ['amb-groves', near(zones.groves), (0.3 + 0.7 * day) * 0.4],
+        // The mosque courtyard: quiet most of the day, busier around prayers, fullest at Friday noon.
+        ['amb-mosque', near(zones.mosque), (prayerNow(h, plan.day) === 'friday' ? 0.75 : prayerNow(h, plan.day) ? 0.55 : 0.35) * (0.4 + 0.6 * day)],
       ];
       let pick: [Bed, number, number] | null = null;
       if (close > 0.3)
@@ -472,8 +485,12 @@ export default function App() {
         // The freight train: never in the first minute and a half, at most every four minutes. At night it carries across the whole city.
         const nearRail = nearTo(zones.rail, 200);
         const trainOk = performance.now() - SESSION_START > 90_000 && performance.now() - lastTrain > 240_000;
+        // By the mosque: pigeons, and at prayer times people arriving, slipping off their shoes. No mopeds or radios.
+        const byMosque = nearTo(zones.mosque, 110) && !night;
         const pool: [CityCue, number][] = at === 'desert'
           ? [['cue-goats', night ? 0.2 : 2], ['cue-dog', night ? 1 : 0.3], ['cue-canvas', 0.8]]
+          : byMosque
+          ? [['cue-pigeons', 1.5], ['cue-gathering', prayerNow(h, plan.day) ? 2.5 : 0.15]]
           : night
           ? [['cue-dog', 1], ...(at === 'tinhill' || at === 'camp' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : []), ['cue-train', trainOk ? (nearRail ? 0.8 : 0.35) : 0]]
           : dawn
@@ -505,17 +522,30 @@ export default function App() {
     const id = window.setInterval(tick, 400);
     return () => clearInterval(id);
   }, [soundOn, plan.hour, plan.day, striking, zones, view]); // eslint-disable-line react-hooks/exhaustive-deps
-  // The call to prayer: at dawn and before Friday noon prayers, and a softer, farther echo at the other prayers.
+  // The call to prayer: at dawn and before Friday noon prayers, and softer at the other prayers. It comes from the
+  // minaret: clear and close when you're near the mosque, faint and far off across the city, placed left or right.
   const prayerKey = useRef('');
   useEffect(() => {
     if (!soundOn) return;
-    const h = plan.hour;
-    const loud = h >= 5 && h < 6 ? 'dawn' : plan.day === 'friday' && h >= 11.5 && h < 12.5 ? 'friday' : '';
-    const soft = h >= 12.5 && h < 13 ? 'noon' : h >= 15.5 && h < 16 ? 'afternoon' : h >= 18.5 && h < 19 ? 'sunset' : h >= 20 && h < 20.5 ? 'night' : '';
-    const k = loud || soft;
-    if (k && k !== prayerKey.current) sound.play('amb-call-to-prayer', 0, loud ? 0.3 : 0.15);
+    const k = prayerNow(plan.hour, plan.day);
+    if (k && k !== prayerKey.current) {
+      const loud = k === 'dawn' || k === 'friday';
+      const m = mapRef.current;
+      const min = world.buildings.find((b) => b.kind === 'minaret');
+      let near = 0.3;
+      let pan = 0;
+      if (m && min) {
+        const v = m.view;
+        const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4));
+        near = Math.max(0, 1 - Math.hypot(min.cx - v.cx, min.cy - v.cy) / 450) * (0.45 + 0.55 * close);
+        const half = (canvasRef.current?.clientWidth ?? 800) / 2;
+        pan = Math.max(-0.8, Math.min(0.8, ((min.cx - v.cx) * m.cam().s) / half));
+      }
+      // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
+      sound.cue('amb-call-to-prayer', pan, (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1));
+    }
     prayerKey.current = k;
-  }, [soundOn, plan.hour, plan.day]);
+  }, [soundOn, plan.hour, plan.day]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);

@@ -2,8 +2,8 @@
 // Ambience follows the hour and where you're looking; radio lines go through a band-pass "radio" filter;
 // the guide has a narrator. Files live in public/audio/.
 
-export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school' | 'amb-industry' | 'amb-camp' | 'amb-groves' | 'amb-desert';
-const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school', 'amb-industry', 'amb-camp', 'amb-groves', 'amb-desert'];
+export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school' | 'amb-industry' | 'amb-camp' | 'amb-groves' | 'amb-desert' | 'amb-mosque';
+const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school', 'amb-industry', 'amb-camp', 'amb-groves', 'amb-desert', 'amb-mosque'];
 const KEY = 'cd.sound';
 const MIX_KEY = 'cd.mix.v2'; // v2: everyone starts again from the quieter default
 const HEADROOM = 0.85; // the loudest the page ever gets, at 100% on every slider
@@ -65,7 +65,9 @@ export type CityCue =
   | 'cue-canvas'
   | 'cue-jerrycan'
   | 'cue-bricks'
-  | 'cue-goats';
+  | 'cue-goats'
+  | 'cue-gathering'
+  | 'amb-call-to-prayer'; // played as a placed city sound, from the minaret
 
 export type RadioLine = 'radio-01-pol' | 'radio-02-estimate' | 'radio-03-cleared' | 'radio-04-away' | 'radio-05-splash' | 'radio-06-destroyed' | 'radio-07-intact' | 'radio-08-bda' | 'radio-09-jev-run' | 'radio-10-jev-done' | 'radio-11-abort' | 'radio-12-calloff';
 
