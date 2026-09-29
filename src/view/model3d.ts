@@ -1402,6 +1402,7 @@ export class Model3D {
           damaged,
           away: o ? { x: o.ix, y: o.iy, r: Math.max(70, weapon(f.plan.weapon).blast * 4) } : null,
           brokenBridge: damaged.has(BRIDGE_RUIN) ? targetOf(this.world, 'bridge').rect : null,
+          hush: f.pop.hush,
         }),
         clock,
         night,

@@ -27,6 +27,15 @@ questions per district and after strikes, never individuals, never the physics.
 1b. **Living made visible** (done): pavement walkers by district (souk and civic streets busy, villa lanes quiet),
    and a steady trickle of people walking each hour's real trips (home to school and work in the morning, home in
    the evening, to the mosque on Friday). Capped at about 80 on the move. `trips()` and `streetD` in `life.ts`.
-2. **Strike reactions** (next): flee near the blast, stay in further out, then a crowd returns to help; a second
-   strike on the same spot counts them.
-3. **Zone effects** (later): parents at the school gate, the souk closing for the day, fewer at the next Friday prayers.
+2. **Strike reactions** (done, Living only; rules in `aftermath()` in `life.ts`): each strike is remembered as a
+   mark (where, hour, day, severity). For about 3 hours, fading by 8 (fewer at night):
+   - a crowd returns to help at the ruin (10 to 55 people) and a second strike counts them;
+   - within ~250 m shops and offices empty, people stay in, streets and squares go quiet;
+   - the souk within ~450 m shuts for the rest of the day;
+   - a school within ~600 m in school hours empties, parents crowd its gate;
+   - families gather at the nearest hospital, which fills;
+   - people, animals, teahouse circles and fishermen clear away nearby and return as it fades.
+   The estimate, Jev's searches (workers get the marks), the map and 3D all use it. Rebuild the city clears it.
+   The outcome card compares a roll with the estimate the strike was planned on.
+3. **Jev behaviour director** (next): TypeSafe steers district behaviour and post-strike responses with narrow,
+   cached multiple-choice questions; the rules above are the fallback.

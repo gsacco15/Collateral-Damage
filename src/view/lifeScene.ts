@@ -14,6 +14,7 @@ export interface SceneCtx {
   damaged: Set<number>;
   away: { x: number; y: number; r: number } | null; // near a strike, everything has gone
   brokenBridge: Rect | null;
+  hush?: { x: number; y: number; r: number }[] | null; // Living, after a strike: small life has cleared from round it, for a while
 }
 
 export type Ent =
@@ -997,6 +998,15 @@ export function lifeScene(c: SceneCtx): Ent[] {
   if (alive(F.mill)) out.push({ t: 'smoke', x: F.mill!.cx - 10, y: F.mill!.cy, z: F.mill!.h + 1, seed: 21, strength: bell(h, 6, 18) * 0.8, dark: 0, size: 1.3 });
   for (const L of F.beacons) if (!cut && !c.damaged.has(L.b.id) && Math.sin(t * 3 + L.x * 0.1) > 0.2) out.push({ t: 'beacon', x: L.x, y: L.y, z: L.z, big: L.big });
   soukScene(c, out);
-  for (const f of extras) out.push(...f(c));
-  return out;
+  // Living, after a strike: the living things round it (people sitting out, fishing, smoking at a door; dogs, cats,
+  // goats, birds) have gone, and come back as the hours pass. Cars, stalls and clutter stay where they were.
+  const H = c.hush;
+  const kept = H?.length
+    ? out.filter((e) => {
+        if (!(e.t === 'person' || e.t === 'dog' || e.t === 'cat' || e.t === 'beast' || e.t === 'duck' || e.t === 'swan' || e.t === 'hookah' || e.t === 'rod' || e.t === 'stool' || e.t === 'bucket' || e.t === 'fire')) return true;
+        return !H.some((q) => Math.hypot(e.x - q.x, e.y - q.y) < q.r);
+      })
+    : out;
+  for (const f of extras) kept.push(...f(c));
+  return kept;
 }

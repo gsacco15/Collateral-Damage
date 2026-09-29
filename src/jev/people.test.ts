@@ -32,3 +32,37 @@ describe('Living people model', () => {
     expect(l.expected[school.id]).toBeCloseTo(c.expected[school.id], 5);
   });
 });
+
+import { estimate, targetCentre, targetOf, type Mark, type Plan } from '.';
+
+describe('After a strike (Living)', () => {
+  const t = targetOf(city, 'warehouse');
+  const c = targetCentre(t);
+  const mark: Mark = { x: c.x, y: c.y, hour: 10, day: 'weekday', sev: 0.8 };
+  const plan: Plan = { target: 'warehouse', weapon: 'large', fuze: 'instant', heading: 90, aimX: c.x, aimY: c.y, hour: 10.5, day: 'weekday', watched: 6, hardness: t.hardness, stored: false };
+  it('changes nothing in Classic', () => {
+    const a = population(city, 10.5, 'weekday', 6);
+    const b = population(city, 10.5, 'weekday', 6, {}, {}, [], false, [mark]);
+    expect(Array.from(b.expected)).toEqual(Array.from(a.expected));
+    expect(b.crowds).toBeUndefined();
+  });
+  it('gathers people to help, empties the school to its gate, and fades by evening', () => {
+    const p = population(city, 10.5, 'weekday', 6, {}, {}, [], true, [mark]);
+    const kinds = (p.crowds ?? []).map((x) => x.kind);
+    expect(kinds).toContain('help');
+    expect(kinds).toContain('gate');
+    expect(kinds).toContain('hospital');
+    const school = city.buildings.find((b) => b.name === 'Cotton Street School')!;
+    const before = population(city, 10.5, 'weekday', 6, {}, {}, [], true).expected[school.id];
+    expect(p.expected[school.id]).toBeLessThan(before * 0.3);
+    const late = population(city, 19, 'weekday', 6, {}, {}, [], true, [mark]);
+    expect(late.crowds?.length ?? 0).toBe(0);
+  });
+  it('counts the crowd at the ruin in a second strike', () => {
+    const p = population(city, 10.5, 'weekday', 6, {}, {}, [], true, [mark]);
+    const without = { ...p, crowds: p.crowds!.filter((x) => x.kind !== 'help') };
+    const a = estimate(city, plan, without, 300, 5).mean;
+    const b = estimate(city, plan, p, 300, 5).mean;
+    expect(b).toBeGreaterThan(a + 3);
+  });
+});

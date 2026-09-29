@@ -116,14 +116,35 @@ export interface Population {
   streetQ: number; // chance a pavement point has someone on it
   trafficQ: [number, number]; // chance a lane point has a car: quiet streets, the boulevard
   living?: boolean; // made by the Living model
+  // Living, after a strike: crowds out in the open (helping at the ruin, parents at a school gate, families at the
+  // hospital), streets gone quiet round it, and the circle where the scene's small life has fled.
+  crowds?: Crowd[];
+  quiet?: { x: number; y: number; r: number; k: number }[]; // pavements near x,y down to k at the centre
+  hush?: { x: number; y: number; r: number }[];
   streetD?: Float32Array; // Living: how busy each district's pavements are, as a multiple of streetQ (by world.districts index)
 }
 
 export type Observations = Record<number, number>;
 
+/** A strike the city remembers: where, when, and how bad (0..1). */
+export interface Mark {
+  x: number;
+  y: number;
+  hour: number;
+  day: Day;
+  sev: number;
+}
+export interface Crowd {
+  x: number;
+  y: number;
+  r: number;
+  n: number;
+  kind: 'help' | 'gate' | 'hospital';
+}
+
 
 /** Who is expected where at this moment. Hours watched narrow the guess; Jev's reading of the reports replaces it; logged sightings are taken as known. */
-export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = [], alive = false): Population {
+export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = [], alive = false, marks: Mark[] = []): Population {
   const fri = day === 'friday' ? 1 : 0;
   const expected = new Float32Array(world.buildings.length);
   const observed = new Int16Array(world.buildings.length).fill(-1);
@@ -168,9 +189,13 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     streetD = new Float32Array(act.length);
     for (let i = 0; i < act.length; i++) streetD[i] = pts[i] ? Math.min(2.2, Math.max(0.35, Math.sqrt(act[i] / pts[i] / Math.max(1e-6, mean)))) : 1;
   }
+  const after = L && marks.length ? aftermath(world, hour, day, marks, expected, spaceQ, ruins) : null;
   return {
     living: !!L,
     streetD,
+    crowds: after?.crowds,
+    quiet: after?.quiet,
+    hush: after?.hush,
     hour,
     day,
     expected,
@@ -181,6 +206,111 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     streetQ: curve(fri ? STREET_FRI : STREET, hour),
     trafficQ: [t * 0.35, t],
   };
+}
+
+// ---------------------------------------------------------------- after a strike (Living)
+
+const HOMES = new Set(['home', 'apartment', 'villa', 'shack', 'tent', 'barracks']);
+function nearestStreet(w: World, x: number, y: number) {
+  const s = w.streetPts;
+  let bx = x;
+  let by = y;
+  let bd = Infinity;
+  for (let i = 0; i < s.length; i += 2) {
+    const d = (s[i] - x) ** 2 + (s[i + 1] - y) ** 2;
+    if (d < bd) (bd = d), (bx = s[i]), (by = s[i + 1]);
+  }
+  return { x: bx, y: by };
+}
+
+/**
+ * What a strike does to the city in the hours after it. Rules, not guesses, and the same every time:
+ * - people come back to help: a crowd at the ruin for about three hours, fading by eight; fewer at night;
+ * - round it, shops and offices empty and people stay in: streets and squares go quiet, homes fill a little;
+ * - the souk nearby shuts for the rest of the day;
+ * - a school nearby in school hours empties, with parents crowding its gate;
+ * - families gather at the nearest hospital, which fills.
+ * Edits the counts in place; returns the crowds, the quiet streets and where the small life has fled.
+ */
+function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Float32Array, spaceQ: Float32Array, ruins: number[]) {
+  const crowds: Crowd[] = [];
+  const quiet: { x: number; y: number; r: number; k: number }[] = [];
+  const hush: { x: number; y: number; r: number }[] = [];
+  const h = ((hour % 24) + 24) % 24;
+  const dayk = h >= 6 && h < 21 ? 1 : 0.45;
+  const gone = new Set(ruins);
+  for (const m of marks) {
+    if (m.day !== day) continue;
+    const e = (h - m.hour + 24) % 24; // hours since
+    const help = e < 3 ? 1 : e < 8 ? (8 - e) / 5 : 0;
+    if (help <= 0) continue;
+    crowds.push({ x: m.x, y: m.y, r: 12 + 8 * m.sev, n: Math.round((10 + 45 * m.sev) * help * dayk), kind: 'help' });
+    quiet.push({ x: m.x, y: m.y, r: 250, k: 1 - 0.75 * help });
+    hush.push({ x: m.x, y: m.y, r: 120 + 260 * help });
+    const openLate = e < Math.max(1, 21 - m.hour);
+    for (const b of w.buildings) {
+      if (gone.has(b.id) || !expected[b.id]) continue;
+      const d = Math.hypot(b.cx - m.x, b.cy - m.y);
+      if (b.kind === 'school' && d < 600 && m.hour >= 7 && m.hour < 15 && e < 2.5) {
+        // Parents come for their children: the school empties towards its gate.
+        const was = expected[b.id];
+        expected[b.id] = was * 0.2;
+        const g = nearestStreet(w, b.cx, b.cy);
+        crowds.push({ x: g.x, y: g.y, r: 8, n: Math.round(Math.min(60, was * 0.25)), kind: 'gate' });
+        continue;
+      }
+      if (d < 450 && b.kind === 'shop' && b.district === 'market' && openLate) {
+        expected[b.id] *= 0.3;
+        continue;
+      }
+      if (d > 250) continue;
+      const k = help * (1 - d / 250);
+      if (HOMES.has(b.kind)) expected[b.id] = Math.min(b.capacity, expected[b.id] * (1 + 0.12 * k));
+      else if (b.kind !== 'hospital' && b.kind !== 'clinic') expected[b.id] *= 1 - 0.55 * k;
+    }
+    for (const sp of w.spaces) {
+      const d = Math.hypot(sp.rect.x + sp.rect.w / 2 - m.x, sp.rect.y + sp.rect.h / 2 - m.y);
+      if (sp.kind === 'market' && d < 450 && openLate) spaceQ[sp.id] *= 0.1;
+      else if (d < 300) spaceQ[sp.id] *= 1 - 0.8 * help * (1 - d / 300);
+    }
+    // The nearest hospital (or clinic): families come looking for the wounded.
+    let best: { b: (typeof w.buildings)[number]; d: number } | null = null;
+    for (const b of w.buildings) {
+      if ((b.kind !== 'hospital' && b.kind !== 'clinic') || gone.has(b.id)) continue;
+      const d = Math.hypot(b.cx - m.x, b.cy - m.y) * (b.kind === 'clinic' ? 1.6 : 1);
+      if (!best || d < best.d) best = { b, d };
+    }
+    const hosp = e < 5 ? 1 : e < 10 ? (10 - e) / 5 : 0;
+    if (best && hosp > 0) {
+      expected[best.b.id] = Math.min(best.b.capacity * 1.15, expected[best.b.id] * (1 + 0.3 * hosp));
+      const g = nearestStreet(w, best.b.cx, best.b.cy);
+      crowds.push({ x: g.x, y: g.y, r: 9, n: Math.round((8 + 30 * m.sev) * hosp * dayk), kind: 'hospital' });
+    }
+  }
+  return { crowds: crowds.filter((c) => c.n > 0), quiet, hush };
+}
+
+/** How busy a pavement point is next to normal, given the quiet after strikes (1 = normal). */
+export function quietAt(pop: Population, x: number, y: number) {
+  let k = 1;
+  for (const q of pop.quiet ?? []) {
+    const d = Math.hypot(x - q.x, y - q.y);
+    if (d < q.r) k *= 1 - (1 - q.k) * (1 - d / q.r);
+  }
+  return k;
+}
+
+/** Stable points spread over a crowd's circle, for counting and harming the people in it. */
+export function crowdPts(c: Crowd, n = 12) {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const rr = c.r * Math.sqrt((i + 0.5) / n);
+    const a = i * 2.39996;
+    xs.push(c.x + Math.cos(a) * rr);
+    ys.push(c.y + Math.sin(a) * rr);
+  }
+  return { xs, ys };
 }
 
 // ---------------------------------------------------------------- districts and pavements (Living)

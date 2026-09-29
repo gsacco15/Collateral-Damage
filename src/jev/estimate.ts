@@ -2,7 +2,7 @@
 // count of people, and see how many are killed or badly hurt.
 import { buildingDist, rectDist, targetOf, type Building, type World } from './city';
 import { collapse, destroys, effect, harm, occlusion, secondaries, structureAt, weapon, type Plan, type Tank } from './effects';
-import type { Population } from './life';
+import { crowdPts, quietAt, type Population } from './life';
 import { sampleJudged } from './levels';
 import { binomial, gamma, normal, poisson, rng } from './rng';
 
@@ -73,12 +73,21 @@ export function estimate(world: World, plan: Plan, pop: Population, runs = 400, 
   }
   const streets: number[] = [];
   const streetOcc: number[] = [];
+  const streetK: number[] = []; // Living, after a strike: the pavements round it go quiet
   for (let i = 0; i < world.streetPts.length; i += 2) {
     const x = world.streetPts[i];
     const y = world.streetPts[i + 1];
     if (Math.abs(x - ax) > reach || Math.abs(y - ay) > reach) continue;
     streets.push(x, y);
     streetOcc.push(occlusion(world, ax, ay, x, y, -99, src));
+    streetK.push(pop.quiet ? quietAt(pop, x, y) : 1);
+  }
+  // Living, after a strike: people in the open (helping at a ruin, at a school gate, outside the hospital).
+  const crowds: { x: number[]; y: number[]; occl: number[]; each: number }[] = [];
+  for (const c of pop.crowds ?? []) {
+    if (Math.hypot(c.x - ax, c.y - ay) - c.r > reach) continue;
+    const { xs, ys } = crowdPts(c);
+    crowds.push({ x: xs, y: ys, occl: xs.map((x, i) => occlusion(world, ax, ay, x, ys[i], -99, src)), each: c.n / xs.length });
   }
   const cars: number[] = [];
   const carOcc: number[] = [];
@@ -165,9 +174,19 @@ export function estimate(world: World, plan: Plan, pop: Population, runs = 400, 
         c += binomial(r, n, p);
       }
     }
+    for (const g of crowds)
+      for (let i = 0; i < g.x.length; i++) {
+        const n = poisson(r, g.each);
+        if (!n) continue;
+        let p = harm(plan.heading, plan.fuze, e, ix, iy, g.x[i], g.y[i], 1, 1, false, g.occl[i]);
+        if (sec.length) p = withSec(p, g.x[i], g.y[i], 1, 1, false);
+        if (p <= 0) continue;
+        street += n * p;
+        c += binomial(r, n, p);
+      }
     const sq = pop.streetQ;
     for (let i = 0, j = 0; i < streets.length; i += 2, j++) {
-      if (r() >= sq) continue;
+      if (r() >= sq * streetK[j]) continue;
       let p = harm(plan.heading, plan.fuze, e, ix, iy, streets[i], streets[i + 1], 1, 1, false, streetOcc[j]);
       if (sec.length) p = withSec(p, streets[i], streets[i + 1], 1, 1, false);
       street += p;

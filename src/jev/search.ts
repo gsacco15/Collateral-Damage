@@ -3,7 +3,7 @@ import { targetOf, type Target, type World } from './city';
 import { FUZES, type FuzeId, type Plan, type WeaponId } from './effects';
 import { estimate } from './estimate';
 import type { IntelByHour } from './intel';
-import { population, type Observations } from './life';
+import { population, type Mark, type Observations } from './life';
 import { rng } from './rng';
 
 export type AimId = 'centre' | 'north' | 'south' | 'east' | 'west' | 'custom';
@@ -79,6 +79,7 @@ export interface Job {
   intel?: IntelByHour; // Jev's readings, by whole hour
   ruins?: number[]; // buildings already destroyed
   living?: boolean; // the Living people model instead of the classic one
+  marks?: Mark[]; // Living: earlier strikes the city is still reacting to
   runs: number;
   cands: Candidate[];
 }
@@ -90,7 +91,7 @@ export function scoreDetailed(world: World, msg: Job): { out: Scored[]; runs: Ui
   const runs: Uint16Array[] = [];
   for (const c of msg.cands) {
     let pop = pops.get(c.hour);
-    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins, msg.living)));
+    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins, msg.living, msg.marks)));
     const e = estimate(world, candidatePlan(world, msg.base, c), pop, msg.runs, 17);
     out.push({ c, pk: e.pk, mean: e.mean, p90: e.p90 });
     runs.push(e.counts);
@@ -103,7 +104,7 @@ export function score(world: World, msg: Job): Scored[] {
   const pops = new Map<number, ReturnType<typeof population>>();
   return msg.cands.map((c) => {
     let pop = pops.get(c.hour);
-    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins, msg.living)));
+    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins, msg.living, msg.marks)));
     const e = estimate(world, candidatePlan(world, msg.base, c), pop, msg.runs, 17);
     return { c, pk: e.pk, mean: e.mean, p90: e.p90 };
   });

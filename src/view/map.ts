@@ -606,6 +606,7 @@ export class MapView {
         damaged,
         away: shown ? { x: shown.ix, y: shown.iy, r: Math.max(70, wpn.blast * 4) } : null,
         brokenBridge: f.ruins.includes(BRIDGE_RUIN) || (shown?.damaged.includes(BRIDGE_RUIN) ?? false) ? targetOf(this.world, 'bridge').rect : null,
+        hush: f.pop.hush,
       });
       drawLife2D(g, ents, {
         time: this.time,

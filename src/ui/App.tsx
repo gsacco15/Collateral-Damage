@@ -40,6 +40,7 @@ import {
   type Job,
   type Observations,
   type Place,
+  type Mark,
   type Plan,
   type Scored,
   type TargetId,
@@ -471,7 +472,13 @@ export default function App() {
   const down3d = useRef<{ x: number; y: number } | null>(null);
   const labels3dRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<Model3D | null>(null);
-  const strikeRef = useRef<{ plan: Plan; outcome: Outcome; before: number[] } | null>(null);
+  const strikeRef = useRef<{ plan: Plan; outcome: Outcome; before: number[]; marksBefore: Mark[] } | null>(null);
+  // Living: the strikes the city remembers, for the hours after each (crowds at the ruin, the souk shut, parents at
+  // the school gate, families at the hospital). Cleared with the ruins.
+  const [marks, setMarks] = useState<Mark[]>([]);
+  const struckEst = useRef<Estimate | null>(null);
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
   const theaterCanvas = useRef<HTMLCanvasElement>(null);
   const theaterRef = useRef<JevTheater | null>(null);
   const trailRef = useRef<Plan[]>([]);
@@ -730,7 +737,7 @@ export default function App() {
     prayerKey.current = k;
   }, [soundOn, plan.hour, plan.day]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive]);
+  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive, marks), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive, marks]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
   // Every change reruns the estimate and the danger field. While the day plays, they hold still (the map's
@@ -768,20 +775,20 @@ export default function App() {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h + 0.5 }));
       jobs.current.hours = Date.now();
-      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, living: alive, runs: 150, cands };
+      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, living: alive, marks, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 250);
     return () => clearTimeout(id);
-  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive, marks]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = SEARCH_WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
       jobs.current.matrix = Date.now() + 1;
-      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, living: alive, runs: 150, cands };
+      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, living: alive, marks, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 350);
     return () => clearTimeout(id);
-  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive, marks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dayPlay) return;
@@ -997,6 +1004,7 @@ export default function App() {
           pushLog(n ? `Jev read the intelligence for ${n} of ${sp.hours.length} hours. Every replay draws who is inside from its answers.` : 'Jev could not read the intelligence here, so replays use the built-in guess of who is inside.', 'step');
           setPhase('search');
           pool.living = aliveRef.current;
+          pool.marks = marksRef.current;
           pool.start(plan, obs, sp, SEED, false, got, ruinsRef.current);
         });
       },
@@ -1015,6 +1023,7 @@ export default function App() {
     pushLog(onlySpace ? 'Search space changed: keeping what still fits.' : 'Assumptions changed: re-scoring from scratch.', 'step');
     bestRef.current = undefined;
     pool.living = aliveRef.current;
+    pool.marks = marksRef.current;
     pool.start(plan, obs, space(), SEED, onlySpace, intelRef.current, ruinsRef.current);
   }, [assumptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1044,7 +1053,7 @@ export default function App() {
   // The map shows Jev's plan instead of yours: while it searches (if you asked to watch), or while you inspect one.
   const following = !!ghostPlan && ((follow && status.running) || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
-  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive]);
+  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive, marks) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive, marks]);
 
   frameRef.current = {
     world,
@@ -1971,7 +1980,12 @@ export default function App() {
     if (mega && view === 'model') modelRef.current?.flyTo(plan.aimX, plan.aimY, 460, 1.4);
     // Rolling again replaces the last strike; a new strike adds to the ruins.
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
+    const marksBefore = outcome && strikeRef.current ? strikeRef.current.marksBefore : marksRef.current;
+    // The outcome is compared with the estimate the strike was planned on, not the one after it (the ruins and the
+    // city's reaction change the numbers straight away). Rolling again keeps the first.
+    if (!outcome) struckEst.current = est;
     setRuins(before);
+    setMarks(marksBefore);
     // The sound of it: the aircraft, the call, the impact, the stamp, then what the radio says.
     // Timed to the plane: the jet is loudest as it passes over the target (~1.9 s); the falling bomb's scream peaks just
     // before it lands (2.6 s), and the blast covers its tail. The biggest bomb comes from a slow, droning cargo plane.
@@ -1982,6 +1996,7 @@ export default function App() {
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
+      setMarks([...marksBefore, { x: o.ix, y: o.iy, hour: plan.hour, day: plan.day, sev: Math.min(1, 0.3 + o.count / 30 + weapon(plan.weapon).blast / 60) }]);
       // The debrief: when the strike hits Warehouse 14 (destroyed or not) or touches the school, a closing word on the story. Not in
       // the guide (it tells its own), and not at the end of the secret file.
       const schoolB = world.buildings.find((b) => b.name === 'Cotton Street School');
@@ -2037,8 +2052,8 @@ export default function App() {
       sound.radio('radio-08-bda', verdict + 2.7);
     };
     m.onSettled = () => setStriking(false);
-    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current), Math.floor(Math.random() * 1e9));
-    strikeRef.current = { plan, outcome: o, before };
+    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current, marksBefore), Math.floor(Math.random() * 1e9));
+    strikeRef.current = { plan, outcome: o, before, marksBefore };
   };
   /** Clear the last strike's effects, keeping the ruins. */
   function endStrike() {
@@ -2052,6 +2067,7 @@ export default function App() {
   function resetCity() {
     endStrike();
     setRuins([]);
+    setMarks([]);
   }
   // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
   const callOff = () => {
@@ -3019,9 +3035,9 @@ export default function App() {
                   <b>{outcome.count}</b>
                   <span>{outcome.count === 1 ? 'person' : 'people'} killed or badly hurt</span>
                 </div>
-                {est && (
+                {(struckEst.current ?? est) && (
                   <p>
-                    The estimate: half the runs at or below {est.p50}, nine in ten at or below {est.p90}. This roll: {outcome.count}.
+                    The estimate: half the runs at or below {(struckEst.current ?? est)!.p50}, nine in ten at or below {(struckEst.current ?? est)!.p90}. This roll: {outcome.count}.
                   </p>
                 )}
                 <p>

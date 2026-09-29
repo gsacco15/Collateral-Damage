@@ -1,5 +1,5 @@
 // People on foot and cars on the road: the living layer of the map, also read by the 3D model.
-import { rng, shownCount, streetDistricts, trips, type Building, type Population, type Rect, type World } from '../jev';
+import { quietAt, rng, shownCount, streetDistricts, trips, type Building, type Population, type Rect, type World } from '../jev';
 import { CLOTH, SKIN } from './paper';
 
 // What people wear, seen from above, very simply. Head: bare, a white prayer cap, a red-checked keffiyeh, a plain
@@ -47,6 +47,7 @@ export interface Walker {
   hurt: boolean;
   gone: boolean;
   d?: number; // Living: the district a pavement walker belongs to
+  crowd?: string; // Living, after a strike: which crowd they're part of (at the ruin, a school gate, the hospital)
 }
 
 export interface Car {
@@ -154,13 +155,17 @@ export class Crowd {
         const mine = street.filter((x) => (x.d ?? -2) === d);
         if (mine.length > want) for (const x of mine.slice(want)) x.gone = true;
         else
-          for (let i = mine.length; i < want; i++) {
+          for (let i = mine.length, tries = 0; i < want && tries < want * 3; tries++) {
             const k = pts[Math.floor(r() * pts.length)];
+            // After a strike the streets round it are quiet: fewer people put there.
+            if (pop.quiet && r() > quietAt(pop, s[k * 2], s[k * 2 + 1])) continue;
             const wk = this.spawn('street', s[k * 2] + (r() - 0.5), s[k * 2 + 1] + (r() - 0.5));
             wk.d = d;
             this.walkers.push(wk);
+            i++;
           }
       }
+      if (pop.quiet) for (const x of this.walkers) if (x.kind === 'street' && !x.gone && !x.hurt && !x.flee && r() > quietAt(pop, x.x, x.y)) x.gone = true;
       // Walkers from before the switch (no district): let them go.
       for (const x of street) if (x.d == null) x.gone = true;
     } else {
@@ -183,6 +188,24 @@ export class Crowd {
       const mine = this.walkers.filter((x) => x.kind === 'space' && x.zone === sp.rect && !x.gone && !x.hurt);
       if (mine.length > n) for (const x of mine.slice(n)) x.gone = true;
       else for (let i = mine.length; i < n; i++) this.walkers.push(this.spawn('space', sp.rect.x + 1 + r() * (sp.rect.w - 2), sp.rect.y + 1 + r() * (sp.rect.h - 2), sp.rect));
+    }
+    // Living, after a strike: the crowds that gather (helping at the ruin, parents at a school gate, families at the
+    // hospital), each milling inside its own small circle. Up to forty drawn per crowd.
+    const want = new Map<string, { c: NonNullable<Population['crowds']>[number]; n: number }>();
+    for (const c of pop.crowds ?? []) want.set(`${c.kind}@${Math.round(c.x)},${Math.round(c.y)}`, { c, n: Math.min(40, c.n) });
+    for (const x of this.walkers) if (x.crowd && !x.gone && !x.hurt && !want.has(x.crowd)) x.gone = true;
+    for (const [key, { c, n }] of want) {
+      const mine = this.walkers.filter((x) => x.crowd === key && !x.gone && !x.hurt);
+      if (mine.length > n) for (const x of mine.slice(n)) x.gone = true;
+      else
+        for (let i = mine.length; i < n; i++) {
+          const zone = { x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 };
+          const a = r() * Math.PI * 2;
+          const rr = c.r * Math.sqrt(r());
+          const wk = this.spawn('space', c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr, zone);
+          wk.crowd = key;
+          this.walkers.push(wk);
+        }
     }
     // People moving between buildings as the hour changes: a handful, scaled to how busy the streets are, and
     // none while the clock is racing (playing the day, holding for an hour) so they never pile up.
