@@ -1354,7 +1354,11 @@ export default function App() {
     }
     // "Change the hour" plays through the day; any other step (or leaving the guide) stops it.
     setDayPlay(i != null && !!GUIDE[i].play);
-    if (i == null) return sound.stopVoice();
+    if (i == null) {
+      // Leaving the guide: back to the standard view, every layer on.
+      setLayers({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true });
+      return sound.stopVoice();
+    }
     sound.voice(i + 1);
     const g = GUIDE[i];
     if (g.plan) {
