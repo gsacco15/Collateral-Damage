@@ -398,6 +398,8 @@ export class Model3D {
     this.controls.maxDistance = 1300;
     this.controls.maxPolarAngle = 1.38;
     this.controls.minPolarAngle = 0.1;
+    // Pan across the ground like a map, never down through it.
+    this.controls.screenSpacePanning = false;
     this.preset('drone', true);
 
     this.resize();
@@ -914,6 +916,17 @@ export class Model3D {
       if (fl.k >= 1) this.fly = null;
     }
     this.controls.update();
+    // Keep the view over the city: the point you orbit stays on the ground and near the edges, the camera above the ground.
+    const tg = this.controls.target;
+    const m = 120;
+    const cx = Math.max(-m, Math.min(this.world.w + m, tg.x));
+    const cz = Math.max(-m, Math.min(this.world.h + m, tg.z));
+    if (cx !== tg.x || cz !== tg.z || Math.abs(tg.y - 4) > 0.01) {
+      const d = new THREE.Vector3(cx - tg.x, 4 - tg.y, cz - tg.z);
+      tg.add(d);
+      this.camera.position.add(d);
+    }
+    if (this.camera.position.y < 4) this.camera.position.y = 4;
     this.light(f.plan.hour);
     this.overlays(f);
     this.damage(f);

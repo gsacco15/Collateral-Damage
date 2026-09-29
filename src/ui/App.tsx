@@ -132,13 +132,33 @@ export default function App() {
   const [hover, setHover] = useState<number | null>(null);
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
   const [guide, setGuide] = useState<number | null>(null);
+  // Phones: no opening card and no big guide cards; the guide starts at once and the narrator does the telling.
+  const [phone, setPhone] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 760px)').matches);
+  useEffect(() => {
+    const mq = matchMedia('(max-width: 760px)');
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const mobileTimers = useRef<number[]>([]);
   const [intro, setIntro] = useState(() => {
     try {
+      if (matchMedia('(max-width: 760px)').matches) return false;
       return !localStorage.getItem(INTRO_KEY) && !location.hash;
     } catch {
       return true;
     }
   });
+  useEffect(() => {
+    try {
+      if (!phone || localStorage.getItem(INTRO_KEY) || location.hash) return;
+      localStorage.setItem(INTRO_KEY, '1');
+    } catch {
+      if (!phone) return;
+    }
+    const id = window.setTimeout(() => goGuide(0), 600);
+    return () => clearTimeout(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const closeIntro = (step: boolean) => {
     setIntro(false);
     try {
@@ -218,6 +238,16 @@ export default function App() {
     return () => window.removeEventListener('click', click, true);
   }, []);
   const [placesOpen, setPlacesOpen] = useState(false);
+  const [storiesOpen, setStoriesOpen] = useState(false);
+  const storiesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!storiesOpen) return;
+    const off = (e: PointerEvent) => !storiesRef.current?.contains(e.target as Node) && setStoriesOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setStoriesOpen(false);
+    window.addEventListener('pointerdown', off);
+    window.addEventListener('keydown', esc);
+    return () => (window.removeEventListener('pointerdown', off), window.removeEventListener('keydown', esc));
+  }, [storiesOpen]);
   const [simulated, setSimulated] = useState(0);
 
   // Jev's search.
@@ -578,6 +608,8 @@ export default function App() {
   }, [speed]);
 
   const bestNow = useMemo(() => best(results, minPk), [results, minPk]);
+  const resultsRef = useRef(results);
+  resultsRef.current = results;
   const showTheater = panels.drawer && drawerTab === 'jev' && phase !== 'idle';
   useEffect(() => {
     if (!showTheater || !theaterCanvas.current) return;
@@ -1084,11 +1116,12 @@ export default function App() {
     chooseTarget(id);
     const c = targetCentre(targetOf(world, id));
     const telling = guide == null && id in TARGET_STORIES;
+    const offset = telling && !phone; // on a phone the story is only a small title, so no need to make room
     // With a story showing (bottom-left), sit the target up and to the right so both can be seen.
     const m = mapRef.current;
     const px = m ? 1 / m.cam().s : 0.4;
     const zk = 3.2 / (m?.view.zoom || 3.2);
-    flyTo(telling ? c.x - 200 * px * zk : c.x, telling ? c.y + 90 * px * zk : c.y, telling ? 3.2 : 3.6);
+    flyTo(offset ? c.x - 200 * px * zk : c.x, offset ? c.y + 90 * px * zk : c.y, telling ? 3.2 : 3.6);
     if (!telling) return;
     const k = id as keyof typeof TARGET_STORIES;
     setStory(k);
@@ -1105,6 +1138,23 @@ export default function App() {
   const goGuide = (i: number | null) => {
     if (i != null) setStory(null);
     setGuide(i);
+    mobileTimers.current.forEach(clearTimeout);
+    mobileTimers.current = [];
+    if (phone && i != null && GUIDE[i].tab) {
+      // On a phone the panels sit under the map: glide down to the one this step is about, then back up.
+      const down = () => document.querySelector('.mobile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const up = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+      const demo = !!GUIDE[i].demo;
+      mobileTimers.current = [
+        window.setTimeout(down, 2500),
+        // At Jev's step, once the search has run, try its pick, as if you'd tapped it, and go back to see it on the map.
+        ...(demo ? [window.setTimeout(() => {
+          const b = best(resultsRef.current, minPk);
+          if (b) applyCandidate(b.c);
+        }, 12500)] : []),
+        window.setTimeout(up, demo ? 14500 : 8000),
+      ];
+    }
     stopDemo();
     stopTour();
     if (i != null && GUIDE[i].tour) startTour();
@@ -1634,11 +1684,43 @@ export default function App() {
           <span>Jev engine</span>
         </div>
         <nav className="targets" aria-label="Targets">
-          {world.targets.map((t) => (
-            <button key={t.id} className={plan.target === t.id ? 'on' : ''} onClick={() => pickPreset(t.id)} title={t.note}>
-              {t.short}
+          <div className="stories-wrap" ref={storiesRef}>
+            <button className={`stories-btn ${storiesOpen ? 'open' : ''}`} onClick={() => setStoriesOpen(!storiesOpen)} aria-expanded={storiesOpen} title="The briefed targets, and the people around them">
+              <span className="k">Targets</span>
+              <b>{world.targets.some((t) => t.id === plan.target) ? target.short : 'Choose'}</b>
+              <span aria-hidden>▾</span>
             </button>
-          ))}
+            {storiesOpen && (
+              <div className="stories-pop" role="menu">
+                {(
+                  [
+                    ['In the city', (y: number) => y < 700],
+                    ['On the outskirts', (y: number) => y >= 700],
+                  ] as const
+                ).map(([label, inGroup]) => (
+                  <div key={label} className="stories-group">
+                    <span className="k">{label}</span>
+                    {world.targets
+                      .filter((t) => inGroup(t.rect.y))
+                      .map((t) => (
+                        <button
+                          key={t.id}
+                          role="menuitem"
+                          className={plan.target === t.id ? 'on' : ''}
+                          onClick={() => {
+                            setStoriesOpen(false);
+                            pickPreset(t.id);
+                          }}
+                        >
+                          <b>{t.name}</b>
+                          <span>{t.note}</span>
+                        </button>
+                      ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {(plan.target.startsWith('b:') || plan.target.startsWith('g:')) && (
             <button className="on picked" title={target.note}>
               {target.short}
@@ -1755,9 +1837,9 @@ export default function App() {
                 </button>
               </div>
             )}
-            {mapMode === 'target' && view === 'map' && !striking && !outcome && <div className="hud-hint">Click any building to make it the target, or drag the target onto one.</div>}
+            {mapMode === 'target' && view === 'map' && !striking && !outcome && <div className="hud-hint fleeting">Click anywhere to put the target there, or drag it.</div>}
 
-            {!striking && !outcome && !confirm && (
+            {!striking && !outcome && !confirm && !(phone && guide != null) && (
               <div className={`strike-dock ${strikeOpen ? 'open' : ''}`} role="group" aria-label="Decide">
                 {strikeOpen ? (
                   <>
@@ -1970,14 +2052,26 @@ export default function App() {
             )}
 
             {guide != null && (
-              <div className="guide">
+              <div className={`guide ${phone ? 'compact' : ''}`}>
                 <span className="n">
                   {guide + 1}/{GUIDE.length}
                 </span>
                 <div>
                   <h4>{GUIDE[guide].title}</h4>
-                  <p>{GUIDE[guide].text}</p>
+                  {!phone && <p>{GUIDE[guide].text}</p>}
                 </div>
+                {phone && !soundOn && (
+                  <button
+                    className="guide-listen"
+                    onClick={() => {
+                      sound.setEnabled(true);
+                      void sound.voice(guide + 1);
+                    }}
+                    aria-label="Turn the narration on"
+                  >
+                    🔈 Listen
+                  </button>
+                )}
                 <div className="guide-nav">
                   <button onClick={() => goGuide(Math.max(0, guide - 1))} disabled={guide === 0}>
                     Back
@@ -1989,6 +2083,11 @@ export default function App() {
                   ) : (
                     <button className="primary" onClick={() => goGuide(null)}>
                       Done
+                    </button>
+                  )}
+                  {phone && (
+                    <button className="guide-x" onClick={() => goGuide(null)} aria-label="Leave the guide">
+                      ✕
                     </button>
                   )}
                 </div>
@@ -2036,17 +2135,17 @@ export default function App() {
             )}
 
             {story && guide == null && !striking && (
-              <div className="storycard" key={story} role="status">
+              <div className={`storycard ${phone ? 'chip' : ''}`} key={story} role="status">
                 <div className="pop-head">
                   <div>
-                    <span className="kind">Why it’s a target, and who is around it</span>
+                    {!phone && <span className="kind">Why it’s a target, and who is around it</span>}
                     <b>{TARGET_STORIES[story].title}</b>
                   </div>
                   <button className="x" onClick={closeStory} aria-label="Close">
                     ×
                   </button>
                 </div>
-                <p>{TARGET_STORIES[story].text}</p>
+                {!phone && <p>{TARGET_STORIES[story].text}</p>}
               </div>
             )}
             {place && !striking && (

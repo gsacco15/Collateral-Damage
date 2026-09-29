@@ -141,6 +141,7 @@ export class MapView {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.cw = Math.max(1, rect.width);
     this.ch = Math.max(1, rect.height);
+    LABEL_K = this.cw < 600 ? 0.8 : 1; // labels a little smaller on a phone
     this.canvas.width = Math.round(this.cw * this.dpr);
     this.canvas.height = Math.round(this.ch * this.dpr);
     this.viewKey = '';
@@ -600,7 +601,7 @@ export class MapView {
         const known = this.discovered.has(`d:${d.id}`);
         g.save();
         g.globalAlpha = dA * (known ? 0.92 : 0.6);
-        g.font = `italic 500 ${22 * px}px "Playfair Display", Georgia, serif`;
+        g.font = `italic 500 ${22 * px * LABEL_K}px "Playfair Display", Georgia, serif`;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.fillStyle = 'rgba(251,248,241,0.9)';
@@ -614,7 +615,7 @@ export class MapView {
     // Streets: small capitals along the road, once you're close enough to read them.
     if (z >= 2.4) {
       g.save();
-      g.font = `600 ${9.5 * px}px "IBM Plex Sans", system-ui, sans-serif`;
+      g.font = `600 ${9.5 * px * LABEL_K}px "IBM Plex Sans", system-ui, sans-serif`;
       g.fillStyle = 'rgba(251,248,241,0.92)';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
@@ -1486,8 +1487,10 @@ function leader(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number,
   g.fill();
 }
 
+let LABEL_K = 1;
 export function label(g: CanvasRenderingContext2D, x: number, y: number, text: string, px: number, o: { small?: boolean; plain?: boolean; tone?: 'protect' | 'hazard' | 'target' }) {
   g.save();
+  px *= LABEL_K;
   const size = (o.small ? 11 : 12.5) * px;
   g.font = `600 ${size}px "IBM Plex Sans", system-ui, sans-serif`;
   const w = g.measureText(text).width;

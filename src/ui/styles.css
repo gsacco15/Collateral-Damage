@@ -661,3 +661,62 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .storycard .kind { display: block; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 2px; }
 .storycard b { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 18px; font-weight: 500; }
 .storycard p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+
+/* The targets: one dropdown, each with its one-line dilemma. */
+.targets { overflow: visible; }
+.stories-wrap { position: relative; }
+.targets .stories-btn { display: inline-flex; align-items: baseline; gap: 7px; border: 1px solid var(--line-2); background: transparent; padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; white-space: nowrap; color: var(--text-1); }
+.targets .stories-btn .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+.targets .stories-btn b { font-weight: 600; }
+.targets .stories-btn > span[aria-hidden] { color: var(--text-3); font-size: 11px; }
+.targets .stories-btn:hover, .targets .stories-btn.open { border-color: var(--text-3); }
+.stories-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: min(340px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow-y: auto; padding: 10px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: var(--float); display: flex; flex-direction: column; gap: 10px; }
+.stories-group { display: flex; flex-direction: column; gap: 2px; }
+.stories-group > .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); padding: 2px 8px 4px; }
+.targets .stories-group button { display: flex; flex-direction: column; gap: 2px; text-align: left; white-space: normal; border: 0; background: transparent; padding: 7px 8px; border-radius: 9px; cursor: pointer; color: var(--text-1); }
+.targets .stories-group button b { font-size: 13px; font-weight: 600; }
+.targets .stories-group button span { font-size: 12px; line-height: 1.35; color: var(--text-2); }
+.targets .stories-group button:hover { background: var(--panel); }
+.targets .stories-group button.on { background: var(--ink); color: var(--on-ink); }
+.targets .stories-group button.on span { color: var(--on-ink); opacity: 0.75; }
+
+/* A hint that shows just long enough to read, then gets out of the way. */
+.hud-hint.fleeting { animation: fleeting 4.2s ease forwards; pointer-events: none; }
+@keyframes fleeting { 0% { opacity: 0; } 8% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
+/* The controls on the map: see-through, so the city shows behind them; solid under the pointer. */
+.hud-time, .hud-mode, .hud-layers > button, .hud-zoom button:not(.tgt-btn), .toast { background: rgba(251, 250, 246, 0.6) !important; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); box-shadow: 0 1px 6px rgba(40, 30, 20, 0.08) !important; }
+.hud-layers > button:not(.on):hover, .hud-zoom button:not(.tgt-btn):hover, .hud-mode:hover { background: rgba(251, 250, 246, 0.94) !important; }
+.hud-layers > button.layers-btn.on { background: var(--ink) !important; }
+.hud-zoom .tgt-btn { background: rgba(200, 40, 30, 0.82); }
+.strike-dock > .act.tab, .strike-dock:not(.open) > button { opacity: 0.9; }
+.strike-dock.open { background: rgba(251, 250, 246, 0.68); }
+
+/* Phones: small, see-through cards; the narrator tells the stories and the guide. */
+@media (max-width: 760px) {
+  .guide.compact { bottom: 10px; width: calc(100% - 20px); padding: 7px 8px 7px 12px; gap: 8px; align-items: center; border-radius: 12px; background: rgba(251, 250, 246, 0.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .guide.compact .n { padding-top: 0; font-size: 11px; }
+  .guide.compact h4 { font-size: 13.5px; margin: 0; }
+  .guide.compact .guide-nav { flex-direction: row; gap: 4px; }
+  .guide.compact .guide-nav button { padding: 6px 10px; font-size: 12px; }
+  .guide.compact .guide-x { padding: 6px 8px; background: transparent; border-color: transparent; color: var(--text-3); }
+  .guide-listen { border: 1px solid var(--line-2); background: transparent; border-radius: 9px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+  .storycard.chip { width: auto; max-width: calc(100% - 24px); padding: 6px 8px 6px 12px; gap: 0; bottom: 64px; background: rgba(246, 243, 236, 0.72); }
+  .storycard.chip b { font-size: 15px; }
+  .hud-time { padding: 5px 9px; gap: 6px; }
+  .hud-time b { font-size: 12.5px; }
+  .hud-time span { font-size: 10.5px; }
+  .hud-mode { top: 44px; }
+  .hud-mode button { padding: 4px 9px; font-size: 11.5px; }
+  .hud-layers button, .hud-zoom button { font-size: 11px; padding: 4px 8px; min-width: 0; }
+  .hud-zoom { bottom: 12px; gap: 3px; }
+  .placecard { width: min(230px, calc(100% - 24px)); padding: 8px 10px; background: rgba(251, 250, 246, 0.72); }
+  .placecard b { font-size: 14.5px; }
+  .placecard p { font-size: 11.5px; line-height: 1.4; }
+  .popcard { padding: 10px 12px; gap: 6px; background: rgba(251, 250, 246, 0.74); }
+  .toast { padding: 6px 12px; }
+  .toast b { font-size: 13px; }
+  .toast span { display: none; }
+  .maptip { max-width: 190px; }
+  .hud-hint { top: 80px; font-size: 11px; }
+}
