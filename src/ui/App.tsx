@@ -433,7 +433,7 @@ export default function App() {
     // Home: close on Warehouse 14 and the school across the street, the depot at the bottom edge.
     const zoom = fit(300);
     // Pulled back: the district around it out to the canal, never so far that the desert shows.
-    const out = Math.min(zoom * 0.7, fit(1000));
+    const out = Math.min(zoom * 0.75, fit(820));
     const hw = cw / 2 / (base * out);
     return { cx: 256, cy: 522, zoom, back: { cx: Math.max(hw - 40, Math.min(452, world.city.w - hw + 10)), cy: 550, zoom: out } };
   };
