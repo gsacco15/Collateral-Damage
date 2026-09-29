@@ -942,6 +942,26 @@ export default function App() {
       alive = false;
     };
   }, [view, world]);
+  // Switching views keeps your place: the 3D camera looks at the middle of the flat map, from a height that
+  // matches the zoom, and the flat map comes back centred on whatever the 3D camera was looking at.
+  const lastView = useRef(view);
+  useEffect(() => {
+    const was = lastView.current;
+    lastView.current = view;
+    const map = mapRef.current;
+    const model = modelRef.current;
+    if (!map || !model || !modelReady) return;
+    const K = 900; // metres of camera distance at map zoom 1
+    if (view === 'model') model.jumpTo(map.view.cx, map.view.cy, K / map.view.zoom);
+    else if (was === 'model') {
+      const l = model.lookingAt();
+      focusRef.current = null;
+      map.view.zoom = K / l.dist;
+      map.view.cx = l.x;
+      map.view.cy = l.y;
+      map.clampView();
+    }
+  }, [view, modelReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const m = modelRef.current;
     if (!m) return;

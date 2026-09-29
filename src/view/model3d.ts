@@ -421,6 +421,23 @@ export class Model3D {
     this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1: t1.clone().add(dir.multiplyScalar(dist)), k: 0 };
   }
 
+  /** Cut straight to looking at a spot from a distance, keeping the current angle: used when switching over from the flat map. */
+  jumpTo(x: number, y: number, dist: number) {
+    this.fly = null;
+    const t = new THREE.Vector3(x, 4, y);
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    if (dir.y < 0.35) dir.y = 0.35;
+    dir.normalize();
+    this.controls.target.copy(t);
+    this.camera.position.copy(t).add(dir.multiplyScalar(Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, dist))));
+    this.controls.update();
+  }
+  /** Where the camera is looking, and from how far: used when switching back to the flat map. */
+  lookingAt() {
+    const t = this.controls.target;
+    return { x: t.x, y: t.z, dist: this.camera.position.distanceTo(t) };
+  }
+
   /** Look at the current target. */
   toTarget() {
     const f = this.getFrame();
