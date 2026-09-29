@@ -736,6 +736,45 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         g.fill();
       }
       g.restore();
+    } else if (e.t === 'shed') {
+      // A lock-up garage: a corrugated tin roof over block walls, its roller door up on one side.
+      g.fillStyle = 'rgba(40,30,20,0.3)';
+      g.fillRect(e.x + 1.2, e.y + 1.2, e.w, e.h);
+      g.fillStyle = '#a4a9ab';
+      g.fillRect(e.x, e.y, e.w, e.h);
+      g.fillStyle = 'rgba(255,255,255,0.14)';
+      for (let k = 0; k < e.w; k += 0.9) g.fillRect(e.x + k, e.y, 0.4, e.h);
+      g.fillStyle = 'rgba(150,78,38,0.35)';
+      g.fillRect(e.x + e.w * 0.55, e.y + 1, e.w * 0.3, e.h * 0.45);
+      g.fillStyle = '#2a2826';
+      if (e.door === 1) g.fillRect(e.x + e.w - 0.3, e.y + e.h * 0.2, 0.6, e.h * 0.6);
+    } else if (e.t === 'container') {
+      g.fillStyle = 'rgba(40,30,20,0.3)';
+      g.fillRect(e.x + 0.8, e.y + 0.8, e.w, e.h);
+      g.fillStyle = e.col;
+      g.fillRect(e.x, e.y, e.w, e.h);
+      g.fillStyle = 'rgba(0,0,0,0.14)';
+      for (let k = 0.5; k < e.w; k += 0.8) g.fillRect(e.x + k, e.y, 0.25, e.h);
+      g.fillStyle = 'rgba(150,78,38,0.3)';
+      g.fillRect(e.x + e.w * 0.2, e.y + e.h * 0.6, e.w * 0.3, e.h * 0.3);
+    } else if (e.t === 'forklift') {
+      g.save();
+      g.translate(e.x, e.y);
+      g.rotate(e.a);
+      g.fillStyle = 'rgba(40,30,20,0.25)';
+      g.fillRect(-0.7, -1, 1.8, 2.2);
+      g.fillStyle = '#e0b43a';
+      g.fillRect(-0.8, -0.6, 1.6, 1.7);
+      g.fillStyle = '#2a2826';
+      g.fillRect(-0.55, -1.7, 0.18, 1.1);
+      g.fillRect(0.37, -1.7, 0.18, 1.1);
+      if (e.load) {
+        g.fillStyle = '#b89968';
+        g.fillRect(-0.7, -2.1, 1.4, 1.3);
+        g.fillStyle = '#b08a5e';
+        g.fillRect(-0.55, -2, 1.1, 1.1);
+      }
+      g.restore();
     } else if (e.t === 'junk') junk2d(g, e.x, e.y, e.size, e.seed);
     else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
     else if (e.t === 'clutter' && d.traffic) clutter2d(g, e);
@@ -849,6 +888,10 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         break;
       case 'person':
         d.figure(asWalker(e));
+        if (e.carry) {
+          g.fillStyle = '#b08a5e';
+          g.fillRect(e.x + Math.cos(e.face) * 0.5 - 0.35, e.y + Math.sin(e.face) * 0.5 - 0.35, 0.7, 0.7);
+        }
         if (e.smoke) wisp(g, e.x + 0.3, e.y - 0.3, t, e.id * 0.37);
         break;
       case 'rod':
@@ -905,11 +948,13 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
           g.fillStyle = 'rgba(140,70,30,0.3)';
           g.fillRect(-3.2, -1.05, 1.4, 2.1);
         }
-        // A puff of blue-grey exhaust behind.
-        g.fillStyle = `rgba(150,150,155,${0.45 * (1 - e.smoke)})`;
-        g.beginPath();
-        g.arc(-3.2 - e.smoke * 2.5, 0.6, 0.3 + e.smoke * 0.8, 0, Math.PI * 2);
-        g.fill();
+        // A puff of blue-grey exhaust behind (not when parked).
+        if (e.smoke >= 0) g.fillStyle = `rgba(150,150,155,${0.45 * (1 - e.smoke)})`;
+        if (e.smoke >= 0) {
+          g.beginPath();
+          g.arc(-3.2 - e.smoke * 2.5, 0.6, 0.3 + e.smoke * 0.8, 0, Math.PI * 2);
+          g.fill();
+        }
         g.restore();
         break;
       case 'fountain': {

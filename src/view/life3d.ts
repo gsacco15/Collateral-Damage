@@ -63,6 +63,20 @@ export class Life3D {
   private s = new THREE.Vector3();
   private c = new THREE.Color();
   private meshes: Record<string, THREE.InstancedMesh> = {};
+  private metal = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#a4a9ab';
+    g.fillRect(0, 0, 64, 64);
+    for (let x = 0; x < 64; x += 4) {
+      g.fillStyle = x % 8 ? 'rgba(255,255,255,0.15)' : 'rgba(30,30,35,0.1)';
+      g.fillRect(x, 0, 2, 64);
+    }
+    g.fillStyle = 'rgba(150,78,38,0.35)';
+    g.fillRect(34, 10, 20, 26);
+    return new THREE.CanvasTexture(c);
+  })();
   private counts: Record<string, number> = {};
   private pools: THREE.InstancedMesh;
   private poolMat: THREE.MeshBasicMaterial;
@@ -155,6 +169,13 @@ export class Life3D {
     add('l_can', new THREE.CylinderGeometry(0.07, 0.07, 0.24, 7).rotateZ(Math.PI / 2).translate(0, 0.07, 0), std({ roughness: 0.4, metalness: 0.4 }), 800, false);
     add('l_bottle', new THREE.CapsuleGeometry(0.07, 0.3, 2, 6).rotateZ(Math.PI / 2).translate(0, 0.07, 0), new THREE.MeshStandardMaterial({ roughness: 0.2, transparent: true, opacity: 0.8 }), 800, false);
     add('l_bag', new THREE.IcosahedronGeometry(0.28, 0).scale(1.1, 0.35, 0.8).translate(0, 0.08, 0), std({ roughness: 0.7 }), 800, false);
+    // Warehouse yard: a lock-up garage, shipping containers, a forklift.
+    add('shed', mergeGeometries([box(0, 1.4, -0.5, 1, 2.8, 0.02), box(0, 1.4, 0.5, 1, 2.8, 0.02), box(-0.5, 1.4, 0, 0.02, 2.8, 1), box(0.5, 2.2, 0, 0.02, 1.2, 1), box(0.5, 0.9, -0.42, 0.02, 1.8, 0.16), box(0.5, 0.9, 0.42, 0.02, 1.8, 0.16)])!, std({ color: '#c9c2b4' }), 4);
+    add('shedroof', box(0, 2.85, 0, 1.08, 0.08, 1.08), new THREE.MeshStandardMaterial({ map: this.metal, roughness: 0.65, metalness: 0.25 }), 4);
+    add('container', mergeGeometries([box(0, 1.3, 0, 1, 2.6, 1), ...Array.from({ length: 9 }, (_, k) => box(-0.45 + k * 0.11, 1.3, 0.505, 0.03, 2.5, 0.02)), ...Array.from({ length: 9 }, (_, k) => box(-0.45 + k * 0.11, 1.3, -0.505, 0.03, 2.5, 0.02))])!, std({ roughness: 0.6 }), 6);
+    add('forklift', mergeGeometries([box(0, 0.7, 0.4, 1.3, 1.0, 1.6), box(0, 1.9, 0.6, 1.2, 0.08, 1.2), box(-0.55, 1.3, 0.1, 0.06, 1.2, 0.06), box(0.55, 1.3, 0.1, 0.06, 1.2, 0.06), box(-0.4, 1.4, -0.45, 0.1, 2.6, 0.1), box(0.4, 1.4, -0.45, 0.1, 2.6, 0.1), box(-0.3, 0.12, -1.1, 0.12, 0.06, 1.2), box(0.3, 0.12, -1.1, 0.12, 0.06, 1.2)])!, std({ color: '#e0b43a', roughness: 0.5 }), 3);
+    add('fkload', mergeGeometries([box(0, 0.25, -1.1, 1.2, 0.14, 1.2), box(0, 0.75, -1.1, 1.05, 0.9, 1.05)])!, std({ color: '#b08a5e' }), 3, false);
+    add('carried', box(0, 1.25, -0.45, 0.6, 0.45, 0.45), std({ color: '#b08a5e' }), 12, false);
     // Junk heaps: a lumpy mound, and bits sticking out of it (sheets, a tyre, a crate, a bottle).
     add('j_mound', new THREE.IcosahedronGeometry(1, 1).scale(1, 0.45, 0.85).translate(0, 0.2, 0), std(), 80);
     add('j_bit', box(0, 0, 0, 0.9, 0.12, 0.6), std({ roughness: 0.7 }), 1800, false);
@@ -280,6 +301,7 @@ export class Life3D {
           const id = e.id;
           this.put('body', e.x, e.y, e.sit ? 0.25 : 0, 0, 1.3, 1.3 * sy, 1.3, ['#5b6b7c', '#8a7a5c', '#6e4a3a', '#d8d2c4', '#3f4a3a', '#7d6b8a', '#2f3440'][id % 7]);
           this.put('head', e.x, e.y, (e.sit ? 0.25 : 0) - (1 - sy) * 1.9, 0, 1.3, 1.3, 1.3, ['#c8a07a', '#a8805e', '#8a6446', '#d6b08a'][id % 4]);
+          if (e.carry) this.put('carried', e.x, e.y, 0, -e.face - Math.PI / 2, 1, 1, 1);
           if (e.smoke) this.put('smoke', e.x + ((time * 0.35) % 1) * 1.5, e.y, 2.2 + ((time * 0.35) % 1) * 1.2, time, 0.18 + ((time * 0.35) % 1) * 0.3, 0.18 + ((time * 0.35) % 1) * 0.3, 0.18 + ((time * 0.35) % 1) * 0.3, '#e8e5de');
           break;
         }
@@ -353,7 +375,7 @@ export class Life3D {
           this.put(e.lorry ? 'lorry' : 'truck', e.x, e.y, 0, yaw, 1, 1, 1, e.col, e.lean);
           this.put('t_door', e.x, e.y, 0, yaw, 1, 1, 1, e.door, e.lean);
           if (!e.lorry) this.put('t_load', e.x, e.y, 0, yaw, 1, 1, 1, e.load, e.lean * 1.5);
-          this.put('smoke', e.x - Math.cos(e.a) * (3.4 + e.smoke * 2), e.y - Math.sin(e.a) * (3.4 + e.smoke * 2), 0.5 + e.smoke * 0.8, e.smoke * 3, 0.25 + e.smoke * 0.5, 0.25 + e.smoke * 0.5, 0.25 + e.smoke * 0.5, '#9a9aa0');
+          if (e.smoke >= 0) this.put('smoke', e.x - Math.cos(e.a) * (3.4 + e.smoke * 2), e.y - Math.sin(e.a) * (3.4 + e.smoke * 2), 0.5 + e.smoke * 0.8, e.smoke * 3, 0.25 + e.smoke * 0.5, 0.25 + e.smoke * 0.5, 0.25 + e.smoke * 0.5, '#9a9aa0');
           this.put('twheels', e.x, e.y, 0, yaw, 1, 1, 1);
           if (night > 0.3) this.put('dpool', e.x + Math.cos(e.a) * 6, e.y + Math.sin(e.a) * 6, 0.3, 0, 4, 1, 4, '#fff0c8');
           break;
@@ -372,6 +394,17 @@ export class Life3D {
           if (night > 0.3) this.put('dpool', e.x, e.y, 0.95, 0, 7, 1, 7, '#cfe6ff');
           break;
         }
+        case 'shed':
+          this.put('shed', e.x + e.w / 2, e.y + e.h / 2, 0, 0, e.w, 1, e.h, '#c9c2b4');
+          this.put('shedroof', e.x + e.w / 2, e.y + e.h / 2, 0, 0, e.w, 1, e.h);
+          break;
+        case 'container':
+          this.put('container', e.x + e.w / 2, e.y + e.h / 2, 0, 0, e.w, 1, e.h, e.col);
+          break;
+        case 'forklift':
+          this.put('forklift', e.x, e.y, 0, -e.a, 1, 1, 1);
+          if (e.load) this.put('fkload', e.x, e.y, 0, -e.a, 1, 1, 1);
+          break;
         case 'litter':
           this.put(e.kind === 0 ? 'l_can' : e.kind === 1 ? 'l_bottle' : 'l_bag', e.x, e.y, 0, e.a, 1.8, 1.8, 1.8, e.col);
           break;

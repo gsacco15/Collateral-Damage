@@ -17,7 +17,10 @@ export interface SceneCtx {
 
 export type Ent =
   | { t: 'boat'; x: number; y: number; a: number; len: number; hull: number; kind: 'moor' | 'fish' | 'row' | 'motor'; side: number; stroke: number }
-  | { t: 'person'; x: number; y: number; face: number; id: number; wear?: Wear; sit?: boolean; smoke?: boolean }
+  | { t: 'person'; x: number; y: number; face: number; id: number; wear?: Wear; sit?: boolean; smoke?: boolean; carry?: boolean }
+  | { t: 'shed'; x: number; y: number; w: number; h: number; door: number } // door: the side it opens on, 0 N 1 E 2 S 3 W
+  | { t: 'container'; x: number; y: number; w: number; h: number; col: string }
+  | { t: 'forklift'; x: number; y: number; a: number; load: boolean }
   | { t: 'rod'; x: number; y: number; a: number; len: number; seed: number; z: number }
   | { t: 'stool' | 'bucket' | 'table'; x: number; y: number }
   | { t: 'hookah'; x: number; y: number; seed: number }
@@ -30,7 +33,7 @@ export type Ent =
   | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string; v?: boolean } // v: parked nose-in, north-south
   | { t: 'scooter'; x: number; y: number; a: number; col: string; sway: number }
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
-  | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string; door: string; lean: number; smoke: number } // janky: odd door, a lean, a puff of exhaust
+  | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string; door: string; lean: number; smoke: number } // smoke < 0: parked, engine off // janky: odd door, a lean, a puff of exhaust
   | { t: 'fountain'; x: number; y: number; r: number }
   | { t: 'tarp'; x: number; y: number; a: number; col: string; size: number; mat: boolean }
   | { t: 'beast'; kind: 'goat' | 'chicken' | 'pigeon' | 'donkey'; x: number; y: number; a: number; col: string; moving: boolean; lying: boolean; cart?: boolean }
@@ -789,6 +792,56 @@ export function lifeScene(c: SceneCtx): Ent[] {
     out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load, door: s.door, lean: s.lean + Math.sin(t * 5 + i) * 0.012, smoke: (t * 1.3 + i * 0.37) % 1 });
   });
   for (const l of F.litter) if (far(l.x, l.y)) out.push({ t: 'litter', x: l.x, y: l.y, a: l.a, kind: l.kind, col: l.col });
+  // Warehouse 14's yard: the lock-up garage and a container out the back, trucks parked up, drums along the wall,
+  // pallets and tyres; by day men loading and unloading, a forklift shuttling on the loading side; at night a guard
+  // by a burning drum.
+  const wh = c.world.buildings.find((b) => b.name === 'Warehouse 14');
+  if (wh && alive(wh)) {
+    const q = wh.rects[0];
+    const X = q.x;
+    const Y = q.y;
+    const put = (e: Ent) => {
+      const p = e as { x: number; y: number };
+      if (far(p.x, p.y)) out.push(e);
+    };
+    put({ t: 'shed', x: X - 24, y: Y - 16, w: 12, h: 11, door: 1 });
+    put({ t: 'container', x: X - 25, y: Y + 9, w: 12, h: 5, col: '#b8573a' });
+    put({ t: 'container', x: X - 25, y: Y + 15, w: 12, h: 5, col: '#2f5f8a' });
+    put({ t: 'truck', x: X - 6, y: Y - 9, a: Math.PI, col: '#e9e4d8', lorry: false, load: '#c99a5e', door: '#8a4a2a', lean: 0.03, smoke: -1 });
+    put({ t: 'truck', x: X - 7, y: Y + 26, a: -Math.PI / 2, col: '#6c8aa8', lorry: true, load: '#d0d4d6', door: '#c9b24c', lean: -0.02, smoke: -1 });
+    for (let k = 0; k < 12; k++) put({ t: 'clutter', kind: 'drum', x: X - 1.3 - (k % 2) * 0.8, y: Y + 3 + Math.floor(k / 2) * 0.8, a: 0, col: ['#2f5f8a', '#8a4a2a', '#2f5f8a', '#3f6a4a'][k % 4] });
+    for (let k = 0; k < 5; k++) put({ t: 'clutter', kind: 'drum', x: X - 12 + k * 0.8, y: Y - 4.6, a: 0, col: k % 2 ? '#c9a44c' : '#7a2a22' });
+    for (let k = 0; k < 3; k++) put({ t: 'clutter', kind: 'pallet', x: X - 20 + k * 1.4, y: Y + 3, a: 0, col: '#b89968' });
+    for (let k = 0; k < 6; k++) put({ t: 'clutter', kind: 'crate', x: X - 15 + (k % 3) * 0.7, y: Y + 1 + Math.floor(k / 3) * 0.7, a: 0, col: '#b08a5e' });
+    put({ t: 'clutter', kind: 'tyres', x: X - 10, y: Y - 11, a: 0, col: '#2a2826' });
+    put({ t: 'clutter', kind: 'tyrepile', x: X - 26, y: Y - 2, a: 0.4, col: '#2a2826' });
+    put({ t: 'clutter', kind: 'jerry', x: X - 11.5, y: Y - 9, a: 0, col: '#e0c64a' });
+    if (day) {
+      // Two men carrying crates from the container to the warehouse wall and back.
+      for (let k = 0; k < 2; k++) {
+        const u = (t * 0.06 + k * 0.5) % 2;
+        const back = u > 1;
+        const f = back ? 2 - u : u;
+        const x = X - 13 + f * 11;
+        const y = Y + 11 + f * -3 + k * 1.4;
+        put({ t: 'person', x, y, face: back ? Math.PI : 0, id: 500 + k, carry: !back });
+      }
+      // One at the garage door working on something, one sitting on a drum with a cigarette, one on the phone by the truck.
+      put({ t: 'person', x: X - 11, y: Y - 10.5, face: Math.PI, id: 503 });
+      put({ t: 'person', x: X - 2.4, y: Y + 1.8, face: Math.PI, id: 504, sit: true, smoke: true });
+      put({ t: 'person', x: X - 4, y: Y - 12, face: t * 0.2, id: 505 });
+      // The forklift on the loading side: from the stacks to the doors and back.
+      const u = (t * 0.05) % 2;
+      const back = u > 1;
+      const f = back ? 2 - u : u;
+      put({ t: 'forklift', x: X + 4 + f * 26, y: Y + q.h + 10, a: back ? -Math.PI / 2 : Math.PI / 2, load: !back });
+      put({ t: 'person', x: X + 9 + Math.sin(t * 0.1) * 5, y: Y + q.h + 3, face: Math.PI / 2, id: 506, carry: Math.sin(t * 0.1) > 0 });
+    } else {
+      put({ t: 'fire', x: X - 8, y: Y + 6, size: 0.55, flicker: Math.sin(t * 9) * 0.5 + Math.sin(t * 13) * 0.5 });
+      put({ t: 'person', x: X - 9.6, y: Y + 6.4, face: 0, id: 507, sit: true, smoke: true });
+      put({ t: 'glow', x: X - 18, y: Y - 10, r: 5, a: 0.5 * c.night, col: '255,205,120', z: 3.2 });
+    }
+  }
   // Shelters, and the people living in them: sitting out by day, a small fire by some at night.
   F.tarps.forEach((tp, i) => {
     if (!far(tp.x, tp.y)) return;
