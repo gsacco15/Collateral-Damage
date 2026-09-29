@@ -29,7 +29,9 @@ export type Ent =
   | { t: 'car'; x: number; y: number; h: boolean; dir: 1 | -1; col: string }
   | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string; v?: boolean } // v: parked nose-in, north-south
   | { t: 'scooter'; x: number; y: number; a: number; col: string; sway: number }
-  | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number }
+  | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
+  | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string }
+  | { t: 'fountain'; x: number; y: number; r: number }
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
   | { t: 'police'; x: number; y: number; h: boolean; dir: 1 | -1; flash: number } // flash: 0 off, 1 red, 2 blue
   | { t: 'engine'; x: number; y: number; h: boolean; dir: 1 | -1 }
@@ -65,6 +67,8 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
+  trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string }[];
+  stacks: Building[];
   cafes: { x: number; y: number; evening: boolean; awn: number }[];
   smokers: { x: number; y: number; face: number; b: Building }[];
   services: { kind: 'police' | 'engine'; x: number; y: number; h: boolean; dir: 1 | -1; b: Building }[];
@@ -231,7 +235,21 @@ function makeFixed(w: World): Fixed {
   if (hosp) antennas.push({ x: hosp.rects[2]?.x ?? hosp.cx, y: hosp.cy, z: hosp.h, h: 7, b: hosp });
   const tall = w.buildings.filter((b) => b.kind === 'apartment' && b.floors >= 5 && b.name !== 'Tower 7').sort((a, b) => b.h - a.h);
   for (const b of tall.slice(0, 40).filter((_, i) => i % 9 === 0)) antennas.push({ x: b.rects[0].x + 2, y: b.rects[0].y + 2, z: b.h, h: 5 + r() * 3, b });
+  // Pickups and small lorries: bread, gas bottles, crates of vegetables, building sand. Busy by day, a couple at night.
+  const trucks = pickN(long, 10).map((rd, i) => ({
+    r: rd.rect,
+    h: rd.rect.w > rd.rect.h,
+    lane: (r() < 0.5 ? -1 : 1) * 2.2,
+    speed: 4 + r() * 3,
+    phase: r() * 1000,
+    col: ['#e9e4d8', '#c9b24c', '#6c8aa8', '#b8483a', '#8a9a7a'][i % 5],
+    dir: (r() < 0.5 ? 1 : -1) as 1 | -1,
+    lorry: i % 3 === 0,
+    load: ['#7fa3b8', '#c99a5e', '#8fa86a', '#e0cfa8', '#d0d4d6'][i % 5],
+  }));
   return {
+    trucks,
+    stacks: w.buildings.filter((b) => b.kind === 'chimney'),
     services,
     flag,
     fires,
@@ -541,6 +559,19 @@ export function lifeScene(c: SceneCtx): Ent[] {
       if (far(x, y)) out.push({ t: 'bus', x, y, dir: k % 2 ? 1 : -1, col, v: true });
     }
   }
+  F.trucks.forEach((s, i) => {
+    if (!(h >= 5.5 && h < 21) && i % 5) return;
+    const len = s.h ? s.r.w : s.r.h;
+    const u = (((t * s.speed + s.phase) % len) + len) % len;
+    const along = s.dir > 0 ? u : len - u;
+    const x = s.h ? s.r.x + along : s.r.x + s.r.w / 2 + s.lane * s.dir;
+    const y = s.h ? s.r.y + s.r.h / 2 - s.lane * s.dir : s.r.y + along;
+    if (!far(x, y) || onBroken(x, y)) return;
+    out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load });
+  });
+  // The fountain on the Circus, running from morning until late.
+  const rb = c.world.roundabout;
+  if (far(rb.x, rb.y)) out.push({ t: 'fountain', x: rb.x, y: rb.y, r: h >= 6 && h < 23.5 ? 1 : 0 });
   F.scooters.forEach((s, i) => {
     if (!(h >= 6 && h < 23) && i % 3) return;
     const len = s.h ? s.r.w : s.r.h;
@@ -556,6 +587,8 @@ export function lifeScene(c: SceneCtx): Ent[] {
   F.bakeries.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: b.h + 1, seed: i + 1, strength: bell(h, 3.5, 11) + 0.4 * bell(h, 16, 19.5), dark: 0.25, size: 1 }));
   F.tents.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: 1, seed: i + 7, strength: bell(h, 5.5, 8.5) + bell(h, 17, 20.5), dark: 0.55, size: 0.8 }));
   F.gens.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx + 1.5, y: b.cy, z: b.h + 0.5, seed: i + 13, strength: (h >= 20 || h < 5 ? 1 : 0) * (Math.sin(t * 0.03 + i) > -0.3 ? 0.9 : 0), dark: 0.85, size: 0.6 }));
+  // The power station's stacks and the kiln chimneys, drawn in 3D (the flat map has its own chimney smoke).
+  F.stacks.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: b.h + 0.5, seed: 31 + i, strength: b.name === 'Power station stack' ? 0.8 : h >= 3.5 && h < 20 ? 0.9 : 0.45, dark: b.name === 'Power station stack' ? 0.2 : 0.55, size: 1.4, d3: true }));
   if (alive(F.mill)) out.push({ t: 'smoke', x: F.mill!.cx - 10, y: F.mill!.cy, z: F.mill!.h + 1, seed: 21, strength: bell(h, 6, 18) * 0.8, dark: 0, size: 1.3 });
   for (const L of F.beacons) if (!c.damaged.has(L.b.id) && Math.sin(t * 3 + L.x * 0.1) > 0.2) out.push({ t: 'beacon', x: L.x, y: L.y, z: L.z, big: L.big });
   return out;

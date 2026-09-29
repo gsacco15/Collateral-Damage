@@ -63,7 +63,28 @@ function wallTex(base: string, lit: boolean, seed: number, windows = true) {
     (g, r) => {
       g.fillStyle = lit ? '#000' : base;
       g.fillRect(0, 0, 128, 128);
-      if (!lit) grain(g, r, 128, 128, 14);
+      if (!lit) {
+        grain(g, r, 128, 128, 14);
+        // Weathering: dust settled along the foot of the wall, a rain streak under the sill, a stain here and there.
+        const foot = g.createLinearGradient(0, 128, 0, 104);
+        foot.addColorStop(0, 'rgba(110,90,65,0.22)');
+        foot.addColorStop(1, 'rgba(110,90,65,0)');
+        g.fillStyle = foot;
+        g.fillRect(0, 104, 128, 24);
+        if (windows) {
+          const st = g.createLinearGradient(0, 88, 0, 118);
+          st.addColorStop(0, 'rgba(80,70,60,0.16)');
+          st.addColorStop(1, 'rgba(80,70,60,0)');
+          g.fillStyle = st;
+          g.fillRect(48 + r() * 20, 88, 3 + r() * 4, 30);
+        }
+        if (r() < 0.5) {
+          g.fillStyle = 'rgba(120,100,75,0.10)';
+          g.beginPath();
+          g.ellipse(r() * 128, r() * 128, 10 + r() * 14, 6 + r() * 10, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
       if (!windows) return;
       const on = r() < 0.55;
       if (lit) {
@@ -98,6 +119,38 @@ function roofTex(base: string, seed: number, creases: number) {
         g.fill();
       }
       grain(g, r, 256, 256, 12);
+    },
+    seed,
+  );
+}
+
+/** Corrugated metal: ridges, panels rusted or repainted, rust running down in streaks. */
+function metalTex(base: string, seed: number) {
+  return canvasTex(
+    128,
+    128,
+    (g, r) => {
+      g.fillStyle = base;
+      g.fillRect(0, 0, 128, 128);
+      for (let x = 0; x < 128; x += 4) {
+        g.fillStyle = x % 8 ? 'rgba(255,255,255,0.14)' : 'rgba(30,30,35,0.10)';
+        g.fillRect(x, 0, 2, 128);
+      }
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle = r() < 0.6 ? 'rgba(150,78,38,0.30)' : 'rgba(90,120,150,0.18)';
+        g.fillRect(Math.floor(r() * 4) * 32, r() * 128, 32, 20 + r() * 60);
+      }
+      for (let i = 0; i < 14; i++) {
+        const x = r() * 128;
+        const y = r() * 100;
+        const len = 10 + r() * 30;
+        const grd = g.createLinearGradient(x, y, x, y + len);
+        grd.addColorStop(0, 'rgba(130,64,28,0.45)');
+        grd.addColorStop(1, 'rgba(130,64,28,0)');
+        g.fillStyle = grd;
+        g.fillRect(x, y, 1.5, len);
+      }
+      grain(g, r, 128, 128, 16);
     },
     seed,
   );
@@ -317,6 +370,10 @@ export class Model3D {
   private carGlass: THREE.InstancedMesh;
   private carWheels: THREE.InstancedMesh;
   private carLights: THREE.InstancedMesh;
+  private carTails!: THREE.InstancedMesh;
+  private carBeams!: THREE.InstancedMesh;
+  private tailMat = new THREE.MeshStandardMaterial({ color: '#8a2a1e', emissive: '#ff3a24', emissiveIntensity: 0, roughness: 0.4 });
+  private beamMat!: THREE.MeshBasicMaterial;
   private lightMat = new THREE.MeshStandardMaterial({ color: '#f3ead2', emissive: '#ffd98a', emissiveIntensity: 0, roughness: 0.4 });
   private litMats: THREE.MeshStandardMaterial[] = [];
   private mats!: Record<string, THREE.Material>;
@@ -406,6 +463,32 @@ export class Model3D {
     this.carWheels = new THREE.InstancedMesh(wheelGeo, new THREE.MeshStandardMaterial({ color: '#232120', roughness: 0.8 }), 400);
     const lightGeo = mergeGeometries([boxGeo(2.11, 0.75, 0.6, 0.04, 0.22, 0.42), boxGeo(2.11, 0.75, -0.6, 0.04, 0.22, 0.42)])!;
     this.carLights = new THREE.InstancedMesh(lightGeo, this.lightMat, 400);
+    this.carTails = new THREE.InstancedMesh(mergeGeometries([boxGeo(-2.11, 0.8, 0.62, 0.04, 0.2, 0.36), boxGeo(-2.11, 0.8, -0.62, 0.04, 0.2, 0.36)])!, this.tailMat, 400);
+    // Headlight beams: a long soft wedge of light on the road ahead, faded along its length.
+    {
+      const c = document.createElement('canvas');
+      c.width = 64;
+      c.height = 32;
+      const g = c.getContext('2d')!;
+      const grd = g.createLinearGradient(0, 0, 64, 0);
+      grd.addColorStop(0, 'rgba(255,240,200,0.9)');
+      grd.addColorStop(1, 'rgba(255,240,200,0)');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.moveTo(0, 12);
+      g.lineTo(64, 0);
+      g.lineTo(64, 32);
+      g.lineTo(0, 20);
+      g.closePath();
+      g.fill();
+      this.beamMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 });
+    }
+    this.carBeams = new THREE.InstancedMesh(new THREE.PlaneGeometry(9, 4.4).rotateX(-Math.PI / 2).translate(2.2 + 4.5, 0.25, 0), this.beamMat, 400);
+    for (const im of [this.carTails, this.carBeams]) {
+      im.count = 0;
+      im.frustumCulled = false;
+      s.add(im);
+    }
     for (const m of [this.people, this.heads, this.wraps, this.carBodies, this.carGlass, this.carWheels, this.carLights]) {
       m.castShadow = true;
       m.count = 0;
@@ -613,12 +696,12 @@ export class Model3D {
       greyWall: new THREE.MeshStandardMaterial({ map: wallTex('#c2bcb2', false, 3), emissiveMap: wallTex('#000', true, 3), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       kraftWall: new THREE.MeshStandardMaterial({ map: wallTex('#c89e69', false, 2), emissiveMap: wallTex('#000', true, 2), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       schoolWall: new THREE.MeshStandardMaterial({ map: wallTex('#e3b25a', false, 5), emissiveMap: wallTex('#000', true, 5), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
-      tinWall: new THREE.MeshStandardMaterial({ map: stripesTex('#9aa0a3', '#b3b8ba', 8), roughness: 0.7, metalness: 0.2 }),
+      tinWall: new THREE.MeshStandardMaterial({ map: metalTex('#a4a9ab', 7), roughness: 0.75, metalness: 0.2 }),
       terracottaWall: new THREE.MeshStandardMaterial({ map: wallTex('#f1ece2', false, 4), emissiveMap: wallTex('#000', true, 4), emissive: '#ffffff', emissiveIntensity: 0, roughness: 0.95 }),
       whiteRoof: new THREE.MeshStandardMaterial({ map: roofTex('#f1eee8', 4, 14), roughness: 1 }),
       greyRoof: new THREE.MeshStandardMaterial({ map: roofTex('#cdc8bf', 6, 14), roughness: 1 }),
       kraftRoof: new THREE.MeshStandardMaterial({ map: roofTex('#c99f69', 5, 20), roughness: 1 }),
-      tinRoof: new THREE.MeshStandardMaterial({ map: stripesTex('#a3a9ac', '#c0c4c6', 16), roughness: 0.6, metalness: 0.25 }),
+      tinRoof: new THREE.MeshStandardMaterial({ map: metalTex('#b0b5b7', 9), roughness: 0.65, metalness: 0.25 }),
       terracottaRoof: new THREE.MeshStandardMaterial({ color: '#c47a5a', roughness: 0.9, flatShading: true }),
       fold: new THREE.MeshStandardMaterial({ color: '#f5f3ee', roughness: 0.9, flatShading: true, side: THREE.DoubleSide }),
       dome: new THREE.MeshStandardMaterial({ color: '#d9b77a', roughness: 0.55 }),
@@ -1443,6 +1526,9 @@ export class Model3D {
     this.winMat.opacity = Math.min(1, night * 1.2);
     this.winMesh.visible = night > 0.05;
     this.lightMat.emissiveIntensity = night * 2.2; // headlights at night
+    this.tailMat.emissiveIntensity = night * 2;
+    this.beamMat.opacity = night * 0.45;
+    this.carBeams.visible = night > 0.2;
     const sky = new THREE.Color('#e9dcc6').lerp(new THREE.Color('#1f2742'), night).lerp(tint, (1 - night) * gr.s * 0.5);
     this.scene.background = sky;
     (this.scene.fog as THREE.Fog).color.copy(sky);
@@ -1669,13 +1755,15 @@ export class Model3D {
       this.carGlass.setMatrixAt(k, m);
       this.carWheels.setMatrixAt(k, m);
       this.carLights.setMatrixAt(k, m);
+      this.carTails.setMatrixAt(k, m);
+      this.carBeams.setMatrixAt(k, m);
       this.carBodies.setColorAt(k, c.set(car.hurt ? '#3d3935' : car.color));
       if (car.hurt && rings < 800) this.rings.setMatrixAt(rings++, new THREE.Matrix4().compose(v.set(car.x, 0.08, car.y), q.identity(), new THREE.Vector3(2.4, 1, 2.4)));
       k++;
     }
-    this.carBodies.count = this.carGlass.count = this.carWheels.count = this.carLights.count = k;
+    this.carBodies.count = this.carGlass.count = this.carWheels.count = this.carLights.count = this.carTails.count = this.carBeams.count = k;
     this.rings.count = rings;
-    for (const im of [this.people, this.heads, this.wraps, this.rings, this.carBodies, this.carGlass, this.carWheels, this.carLights]) {
+    for (const im of [this.people, this.heads, this.wraps, this.rings, this.carBodies, this.carGlass, this.carWheels, this.carLights, this.carTails, this.carBeams]) {
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }

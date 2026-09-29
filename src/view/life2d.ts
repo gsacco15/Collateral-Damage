@@ -374,6 +374,12 @@ function hookah(g: CanvasRenderingContext2D, x: number, y: number, t: number, se
   wisp(g, x, y - 0.2, t, seed);
 }
 
+const shadeHex = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v: number) => Math.round(v * 0.82);
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+};
+
 const turn = (h: boolean, dir: 1 | -1) => (h ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** Small flames over a fire pit or an oil drum, with their glow. */
@@ -555,6 +561,42 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         }
         break;
       }
+      case 'truck':
+        if (!d.traffic) break;
+        g.save();
+        g.translate(e.x, e.y);
+        g.rotate(e.a);
+        g.fillStyle = 'rgba(40,30,20,0.25)';
+        g.fillRect(-2.6 + 0.6, -1 + 0.6, e.lorry ? 6.2 : 5, 2.1);
+        g.fillStyle = e.col;
+        g.fillRect(e.lorry ? 1.4 : 1, -1.05, 1.6, 2.1); // the cab
+        g.fillStyle = 'rgba(40,50,62,0.6)';
+        g.fillRect(e.lorry ? 2.6 : 2.2, -0.9, 0.35, 1.8);
+        g.fillStyle = e.lorry ? '#d9d4c8' : shadeHex(e.col);
+        g.fillRect(e.lorry ? -3.4 : -2.6, -1.05, e.lorry ? 4.7 : 3.5, 2.1); // the bed or the box
+        if (!e.lorry) {
+          g.fillStyle = e.load;
+          for (let k = 0; k < 4; k++) g.fillRect(-2.4 + (k % 2) * 1.5, -0.85 + Math.floor(k / 2) * 0.95, 1.3, 0.8);
+        }
+        g.restore();
+        break;
+      case 'fountain': {
+        // Water thrown up from the middle and falling back in a ring of drops.
+        if (!e.r) break;
+        g.fillStyle = 'rgba(235,245,250,0.8)';
+        for (let k = 0; k < 14; k++) {
+          const a = (k / 14) * Math.PI * 2 + t * 0.3;
+          const u = (t * 0.8 + k * 0.37) % 1;
+          const rr = 0.4 + u * 3.2;
+          g.beginPath();
+          g.arc(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, 0.22 * (1 - u * 0.5), 0, Math.PI * 2);
+          g.fill();
+        }
+        g.beginPath();
+        g.arc(e.x, e.y, 0.6, 0, Math.PI * 2);
+        g.fill();
+        break;
+      }
       case 'fire':
         fire(g, e.x, e.y, e.size, e.flicker, n);
         break;
@@ -630,7 +672,7 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
     }
   }
   for (const e of ents) {
-    if (e.t === 'smoke' && d.traffic) plume(g, t, e.x, e.y, e.seed, e.strength, e.dark, e.size);
+    if (e.t === 'smoke' && d.traffic && !e.d3) plume(g, t, e.x, e.y, e.seed, e.strength, e.dark, e.size);
     else if (e.t === 'glow') glow(g, e.x, e.y, e.r, e.a, e.col);
     else if (e.t === 'beacon' && d.traffic) {
       if (n > 0.3) {

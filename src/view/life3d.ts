@@ -101,6 +101,13 @@ export class Life3D {
     add('smoke', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#b9b4ac', roughness: 1, flatShading: true, transparent: true, opacity: 0.38, depthWrite: false }), 300, false);
     add('beacon', new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2a1a' }), 30, false);
     add('lamp', new THREE.SphereGeometry(0.25, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffe2a8' }), 40, false);
+    add('truck', mergeGeometries([box(1.6, 1.15, 0, 1.7, 1.7, 2.1), box(-1.1, 0.75, 0, 3.6, 0.5, 2.1), box(-1.1, 1.25, 1.02, 3.6, 0.5, 0.06), box(-1.1, 1.25, -1.02, 3.6, 0.5, 0.06), box(-2.88, 1.25, 0, 0.06, 0.5, 2.1)])!, std({ roughness: 0.6 }), 16);
+    add('lorry', mergeGeometries([box(2.3, 1.2, 0, 1.6, 1.9, 2.2), box(-0.9, 1.6, 0, 4.6, 2.6, 2.3)])!, std({ roughness: 0.6 }), 8);
+    add('cargo', box(-1.1, 1.3, 0, 3.2, 0.6, 1.9), std(), 16, false);
+    add('twheels', mergeGeometries([[1.5, 1.05], [1.5, -1.05], [-1.8, 1.05], [-1.8, -1.05]].map(([x, z]) => new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8).rotateX(Math.PI / 2).translate(x, 0.4, z).toNonIndexed()))!, std({ color: '#232120' }), 24, false);
+    add('basin', mergeGeometries([new THREE.CylinderGeometry(6.2, 6.4, 0.9, 32, 1, true).translate(0, 0.45, 0).toNonIndexed(), new THREE.RingGeometry(5.8, 6.3, 32).rotateX(-Math.PI / 2).translate(0, 0.9, 0).toNonIndexed(), new THREE.CylinderGeometry(0.7, 1.1, 2.6, 12).translate(0, 1.3, 0).toNonIndexed(), new THREE.CylinderGeometry(2.2, 1.2, 0.4, 16).translate(0, 2.6, 0).toNonIndexed()])!, std({ color: '#e8e1d2', side: THREE.DoubleSide, flatShading: false }), 1);
+    add('water', new THREE.CircleGeometry(6, 32).rotateX(-Math.PI / 2).translate(0, 0.62, 0), new THREE.MeshStandardMaterial({ color: '#8fb5c4', roughness: 0.15, metalness: 0.2, emissive: '#a8d4ff', emissiveIntensity: 0 }), 1, false);
+    add('drop', new THREE.SphereGeometry(0.16, 5, 4), new THREE.MeshStandardMaterial({ color: '#eef7fb', emissive: '#bfe0ff', emissiveIntensity: 0, roughness: 0.2, transparent: true, opacity: 0.85 }), 60, false);
     add('lightbar', box(-0.3, 1.82, 0, 0.4, 0.16, 1.3), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 6, false);
     add('engine', mergeGeometries([box(-0.7, 1.4, 0, 6.6, 2.4, 2.5), box(3.3, 1.2, 0, 1.4, 2.0, 2.5)])!, std({ color: '#c0392b', roughness: 0.5, flatShading: false }), 4);
     add('ladder', mergeGeometries([box(-0.7, 2.7, 0.45, 6, 0.1, 0.1), box(-0.7, 2.7, -0.45, 6, 0.1, 0.1), ...Array.from({ length: 9 }, (_, k) => box(-3.4 + k * 0.7, 2.7, 0, 0.08, 0.08, 0.9))])!, std({ color: '#d9d4c8' }), 4, false);
@@ -249,6 +256,28 @@ export class Life3D {
               this.put('smoke', e.x + u * 12 * e.size, e.y - u * 5 * e.size, e.z + u * 16 * e.size, u * 3 + k, r, r, r, e.dark > 0.5 ? '#6d6862' : '#c9c4ba');
             }
           break;
+        case 'truck': {
+          const yaw = -e.a;
+          this.put(e.lorry ? 'lorry' : 'truck', e.x, e.y, 0, yaw, 1, 1, 1, e.col);
+          if (!e.lorry) this.put('cargo', e.x, e.y, 0, yaw, 1, 1, 1, e.load);
+          this.put('twheels', e.x, e.y, 0, yaw, 1, 1, 1);
+          if (night > 0.3) this.put('dpool', e.x + Math.cos(e.a) * 6, e.y + Math.sin(e.a) * 6, 0.3, 0, 4, 1, 4, '#fff0c8');
+          break;
+        }
+        case 'fountain': {
+          this.put('basin', e.x, e.y, 0, 0, 1, 1, 1);
+          this.put('water', e.x, e.y, 0, 0, 1, 1, 1);
+          if (e.r)
+            for (let k = 0; k < 36; k++) {
+              // Jets arching up from the bowl and falling into the basin.
+              const a = (k / 36) * Math.PI * 2;
+              const u = (time * 0.7 + (k % 6) / 6) % 1;
+              const rr = 1.2 + u * 4.2;
+              this.put('drop', e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, 2.8 + Math.sin(u * Math.PI) * 3.2 - u * 2, 0, 1, 1, 1);
+            }
+          if (night > 0.3) this.put('dpool', e.x, e.y, 0.95, 0, 7, 1, 7, '#cfe6ff');
+          break;
+        }
         case 'police': {
           const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
           for (const n2 of ['car', 'glass', 'wheels']) this.put(n2, e.x, e.y, 0, yaw, 1, 1, 1, n2 === 'car' ? '#f4f2ec' : undefined);
@@ -306,6 +335,9 @@ export class Life3D {
     this.poolMat.opacity = night * 0.26;
     this.dpoolMat.opacity = 0.55 * Math.max(0.3, night);
     this.lampHeadMat.emissiveIntensity = night * 2.4;
+    // The fountain is lit from under the water at night.
+    (this.meshes.water.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 0.6;
+    (this.meshes.drop.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 0.9;
     this.pools.visible = night > 0.05;
   }
 }

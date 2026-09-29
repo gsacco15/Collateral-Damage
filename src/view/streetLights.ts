@@ -44,6 +44,13 @@ export function streetLights(w: World): StreetLight[] {
       else add(q.x + q.w / 2 + side * (q.w / 2 - 1), q.y + d, -side, 0, 6);
     }
   }
+  // Six lamps round the fountain on the Circus, arms leaning in over it.
+  const rb = w.roundabout;
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const pr = rb.r - 7.5;
+    out.push({ x: rb.x + Math.cos(a) * (pr - 1.6), y: rb.y + Math.sin(a) * (pr - 1.6), px: rb.x + Math.cos(a) * pr, py: rb.y + Math.sin(a) * pr, r: 6, flood: false });
+  }
   for (const b of w.buildings) {
     if (b.kind !== 'warehouse' && b.kind !== 'factory') continue;
     const q = b.rects[0];

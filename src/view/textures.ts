@@ -128,13 +128,67 @@ function paint(kind: PaperKind, seed: number) {
     }
   });
   if (kind === 'tin') {
-    // A few rusty and repainted sheets.
-    for (let i = 0; i < 10; i++) {
-      g.fillStyle = r() < 0.5 ? 'rgba(150,80,40,0.22)' : 'rgba(80,110,140,0.18)';
-      g.fillRect(r() * PX, r() * PX, 60 + r() * 120, 50 + r() * 140);
+    // Corrugated sheets laid in overlapping panels: some rusted, some repainted, rust running down from the nail lines.
+    for (let x = 0; x < PX; x += 7) {
+      g.fillStyle = x % 14 ? 'rgba(255,255,255,0.10)' : 'rgba(40,40,45,0.08)';
+      g.fillRect(x, 0, 3.5, PX);
+    }
+    for (let i = 0; i < 12; i++) {
+      g.fillStyle = r() < 0.55 ? 'rgba(150,80,40,0.24)' : 'rgba(80,110,140,0.16)';
+      g.fillRect(Math.floor(r() * 8) * 80, r() * PX, 80, 60 + r() * 160);
+    }
+    for (let i = 0; i < 40; i++) {
+      const x = r() * PX;
+      const y = r() * PX;
+      const len = 20 + r() * 70;
+      const grd = g.createLinearGradient(x, y, x, y + len);
+      grd.addColorStop(0, 'rgba(140,70,30,0.35)');
+      grd.addColorStop(1, 'rgba(140,70,30,0)');
+      g.fillStyle = grd;
+      g.fillRect(x, y, 2 + r() * 3, len);
+    }
+    // The panel seams.
+    g.strokeStyle = 'rgba(40,35,30,0.25)';
+    g.lineWidth = 1.2;
+    for (let y = 0; y < PX; y += 160) {
+      g.beginPath();
+      g.moveTo(0, y + r() * 6);
+      g.lineTo(PX, y + r() * 6);
+      g.stroke();
     }
   }
   if (kind === 'road') {
+    // Worn tarmac: patched squares, oil stains, sand blown in, a few potholes.
+    for (let i = 0; i < 9; i++) {
+      g.fillStyle = r() < 0.5 ? 'rgba(60,55,50,0.14)' : 'rgba(190,180,165,0.12)';
+      g.fillRect(r() * PX, r() * PX, 30 + r() * 70, 20 + r() * 50);
+    }
+    for (let i = 0; i < 14; i++) {
+      const x = r() * PX;
+      const y = r() * PX;
+      const rr = 6 + r() * 16;
+      const grd = g.createRadialGradient(x, y, 0, x, y, rr);
+      grd.addColorStop(0, 'rgba(30,28,26,0.22)');
+      grd.addColorStop(1, 'rgba(30,28,26,0)');
+      g.fillStyle = grd;
+      g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+    }
+    for (let i = 0; i < 10; i++) {
+      const x = r() * PX;
+      const y = r() * PX;
+      const rr = 30 + r() * 60;
+      const grd = g.createRadialGradient(x, y, 0, x, y, rr);
+      grd.addColorStop(0, 'rgba(215,195,160,0.18)');
+      grd.addColorStop(1, 'rgba(215,195,160,0)');
+      g.fillStyle = grd;
+      g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
+    }
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle = 'rgba(45,40,36,0.35)';
+      g.beginPath();
+      g.ellipse(r() * PX, r() * PX, 3 + r() * 5, 2 + r() * 3, r() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
     for (let i = 0; i < 18; i++) {
       g.strokeStyle = 'rgba(40,35,30,0.12)';
       g.lineWidth = 1;
