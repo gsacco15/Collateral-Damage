@@ -29,6 +29,7 @@ import {
   type World,
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
+import { drawCityLife } from './citylife';
 import { drawAnimals, drawRiverLife, type LifeCtx } from './riverlife';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
 import { C, hexA, mix, nightness, sun, type Sun } from './paper';
@@ -604,6 +605,17 @@ export class MapView {
       };
       drawRiverLife(g, life);
       if (s > 1.1) drawAnimals(g, life);
+      if (s > 0.9)
+        drawCityLife(g, {
+          world: this.world,
+          time: this.time,
+          hour: f.plan.hour,
+          night,
+          damaged,
+          away: life.away,
+          brokenBridge: life.brokenBridge,
+          car: (x, y, horizontal, dir, color, lit) => drawCar(g, { id: -1, x, y, horizontal, dir, lane: 0, from: 0, to: 0, speed: 0, color, hurt: false }, lit ? night : 0, sh, false),
+        });
     }
     if (fx) this.drawFx(g, fx, px);
     this.drawSmoke(g, night);
