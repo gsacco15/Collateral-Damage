@@ -46,6 +46,7 @@ export class JevPool {
   private obs: Observations = {};
   private intel: IntelByHour = {};
   private ruins: number[] = [];
+  living = false; // which people model the searches use
   private seed = 7;
   results: Scored[] = [];
   total = 0;
@@ -155,7 +156,7 @@ export class JevPool {
       if (slot.pending) continue;
       const size = n === Infinity ? 6 : Math.min(n - sent, Math.max(1, Math.ceil((n - sent) / this.slots.length)));
       const cands = this.queue.splice(0, size);
-      const msg: Job = { job: ++this.job, seed: this.seed, base: this.base!, obs: this.obs, intel: this.intel, ruins: this.ruins, runs: this.runs, cands };
+      const msg: Job = { job: ++this.job, seed: this.seed, base: this.base!, obs: this.obs, intel: this.intel, ruins: this.ruins, living: this.living, runs: this.runs, cands };
       slot.pending++;
       sent += cands.length;
       this.jobGen.set(msg.job, this.generation);

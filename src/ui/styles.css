@@ -1059,3 +1059,4 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .map-note .note-act { margin-left: 10px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--critical); background: transparent; color: var(--critical); font-family: inherit; font-weight: 600; font-size: 12px; cursor: pointer; }
 .map-note .note-act:hover { background: var(--critical); color: #fff; }
 .debrief p { margin: 0; padding-right: 18px; }
+.theme-btn.people-btn.on { color: var(--text-1); border-color: var(--text-3); }

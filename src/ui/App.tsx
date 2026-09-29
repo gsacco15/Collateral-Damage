@@ -205,6 +205,24 @@ export default function App() {
       /* no storage */
     }
   }, [dark]);
+  // Which people model: "Classic" (every place of a kind at the same share of its capacity) or "Living" (people move
+  // from home to places nearby, households differ, districts keep their own hours). A switch at the foot of the page.
+  const [alive, setAlive] = useState(() => {
+    try {
+      return localStorage.getItem('cd-people') === 'living';
+    } catch {
+      return false;
+    }
+  });
+  const aliveRef = useRef(alive);
+  aliveRef.current = alive;
+  useEffect(() => {
+    try {
+      localStorage.setItem('cd-people', alive ? 'living' : 'classic');
+    } catch {
+      /* no storage */
+    }
+  }, [alive]);
   const [missionEnd, setMissionEnd] = useState<{ result: 'clean' | 'hurt' | 'miss'; others: number; names: string[] } | null>(null);
   const [countMode, setCountMode] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
@@ -712,7 +730,7 @@ export default function App() {
     prayerKey.current = k;
   }, [soundOn, plan.hour, plan.day]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins]);
+  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
   // Every change reruns the estimate and the danger field. While the day plays, they hold still (the map's
@@ -750,20 +768,20 @@ export default function App() {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h + 0.5 }));
       jobs.current.hours = Date.now();
-      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, runs: 150, cands };
+      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, living: alive, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 250);
     return () => clearTimeout(id);
-  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = SEARCH_WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
       jobs.current.matrix = Date.now() + 1;
-      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, runs: 150, cands };
+      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, living: alive, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 350);
     return () => clearTimeout(id);
-  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins, alive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dayPlay) return;
@@ -978,6 +996,7 @@ export default function App() {
           if (n) sound.radio('radio-01-pol', 2.4);
           pushLog(n ? `Jev read the intelligence for ${n} of ${sp.hours.length} hours. Every replay draws who is inside from its answers.` : 'Jev could not read the intelligence here, so replays use the built-in guess of who is inside.', 'step');
           setPhase('search');
+          pool.living = aliveRef.current;
           pool.start(plan, obs, sp, SEED, false, got, ruinsRef.current);
         });
       },
@@ -995,6 +1014,7 @@ export default function App() {
     if (!pool || phase !== 'search') return;
     pushLog(onlySpace ? 'Search space changed: keeping what still fits.' : 'Assumptions changed: re-scoring from scratch.', 'step');
     bestRef.current = undefined;
+    pool.living = aliveRef.current;
     pool.start(plan, obs, space(), SEED, onlySpace, intelRef.current, ruinsRef.current);
   }, [assumptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1024,7 +1044,7 @@ export default function App() {
   // The map shows Jev's plan instead of yours: while it searches (if you asked to watch), or while you inspect one.
   const following = !!ghostPlan && ((follow && status.running) || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
-  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins]);
+  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins, alive) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins, alive]);
 
   frameRef.current = {
     world,
@@ -1902,6 +1922,22 @@ export default function App() {
       <button className="theme-btn" onClick={() => setDark(!dark)} aria-pressed={dark} title="Switch between light and dark">
         {dark ? '☀ Light mode' : '☾ Dark mode'}
       </button>
+      <button
+        className={`theme-btn people-btn ${alive ? 'on' : ''}`}
+        onClick={() => {
+          const next = !alive;
+          setAlive(next);
+          // Jev's last search was on the other model: clear it rather than show numbers from a different city.
+          poolRef.current?.stop();
+          setResults([]);
+          setPhase('idle');
+          flash(next ? 'Living people: they go from home to places nearby, each household its own size, each district its own hours.' : 'Classic people: every place of a kind at the same share of its capacity.');
+        }}
+        aria-pressed={alive}
+        title="Which people model the estimates, Jev and the map use (try both)"
+      >
+        {alive ? '◉ People: Living' : '○ People: Classic'}
+      </button>
     </div>
   );
   const pickPlace = (kind: 'b' | 's', id: number) => {
@@ -2001,7 +2037,7 @@ export default function App() {
       sound.radio('radio-08-bda', verdict + 2.7);
     };
     m.onSettled = () => setStriking(false);
-    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before), Math.floor(Math.random() * 1e9));
+    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current), Math.floor(Math.random() * 1e9));
     strikeRef.current = { plan, outcome: o, before };
   };
   /** Clear the last strike's effects, keeping the ruins. */

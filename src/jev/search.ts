@@ -78,6 +78,7 @@ export interface Job {
   obs: Observations;
   intel?: IntelByHour; // Jev's readings, by whole hour
   ruins?: number[]; // buildings already destroyed
+  living?: boolean; // the Living people model instead of the classic one
   runs: number;
   cands: Candidate[];
 }
@@ -89,7 +90,7 @@ export function scoreDetailed(world: World, msg: Job): { out: Scored[]; runs: Ui
   const runs: Uint16Array[] = [];
   for (const c of msg.cands) {
     let pop = pops.get(c.hour);
-    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins)));
+    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins, msg.living)));
     const e = estimate(world, candidatePlan(world, msg.base, c), pop, msg.runs, 17);
     out.push({ c, pk: e.pk, mean: e.mean, p90: e.p90 });
     runs.push(e.counts);
@@ -102,7 +103,7 @@ export function score(world: World, msg: Job): Scored[] {
   const pops = new Map<number, ReturnType<typeof population>>();
   return msg.cands.map((c) => {
     let pop = pops.get(c.hour);
-    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins)));
+    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs, msg.intel?.[Math.floor(c.hour) % 24], msg.ruins, msg.living)));
     const e = estimate(world, candidatePlan(world, msg.base, c), pop, msg.runs, 17);
     return { c, pk: e.pk, mean: e.mean, p90: e.p90 };
   });

@@ -3,6 +3,7 @@
 import { rng } from './rng';
 import type { Building, Kind, SpaceKind, World } from './city';
 import { judgedMean, type Intel } from './levels';
+import { living as livingOf } from './people';
 
 export type Day = 'weekday' | 'friday';
 
@@ -120,12 +121,15 @@ export type Observations = Record<number, number>;
 
 
 /** Who is expected where at this moment. Hours watched narrow the guess; Jev's reading of the reports replaces it; logged sightings are taken as known. */
-export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = []): Population {
+export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = [], alive = false): Population {
   const fri = day === 'friday' ? 1 : 0;
   const expected = new Float32Array(world.buildings.length);
   const observed = new Int16Array(world.buildings.length).fill(-1);
+  // "Living": people flow from where they live to places near home; each household its own size; some districts
+  // earlier or later. Otherwise the classic model: every building of a kind runs at the same share of capacity.
+  const L = alive ? livingOf(world) : null;
   for (const b of world.buildings) {
-    expected[b.id] = b.capacity * curve(BUILDING[b.kind][fri], hour);
+    expected[b.id] = L ? Math.min(b.capacity * 1.15, b.capacity * curve(BUILDING[b.kind][fri], hour - L.shift[b.id]) * L.k[b.id]) : b.capacity * curve(BUILDING[b.kind][fri], hour);
     if (intel[b.id]) expected[b.id] = judgedMean(intel[b.id], b.capacity);
     if (obs[b.id] != null) observed[b.id] = obs[b.id];
   }
@@ -136,7 +140,7 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     observed[id] = 0;
   }
   const spaceQ = new Float32Array(world.spaces.length);
-  for (const s of world.spaces) spaceQ[s.id] = curve(SPACE[s.kind][fri], hour);
+  for (const s of world.spaces) spaceQ[s.id] = L ? Math.min(1, curve(SPACE[s.kind][fri], hour - L.sshift[s.id]) * L.sk[s.id]) : curve(SPACE[s.kind][fri], hour);
   const t = curve(TRAFFIC, hour) * (fri ? 0.6 : 1);
   return {
     hour,
