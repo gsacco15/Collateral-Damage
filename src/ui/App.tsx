@@ -310,8 +310,15 @@ export default function App() {
       school: [...rects((x) => x.kind === 'school', world.buildings), ...rects((x) => x.kind === 'playground', world.spaces)],
       traffic: rects((x) => x.kind === 'boulevard', world.roads),
       market: souk ? [{ x: souk.x - 30, y: souk.y - 30, w: 60, h: 60 }] : [],
+      bus: rects((x) => x.kind === 'busstation', world.spaces),
+      hospital: rects((x) => x.kind === 'hospital', world.buildings),
     };
   }, [world]);
+  const districtHere = (x: number, y: number) => {
+    if (Math.abs(x - riverX(y)) < world.river.width / 2 + 20) return 'canal';
+    const bl = world.blocks.find((q) => x >= q.x - 8 && x <= q.x + q.w + 8 && y >= q.y - 8 && y <= q.y + q.h + 8);
+    return bl?.district ?? '';
+  };
   useEffect(() => {
     if (!soundOn) return;
     const h = plan.hour;
@@ -374,24 +381,48 @@ export default function App() {
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
       if (pick) pans[pick[0]] = pick[2];
       void sound.ambience(levels, pans);
-      // Now and then, one small sound of the city that fits the hour: about every twenty seconds.
+      // Now and then, one small sound that fits where you are and the hour: about every twenty seconds.
       if (!striking && close > 0.15 && Math.random() < 0.02) {
+        const at = districtHere(v.cx, v.cy);
+        const home = at === 'terraces' || at === 'quarter' || at === 'tinhill' || at === 'oldtown' || at === 'garden';
+        const weekday = plan.day !== 'friday';
+        const night = day < 0.3;
         const dawn = h >= 5 && h < 7.5;
-        const pool: CityCue[] = day < 0.3 ? ['cue-dog'] : dawn ? ['cue-rooster', 'cue-shutter', 'cue-pigeons'] : ['cue-pigeons', 'cue-child', 'cue-moped'];
-        sound.cue(pool[Math.floor(Math.random() * pool.length)], (Math.random() - 0.5) * 1.4, 0.16 + 0.12 * close);
+        const nearTo = (qs: Rect[], m: number) => near(qs)[0] < m;
+        const pool: [CityCue, number][] = night
+          ? [['cue-dog', 1], ...(at === 'tinhill' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : [])]
+          : dawn
+            ? [['cue-rooster', at === 'tinhill' || at === 'oldtown' ? 2 : 1], ['cue-shutter', at === 'market' || at === 'oldtown' ? 2 : 0.5], ['cue-pigeons', 1]]
+            : [
+                ['cue-pigeons', 1],
+                ['cue-moped', 0.8],
+                ['cue-workshop', at === 'workshops' && weekday && h >= 8 && h < 17 ? 3 : 0],
+                ['cue-sellers', at === 'market' && h >= 9 && h < 14 ? 3 : 0],
+                ['cue-bus', nearTo(zones.bus, 90) && h >= 6 && h < 21 ? 3 : 0],
+                ['cue-chimes', at === 'garden' ? 2 : 0],
+                ['cue-kitchen', home && ((h >= 6 && h < 8.5) || (h >= 18 && h < 20.5)) ? 2 : 0],
+                ['cue-radio-music', home && h >= 10 ? 0.8 : 0],
+                ['cue-siren', nearTo(zones.hospital, 160) ? 0.3 : 0],
+              ];
+        const total = pool.reduce((n, [, w]) => n + w, 0);
+        let r = Math.random() * total;
+        const pick = pool.find(([, w]) => (r -= w) < 0)?.[0];
+        if (pick) sound.cue(pick, (Math.random() - 0.5) * 1.4, (pick === 'cue-siren' ? 0.1 : 0.16) + 0.12 * close);
       }
     };
     tick();
     const id = window.setInterval(tick, 400);
     return () => clearInterval(id);
   }, [soundOn, plan.hour, plan.day, striking, zones, view]); // eslint-disable-line react-hooks/exhaustive-deps
-  // The call to prayer at dawn, and before Friday noon prayers.
+  // The call to prayer: at dawn and before Friday noon prayers, and a softer, farther echo at the other prayers.
   const prayerKey = useRef('');
   useEffect(() => {
     if (!soundOn) return;
     const h = plan.hour;
-    const k = h >= 5 && h < 6 ? 'dawn' : plan.day === 'friday' && h >= 11.5 && h < 12.5 ? 'friday' : '';
-    if (k && k !== prayerKey.current) sound.play('amb-call-to-prayer');
+    const loud = h >= 5 && h < 6 ? 'dawn' : plan.day === 'friday' && h >= 11.5 && h < 12.5 ? 'friday' : '';
+    const soft = h >= 12.5 && h < 13 ? 'noon' : h >= 15.5 && h < 16 ? 'afternoon' : h >= 18.5 && h < 19 ? 'sunset' : h >= 20 && h < 20.5 ? 'night' : '';
+    const k = loud || soft;
+    if (k && k !== prayerKey.current) sound.play('amb-call-to-prayer', 0, loud ? 0.3 : 0.15);
     prayerKey.current = k;
   }, [soundOn, plan.hour, plan.day]);
 
@@ -843,9 +874,12 @@ export default function App() {
     if (!b || !b.capacity) {
       // Up close only named places (a park, a square) have a card; streets, the canal and whole districts
       // only when you're high above the city.
+      // Named places (a park, a square) show on hover; a click opens a card only for districts and streets,
+      // and only when you're high above the city.
       const high = (mapRef.current?.view.zoom ?? 1) <= 2;
+      if (!high) return;
       const st = placeAt(world, wx, wy);
-      if (!high && !st.named) return;
+      if (st.named) return;
       return setPlace({ story: st, x: px, y: py });
     }
     setPlace(null);
@@ -930,11 +964,14 @@ export default function App() {
     const el = tipRef.current;
     if (!el || view !== 'map' || striking) return;
     let text = '';
+    let named: PlaceStory;
     if (b && mapMode === 'target') {
       const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
     } else if (!b && mapMode === 'target') {
       text = onBridge(wx, wy) ? '<b>Boulevard bridge</b><span>Click to make this the target</span>' : '<b>Open ground</b><span>Click to target this spot</span>';
+    } else if (!b && mapMode === 'explore' && (named = placeAt(world, wx, wy)).named) {
+      text = `<b>${named.title}</b><span>${named.line.split('. ')[0].replace(/\.$/, '')}.</span>`;
     } else if (b) {
       const n = obs[b.id] ?? shownCount(popNow, b);
       const hurt = est && est.byBuilding[b.id] > 0.05 ? ` · ${est.byBuilding[b.id].toFixed(1)} expected hurt` : '';

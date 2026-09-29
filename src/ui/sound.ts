@@ -5,7 +5,8 @@
 export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school';
 const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school'];
 const KEY = 'cd.sound';
-const MIX_KEY = 'cd.mix';
+const MIX_KEY = 'cd.mix.v2'; // v2: everyone starts again from the quieter default
+const HEADROOM = 0.85; // the loudest the page ever gets, at 100% on every slider
 
 /** The mixer: one level for everything, and one each for the city, the effects and the voices. */
 export interface Mix {
@@ -39,7 +40,21 @@ export type Cue =
   | 'amb-call-to-prayer';
 
 /** Small one-off sounds of the city, played now and then, placed left or right by where they are on screen. */
-export type CityCue = 'cue-dog' | 'cue-moped' | 'cue-pigeons' | 'cue-shutter' | 'cue-rooster' | 'cue-child';
+export type CityCue =
+  | 'cue-dog'
+  | 'cue-moped'
+  | 'cue-pigeons'
+  | 'cue-shutter'
+  | 'cue-rooster'
+  | 'cue-kitchen'
+  | 'cue-generator'
+  | 'cue-bus'
+  | 'cue-workshop'
+  | 'cue-frogs'
+  | 'cue-chimes'
+  | 'cue-radio-music'
+  | 'cue-sellers'
+  | 'cue-siren';
 
 export type RadioLine = 'radio-01-pol' | 'radio-02-estimate' | 'radio-03-cleared' | 'radio-04-away' | 'radio-05-splash' | 'radio-06-destroyed' | 'radio-07-intact' | 'radio-08-bda' | 'radio-09-jev-run' | 'radio-10-jev-done' | 'radio-11-abort' | 'radio-12-calloff';
 
@@ -119,7 +134,7 @@ class SoundEngine {
   private applyMix() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    if (this.enabled) this.master?.gain.setTargetAtTime(this.mix.master, t, 0.1);
+    if (this.enabled) this.master?.gain.setTargetAtTime(this.mix.master * HEADROOM, t, 0.1);
     for (const b of ['ambience', 'effects', 'voices'] as Bus[]) this.buses[b]?.gain.setTargetAtTime(this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1), t, 0.4);
   }
 
@@ -135,7 +150,7 @@ class SoundEngine {
       this.ensure();
       void this.ctx?.resume();
       this.unlock();
-      this.master?.gain.setTargetAtTime(this.mix.master, this.ctx!.currentTime, 0.2);
+      this.master?.gain.setTargetAtTime(this.mix.master * HEADROOM, this.ctx!.currentTime, 0.2);
     } else if (this.ctx && this.master) {
       this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
       this.voiceNode?.stop();
@@ -151,7 +166,7 @@ class SoundEngine {
     this.ensure();
     void this.ctx!.resume();
     this.unlock();
-    this.master?.gain.setTargetAtTime(this.mix.master, this.ctx!.currentTime, 0.2);
+    this.master?.gain.setTargetAtTime(this.mix.master * HEADROOM, this.ctx!.currentTime, 0.2);
     return (this.ctx!.state as string) === 'running'; // resume() is async: the next tap will see it running
   }
 

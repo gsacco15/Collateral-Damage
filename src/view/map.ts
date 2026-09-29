@@ -459,8 +459,8 @@ export class MapView {
     const pick = f.retarget ? f.retarget.bid : f.targetMode ? f.hover : null;
     if (f.hover != null && f.hover !== f.selected && pick == null) {
       const b = this.world.buildings[f.hover];
-      g.strokeStyle = f.spotMode ? C.jev : 'rgba(29,27,24,0.55)';
-      g.lineWidth = 1.6 * px;
+      g.strokeStyle = f.spotMode ? C.jev : 'rgba(29,27,24,0.3)';
+      g.lineWidth = 1.1 * px;
       for (const q of b.rects) g.strokeRect(q.x - 0.6, q.y - 0.6, q.w + 1.2, q.h + 1.2);
     }
     // Target mode: the building under the pointer lights up red, ready to be picked.
