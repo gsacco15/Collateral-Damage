@@ -1479,7 +1479,7 @@ export default function App() {
     // First look at the school: in close, the building and its playground filling the view, for a few seconds.
     const yard = world.spaces.find((sp) => sp.name === 'School yard');
     const schoolBox = school && [...school.rects, ...(yard ? [yard.rect] : [])].reduce((u, q) => ({ x0: Math.min(u.x0, q.x), y0: Math.min(u.y0, q.y), x1: Math.max(u.x1, q.x + q.w), y1: Math.max(u.y1, q.y + q.h) }), { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 });
-    if (school && schoolBox) stops.push([7000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo((schoolBox.x0 + schoolBox.x1) / 2, (schoolBox.y0 + schoolBox.y1) / 2 + 3, phone ? 6.4 : 7.6))]);
+    if (school && schoolBox) stops.push([7000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo((schoolBox.x0 + schoolBox.x1) / 2, (schoolBox.y0 + schoolBox.y1) / 2 + 9, phone ? 7.6 : 9))]);
     if (depot.length) {
       const c = mid(depot);
       stops.push([11000, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
