@@ -299,6 +299,8 @@ export function dangerField(world: World, plan: Plan, samples = 40, cell = 3, se
   const R = Math.max(e0.frag * 1.05, e0.blast * 1.3, w.frag * 0.6) + sigma * 2;
   const x0 = plan.aimX - R;
   const y0 = plan.aimY - R;
+  // The biggest bomb's field is huge: coarser cells keep it quick.
+  cell = Math.max(cell, R / 110);
   const cols = Math.ceil((2 * R) / cell);
   const rows = cols;
   const n = cols * rows;

@@ -3,7 +3,7 @@
 import { buildingAt, buildingDist, inRect, targetOf, type Building, type Material, type TargetId, type World } from './city';
 import type { Day } from './life';
 
-export type WeaponId = 'large' | 'medium' | 'small' | 'focused';
+export type WeaponId = 'large' | 'medium' | 'small' | 'focused' | 'moab';
 export type FuzeId = 'instant' | 'delay' | 'airburst';
 
 export interface Weapon {
@@ -14,6 +14,7 @@ export interface Weapon {
   frag: number; // metres of dangerous fragments
   cep: number; // metres: half the bombs land within this of the aim
   note: string;
+  special?: boolean; // only by hand: Jev never considers it
 }
 
 export const WEAPONS: Weapon[] = [
@@ -21,7 +22,11 @@ export const WEAPONS: Weapon[] = [
   { id: 'medium', name: '500-lb class', short: '500 lb', blast: 13, frag: 75, cep: 6, note: 'The workhorse. Enough for most buildings.' },
   { id: 'small', name: '250-lb small-diameter', short: '250 lb', blast: 8, frag: 45, cep: 5, note: 'Narrow body, less explosive, smaller footprint.' },
   { id: 'focused', name: 'Low-collateral, dense case', short: 'Low-collateral', blast: 7, frag: 14, cep: 4, note: 'A casing that crumbles into dust, not fragments.' },
+  // An 11-tonne air blast bomb. Illustrative radii: roughly where the pressure wave flattens buildings, and how far debris flies.
+  { id: 'moab', name: 'Massive air blast (MOAB class)', short: 'MOAB', blast: 280, frag: 500, cep: 9, special: true, note: 'An 11-tonne bomb pushed out of a cargo plane. Used once, on a remote tunnel complex. Never in a city: this is why.' },
 ];
+/** The weapons Jev may choose from. The biggest is only ever picked by hand. */
+export const SEARCH_WEAPONS = WEAPONS.filter((w) => !w.special);
 export const weapon = (id: WeaponId) => WEAPONS.find((w) => w.id === id)!;
 
 export interface Fuze {

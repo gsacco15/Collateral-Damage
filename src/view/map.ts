@@ -777,9 +777,10 @@ export class MapView {
       this.smoke = { x: o.ix, y: o.iy, born: this.time, dark: o.secondary.length ? 1 : 0.55 };
       const r = rng(Math.round(o.ix * 100 + o.iy));
       const w = weapon(fx.plan.weapon);
-      this.shake = Math.min(1.4, 0.25 + w.blast / 18); // a small bomb nudges the table; a big one rattles it
+      const mega = !!w.special;
+      this.shake = mega ? 3 : Math.min(1.4, 0.25 + w.blast / 18); // a small bomb nudges the table; a big one rattles it; the biggest shakes the whole room
       const e = effect(fx.plan, structureAt(this.world, o.ix, o.iy));
-      const n = 40 + Math.round(w.blast ** 1.45 * 1.6);
+      const n = Math.min(700, 40 + Math.round(w.blast ** 1.45 * 1.6));
       const cols = ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc', '#d6d1c7', '#6b5a45'];
       for (let i = 0; i < n; i++) {
         const a = r() * Math.PI * 2;
@@ -787,11 +788,13 @@ export class MapView {
         const v = (6 + r() * 26) * (0.5 + g2) * (fx.plan.fuze === 'delay' ? 0.55 : 1) * Math.sqrt(e.blast / 10);
         fx.scraps.push({ x: o.ix, y: o.iy, z: 0, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 10 + r() * 22, rot: r() * 6, vr: (r() - 0.5) * 18, size: 0.6 + r() * 1.8, color: cols[Math.floor(r() * cols.length)] });
       }
-      const puffs = 8 + Math.round(w.blast ** 1.45 * 0.35);
+      const puffs = mega ? 90 : 8 + Math.round(w.blast ** 1.45 * 0.35);
       for (let i = 0; i < puffs; i++) {
         const a = r() * Math.PI * 2;
-        const d = r() * w.blast * 0.9;
-        fx.puffs.push({ x: o.ix + Math.cos(a) * d, y: o.iy + Math.sin(a) * d, r: 2 + r() * 3, grow: (3 + r() * 5) * Math.sqrt(w.blast / 10), life: -0.35 - r() * 0.35, seed: r() * 1000, dark: r() });
+        // The biggest raises a wall of dust and smoke over hundreds of metres, rolling in after the fireball.
+        const d = mega ? Math.sqrt(r()) * 190 : r() * w.blast * 0.9;
+        const grow = mega ? 18 + r() * 26 : (3 + r() * 5) * Math.sqrt(w.blast / 10);
+        fx.puffs.push({ x: o.ix + Math.cos(a) * d, y: o.iy + Math.sin(a) * d, r: mega ? 8 : 2 + r() * 3, grow, life: mega ? -0.9 - (d / 190) * 1.6 - r() * 0.5 : -0.35 - r() * 0.35, seed: r() * 1000, dark: mega ? 0.3 + r() * 0.6 : r() });
       }
       // Secondary fires: dark smoke over whatever else went off.
       for (const id of o.damaged) {
@@ -806,9 +809,12 @@ export class MapView {
         const b = this.world.buildings[id];
         if (!b || b.hazard) continue;
         const sz = Math.sqrt(b.area);
-        const n = b.id === tid ? 10 : 7;
-        for (let i = 0; i < n; i++) fx.puffs.push({ x: b.cx + (r() - 0.5) * sz, y: b.cy + (r() - 0.5) * sz, r: 3, grow: 5 + r() * 4, life: -0.05 - r() * 0.5, seed: r() * 1000, dark: 0.05 + r() * 0.2 });
-        for (let i = 0; i < 18; i++) {
+        // With hundreds down at once, fewer puffs each; they fall as the pressure wave reaches them.
+        const many = o.damaged.length > 40;
+        const late = mega ? Math.hypot(b.cx - o.ix, b.cy - o.iy) / 160 : 0;
+        const n = many ? 2 : b.id === tid ? 10 : 7;
+        for (let i = 0; i < n; i++) fx.puffs.push({ x: b.cx + (r() - 0.5) * sz, y: b.cy + (r() - 0.5) * sz, r: 3, grow: 5 + r() * 4, life: -0.05 - late - r() * 0.5, seed: r() * 1000, dark: 0.05 + r() * 0.2 });
+        for (let i = 0; i < (many ? 3 : 18); i++) {
           const a = r() * Math.PI * 2;
           const v = 3 + r() * 9;
           fx.scraps.push({ x: b.cx + (r() - 0.5) * sz * 0.8, y: b.cy + (r() - 0.5) * sz * 0.8, z: 2 + r() * 6, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 4 + r() * 8, rot: r() * 6, vr: (r() - 0.5) * 10, size: 0.8 + r() * 1.6, color: cols[Math.floor(r() * cols.length)] });
@@ -848,6 +854,10 @@ export class MapView {
       }
     }
     for (const p of fx.puffs) p.life += dt;
+    if (fx.impacted && weapon(fx.plan.weapon).special) {
+      const since = fx.t - fx.impactAt;
+      if (since < 4.5) this.shake = Math.max(this.shake, 1.6 * (1 - since / 4.5));
+    }
     if (fx.impacted && fx.t > fx.impactAt + 7) {
       fx.puffs = fx.puffs.filter((p) => p.life < 9);
       if (!fx.puffs.length) this.onSettled?.();
@@ -1126,9 +1136,17 @@ export class MapView {
     // Drawn over the smoke and dust so the fireball is always seen. The flash and the shockwave, sized by the weapon: a pop for the smallest, a wide white burst for the biggest.
     // Size grows faster than the blast radius, so the difference between bombs is plain to see:
     // the 2,000-lb bomb is a wide, long fireball; the smallest barely more than a flash.
-    const size = 13 * (weapon(plan.weapon).blast / 13) ** 1.45;
-    const lasts = 0.9 + size / 40;
-    if (fx.impacted && since < lasts + 0.4) {
+    const mega = !!weapon(plan.weapon).special;
+    // The biggest gets its own, slower burst: a fireball hundreds of metres across, and a pressure wave you can watch cross the city.
+    const size = mega ? 190 : 13 * (weapon(plan.weapon).blast / 13) ** 1.45;
+    const lasts = mega ? 3.2 : 0.9 + size / 40;
+    const ringT = mega ? 5.5 : lasts + 0.4;
+    if (fx.impacted && mega && since < 0.5) {
+      // A white flash that fills the whole view for an instant.
+      g.fillStyle = `rgba(255,252,240,${0.85 * (1 - since / 0.5)})`;
+      g.fillRect(o.ix - 3000, o.iy - 3000, 6000, 6000);
+    }
+    if (fx.impacted && since < ringT) {
       const blast = size;
       if (since < lasts) {
         const k = since / lasts;
@@ -1144,7 +1162,7 @@ export class MapView {
         g.arc(o.ix, o.iy, rr, 0, Math.PI * 2);
         g.fill();
       }
-      const k = since / (lasts + 0.4);
+      const k = since / ringT;
       g.strokeStyle = `rgba(255,255,255,${0.75 * (1 - k)})`;
       g.lineWidth = Math.max(0.4, blast * 0.08 * (1 - k));
       g.beginPath();
@@ -1258,7 +1276,9 @@ export function resolveStrike(world: World, plan: Plan, pop: Population, walkers
   // a depot goes up in a rolling series of blasts, nearly together.
   const jit = (i: number) => Math.abs(Math.sin(seed * 0.001 + i * 7.1));
   const at: number[] = [];
-  sec.forEach((s, i) => at.push(s.by >= 0 ? at[s.by] + 0.18 + jit(i) * 0.3 : 0.55 + jit(i) * 0.45));
+  // After the biggest bomb, the depot goes a couple of seconds later, as its own second huge blast.
+  const first = w.special ? 2.2 : 0.55;
+  sec.forEach((s, i) => at.push(s.by >= 0 ? at[s.by] + 0.18 + jit(i) * 0.3 : first + jit(i) * 0.45));
   const blasts = sec.map((s, i) => ({ x: s.x, y: s.y, at: at[i], kind: (s.b ? 'fuel' : 'store') as 'fuel' | 'store' }));
   return { ix, iy, destroyed, damaged: [...damaged], hurtSlots, hurtWalkers, hurtCars, count, secondary: [...new Set(sec.map((s) => s.name))], blasts };
 }

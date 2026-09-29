@@ -359,6 +359,9 @@ a { color: var(--text-1); }
 .log .best { color: var(--critical); }
 .log .info { color: var(--text-2); }
 /* The stamp at impact: pressed onto the map like rubber on paper, then lifted away. */
+/* The one weapon Jev never picks: set apart from the rest. */
+.options button.special { margin-top: 6px; border-color: rgba(140, 47, 34, 0.4); }
+.options button.special b { color: #8c2f22; }
 .stamp { position: absolute; left: 50%; top: 42%; z-index: 7; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 22px 10px; border: 4px double currentColor; border-radius: 10px; background: rgba(251, 250, 246, 0.82); transform: translate(-50%, -50%) rotate(-7deg); animation: stamp 3.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.5s both; mix-blend-mode: multiply; }
 .stamp.hit { color: #b02a1e; }
 .stamp.miss { color: #3f5f78; }

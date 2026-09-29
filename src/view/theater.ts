@@ -27,7 +27,7 @@ const INK2 = '#56514a';
 const INK3 = '#8c8579';
 const LINE = '#e1dbcf';
 const BLUE = '#2a6bc4';
-const SHORT: Record<string, string> = { large: '2000', medium: '500', small: '250', focused: 'LC', instant: 'imp', delay: 'dly', airburst: 'air' };
+const SHORT: Record<string, string> = { large: '2000', medium: '500', small: '250', focused: 'LC', moab: 'MOAB', instant: 'imp', delay: 'dly', airburst: 'air' };
 
 export class JevTheater {
   private g: CanvasRenderingContext2D;

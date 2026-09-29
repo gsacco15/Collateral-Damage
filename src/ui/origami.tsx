@@ -17,6 +17,7 @@ const SHAPES: Record<WeaponId, Shape> = {
   medium: { len: 96, r: 12, nose: 24, tail: 13, fin: 15, band: '#c9a44c', paper: ['#fbfaf6', '#e2dccf', '#c4bcad'] },
   small: { len: 112, r: 7, nose: 20, tail: 9, fin: 10, wing: true, band: '#8a9a6a', paper: ['#f4efe4', '#dcd4c3', '#bdb3a0'] },
   focused: { len: 84, r: 8, nose: 18, tail: 10, fin: 11, band: '#4f7a8a', paper: ['#e9dfcf', '#d2c4ad', '#b3a58c'] },
+  moab: { len: 150, r: 22, nose: 26, tail: 20, fin: 24, band: '#8c2f22', paper: ['#e6e1d6', '#c9c1b2', '#a39a89'] },
 };
 
 export function Origami({ id, size = 1, fold = false }: { id: WeaponId; size?: number; fold?: boolean }) {

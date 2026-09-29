@@ -28,6 +28,7 @@ import {
   riverX,
   groundId,
   type Rect,
+  SEARCH_WEAPONS,
   WEAPONS,
   weapon,
   type Candidate,
@@ -278,7 +279,7 @@ export default function App() {
   const [strikeOpen, setStrikeOpen] = useState(false);
   // Ready the strike's sounds while the decision is still open, so they land with the plane, not after it.
   useEffect(() => {
-    if (strikeOpen) sound.preload(['aircraft-approach', 'bomb-whistle', 'impact', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
+    if (strikeOpen) sound.preload(['aircraft-approach', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
   }, [strikeOpen]);
   // A briefed target's story, shown (and narrated) when you pick it from the top bar.
   const [story, setStory] = useState<keyof typeof TARGET_STORIES | null>(null);
@@ -365,7 +366,7 @@ export default function App() {
   const [speed, setSpeed] = useState(SPEEDS.length - 1); // flat out: about 30–60 seconds for a full search
   const [minPk, setMinPk] = useState(0.85);
   const [hours, setHours] = useState<HourWindow>('any');
-  const [allowed, setAllowed] = useState<WeaponId[]>(WEAPONS.map((w) => w.id));
+  const [allowed, setAllowed] = useState<WeaponId[]>(SEARCH_WEAPONS.map((w) => w.id));
   const [log, setLog] = useState<{ t: string; kind: 'info' | 'best' | 'try' | 'step' }[]>([]);
   const [phase, setPhase] = useState<'idle' | 'checklist' | 'search' | 'done'>('idle');
   const phaseRef = useRef(phase);
@@ -683,7 +684,7 @@ export default function App() {
   }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = window.setTimeout(() => {
-      const cands: Candidate[] = WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
+      const cands: Candidate[] = SEARCH_WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
       jobs.current.matrix = Date.now() + 1;
       const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
@@ -1514,7 +1515,9 @@ export default function App() {
     setDayPlay(false);
     setPop(null);
     if (poolRef.current?.running) poolRef.current.pause();
-    focusRef.current = { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
+    const mega = !!weapon(plan.weapon).special;
+    // The biggest bomb: start a little further out, so the pull-back after it has somewhere to go.
+    focusRef.current = mega ? { cx: plan.aimX, cy: plan.aimY + 10, zoom: 2.4, dur: 1.4 } : { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
     // Rolling again replaces the last strike; a new strike adds to the ruins.
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     setRuins(before);
@@ -1527,7 +1530,12 @@ export default function App() {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
       // The boom follows the bomb: the 2,000-lb shakes the room, the smallest is a hard crack.
-      sound.play('impact', 0, 0.45 + 0.55 * Math.min(1, weapon(plan.weapon).blast / 22));
+      if (mega) {
+        // Its own long, rolling boom; and the camera pulls slowly back to show how much of the city is gone.
+        sound.play('impact-mega');
+        sound.play('impact', 0, 0.7);
+        focusRef.current = { cx: o.ix + (world.city.w / 2 - o.ix) * 0.35, cy: o.iy + (world.city.h / 2 - o.iy) * 0.35, zoom: 1.05, dur: 6.5 };
+      } else sound.play('impact', 0, 0.45 + 0.55 * Math.min(1, weapon(plan.weapon).blast / 22));
       // Whatever else goes off, a beat later. Fuel is the loudest; several tanks together share the volume.
       const each = 1 / Math.sqrt(Math.max(1, o.blasts.length / 2));
       for (const b of o.blasts) sound.play('impact', b.at, (b.kind === 'fuel' ? 0.6 : 0.45) * each);
@@ -1639,7 +1647,8 @@ export default function App() {
           {WEAPONS.map((wp) => (
             <button
               key={wp.id}
-              className={plan.weapon === wp.id ? 'on' : ''}
+              className={`${plan.weapon === wp.id ? 'on' : ''} ${wp.special ? 'special' : ''}`}
+              title={wp.special ? 'Only by hand: Jev never considers it' : undefined}
               onClick={() => {
                 setPlan({ weapon: wp.id });
                 sound.play('ui-weapon');
@@ -1762,7 +1771,7 @@ export default function App() {
         {matrix.length ? (
           <OptionsMatrix
             cells={matrix}
-            weapons={WEAPONS.map((x) => [x.id, x.short])}
+            weapons={SEARCH_WEAPONS.map((x) => [x.id, x.short])}
             fuzes={FUZES.map((f) => [f.id, f.name])}
             current={[plan.weapon, plan.fuze]}
             minPk={minPk}
@@ -1872,14 +1881,14 @@ export default function App() {
         </div>
         <Seg small value={hours} onChange={setHours} options={[['any', 'Any hour'], ['night', 'Night only'], ['quiet', 'Quiet hours']]} />
         <div className="grid2">
-          {WEAPONS.map((wp) => (
+          {SEARCH_WEAPONS.map((wp) => (
             <label key={wp.id} className="check small">
               <input
                 type="checkbox"
                 checked={allowed.includes(wp.id)}
                 onChange={(e) => {
                   const next = e.target.checked ? [...allowed, wp.id] : allowed.filter((x) => x !== wp.id);
-                  if (next.length) setAllowed(WEAPONS.map((x) => x.id).filter((x) => next.includes(x)));
+                  if (next.length) setAllowed(SEARCH_WEAPONS.map((x) => x.id).filter((x) => next.includes(x)));
                 }}
               />
               <span>{wp.short}</span>
