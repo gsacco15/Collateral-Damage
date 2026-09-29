@@ -1017,6 +1017,56 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         break;
       case 'antenna':
         if (!d.traffic) break;
+        if (e.h >= 16) {
+          // A proper roof mast (the District Office's): a lattice triangle, guy wires out to the roof, and its
+          // long ladder of a shadow laid across the roof.
+          const sx = e.h * 0.35;
+          const sy = e.h * 0.25;
+          g.save();
+          g.translate(e.x, e.y);
+          g.scale(2, 2);
+          g.translate(-e.x, -e.y);
+          g.strokeStyle = 'rgba(40,30,20,0.28)';
+          g.lineWidth = 0.35;
+          g.beginPath();
+          g.moveTo(e.x - 0.6, e.y + 0.4);
+          g.lineTo(e.x + sx - 0.2, e.y + sy + 0.1);
+          g.moveTo(e.x + 0.6, e.y - 0.4);
+          g.lineTo(e.x + sx + 0.2, e.y + sy - 0.1);
+          for (let k = 1; k < 9; k++) {
+            const f = k / 9;
+            const w = 0.6 * (1 - f * 0.7);
+            g.moveTo(e.x + sx * f - w, e.y + sy * f + w * 0.7);
+            g.lineTo(e.x + sx * f + w, e.y + sy * f - w * 0.7);
+          }
+          g.stroke();
+          g.strokeStyle = 'rgba(70,65,60,0.55)';
+          g.lineWidth = 0.08;
+          g.beginPath();
+          for (const [gx, gy] of [[-6, -5], [6, -5], [0, 7]]) {
+            g.moveTo(e.x, e.y);
+            g.lineTo(e.x + gx, e.y + gy);
+          }
+          g.stroke();
+          g.strokeStyle = '#5a5550';
+          g.lineWidth = 0.22;
+          g.beginPath();
+          g.moveTo(e.x, e.y - 1.2);
+          g.lineTo(e.x + 1.05, e.y + 0.6);
+          g.lineTo(e.x - 1.05, e.y + 0.6);
+          g.closePath();
+          g.moveTo(e.x, e.y - 1.2);
+          g.lineTo(e.x, e.y + 0.6);
+          g.moveTo(e.x + 1.05, e.y + 0.6);
+          g.lineTo(e.x - 0.5, e.y - 0.3);
+          g.stroke();
+          g.fillStyle = '#4a4540';
+          g.beginPath();
+          g.arc(e.x, e.y, 0.4, 0, Math.PI * 2);
+          g.fill();
+          g.restore();
+          break;
+        }
         g.strokeStyle = 'rgba(70,65,60,0.8)';
         g.lineWidth = 0.1;
         g.beginPath();

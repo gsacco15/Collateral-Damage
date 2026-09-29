@@ -252,10 +252,13 @@ function makeFixed(w: World): Fixed {
     const f = front(b);
     posts.push({ x: f.x + (f.h ? -8 : 0), y: f.y + (f.h ? 0 : -8) }, { x: f.x + (f.h ? 8 : 0), y: f.y + (f.h ? 0 : 8) });
   }
-  // Antennas with a red light on top: Tower 7's radio mast, the hospital's, and a few on the tallest blocks.
+  // Antennas with a red light on top: Tower 7's radio mast, the District Office's, the hospital's, and a few on the tallest blocks.
   const antennas: Fixed['antennas'] = [];
   const t7 = byName('Tower 7');
   if (t7) antennas.push({ x: t7.cx, y: t7.cy, z: t7.h, h: 14, b: t7 });
+  // The District Office's roof mast: the reason the building is on the target list at all.
+  const dOff = byName('District Office');
+  if (dOff) antennas.push({ x: dOff.cx + 6, y: dOff.cy - 3, z: dOff.h, h: 18, b: dOff });
   const hosp = byName('City Hospital');
   if (hosp) antennas.push({ x: hosp.rects[2]?.x ?? hosp.cx, y: hosp.cy, z: hosp.h, h: 7, b: hosp });
   const tall = w.buildings.filter((b) => b.kind === 'apartment' && b.floors >= 5 && b.name !== 'Tower 7').sort((a, b) => b.h - a.h);
