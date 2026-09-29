@@ -1191,7 +1191,7 @@ export default function App() {
     // A picked building, or a protected place of worship, starts unconfirmed: whether it may be struck is for people to decide.
     setLawful(!id.startsWith('b:') && !id.startsWith('g:') && id !== 'mosque');
     setPlan({ target: id, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored });
-    focusRef.current = { cx: a.x + 20, cy: a.y + 10, zoom: 3.2 };
+    // The camera stays where you put it: choosing a target never pans or zooms.
     poolRef.current?.stop();
     setResults([]);
     setPhase('idle');
@@ -2012,7 +2012,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       const c = targetCentre(target);
-                      focusRef.current = { cx: c.x + 20, cy: c.y + 10, zoom: 3.2 };
+                      focusRef.current = { cx: c.x, cy: c.y, zoom: mapRef.current?.view.zoom ?? 3.2 }; // slide over to it, same zoom
                     }}
                     className="tgt-btn"
                     title="Fly to the target"
