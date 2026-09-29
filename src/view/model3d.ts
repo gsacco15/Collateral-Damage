@@ -266,6 +266,9 @@ export class Model3D {
   private hourKey = -1;
   private labels = new Map<string, HTMLDivElement>();
   private puffs: { m: THREE.Mesh; v: THREE.Vector3; born: number; grow: number }[] = [];
+  private plume: THREE.Mesh[] = []; // the smoke that lingers after a strike
+  private smokeAt: { x: number; z: number; born: number; dark: number } | null = null;
+  private birds!: THREE.InstancedMesh;
   private scraps: { m: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3 }[] = [];
   private fxKey: Outcome | null = null;
   private plane: THREE.Group;
@@ -333,6 +336,20 @@ export class Model3D {
     }
     const ringGeo = new THREE.RingGeometry(0.9, 1.25, 20);
     ringGeo.rotateX(-Math.PI / 2);
+    // Lingering smoke: sixteen soft puffs that march up and away downwind; hidden until a strike.
+    const plumeGeo = new THREE.IcosahedronGeometry(1, 1);
+    for (let k = 0; k < 16; k++) {
+      const pm = new THREE.Mesh(plumeGeo, new THREE.MeshStandardMaterial({ color: '#8f8a84', roughness: 1, flatShading: true, transparent: true, opacity: 0, depthWrite: false }));
+      pm.visible = false;
+      s.add(pm);
+      this.plume.push(pm);
+    }
+    // Birds: small paper Vs.
+    const birdGeo = mergeGeometries([boxGeo(-0.45, 0, 0.25, 0.9, 0.04, 0.12).rotateY(0.5), boxGeo(0.45, 0, 0.25, 0.9, 0.04, 0.12).rotateY(-0.5)])!;
+    this.birds = new THREE.InstancedMesh(birdGeo, new THREE.MeshStandardMaterial({ color: '#3a332d', roughness: 1 }), 10);
+    this.birds.count = 0;
+    this.birds.frustumCulled = false;
+    s.add(this.birds);
     this.rings = new THREE.InstancedMesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#c2412b' }), 800);
     this.rings.count = 0;
     this.rings.frustumCulled = false;
@@ -704,10 +721,20 @@ export class Model3D {
         const side = Math.floor(r() * 4);
         const dm = M[`door${Math.floor(r() * 6)}`];
         const along = 0.25 + r() * 0.5;
-        if (side === 0) put(dm, boxGeo(q.x + q.w * along, 1.05, q.y + q.h + 0.05, 1.1, 2.1, 0.1));
-        else if (side === 1) put(dm, boxGeo(q.x + q.w * along, 1.05, q.y - 0.05, 1.1, 2.1, 0.1));
-        else if (side === 2) put(dm, boxGeo(q.x - 0.05, 1.05, q.y + q.h * along, 0.1, 2.1, 1.1));
-        else put(dm, boxGeo(q.x + q.w + 0.05, 1.05, q.y + q.h * along, 0.1, 2.1, 1.1));
+        const dw = r() < 0.2 ? 1.8 : 1.1; // now and then a double door
+        const dh = 2.1 + (r() < 0.3 ? 0.3 : 0);
+        const canopy = r() < 0.3; // a little concrete hood over it
+        const arch = !canopy && p === 'kraft' && r() < 0.5; // old town: a rounded top
+        const door = (x: number, z: number, alongX: boolean, out: number) => {
+          put(dm, boxGeo(x, dh / 2, z, alongX ? dw : 0.1, dh, alongX ? 0.1 : dw));
+          if (canopy) put(wallOf[p], boxGeo(x + (alongX ? 0 : out * 0.35), dh + 0.25, z + (alongX ? out * 0.35 : 0), alongX ? dw + 0.6 : 0.7, 0.12, alongX ? 0.7 : dw + 0.6));
+          if (arch) put(dm, new THREE.CylinderGeometry(dw / 2, dw / 2, 0.1, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateY(alongX ? 0 : Math.PI / 2).translate(x, dh, z));
+          put(wallOf[p === 'tin' ? 'grey' : p], boxGeo(x + (alongX ? 0 : out * 0.3), 0.08, z + (alongX ? out * 0.3 : 0), alongX ? dw + 0.4 : 0.6, 0.16, alongX ? 0.6 : dw + 0.4)); // the step
+        };
+        if (side === 0) door(q.x + q.w * along, q.y + q.h + 0.05, true, 1);
+        else if (side === 1) door(q.x + q.w * along, q.y - 0.05, true, -1);
+        else if (side === 2) door(q.x - 0.05, q.y + q.h * along, false, -1);
+        else door(q.x + q.w + 0.05, q.y + q.h * along, false, 1);
         // Balconies on some blocks of flats: a slab and a railing, floor by floor, on one face.
         if (b.kind === 'apartment' && b.floors >= 3 && r() < 0.35) {
           const bw = Math.min(3.2, q.w * 0.3);
@@ -784,6 +811,7 @@ export class Model3D {
     this.damage(f);
     this.crowd(f);
     this.strike(f, now, dt);
+    this.drift(now, nightness(f.plan.hour));
     this.renderer.render(this.scene, this.camera);
     this.placeLabels(f);
   }
@@ -1103,7 +1131,61 @@ export class Model3D {
     }
   }
 
+  /** The slow things: smoke that lingers after a strike, and birds over the park and the mosque by day. */
+  private drift(now: number, night: number) {
+    const sm = this.smokeAt;
+    const age = sm ? (now - sm.born) / 1000 : 99;
+    if (sm && age > 62) this.smokeAt = null;
+    const fade = Math.min(1, age / 4) * Math.max(0, Math.min(1, (62 - age) / 12));
+    for (let k = 0; k < this.plume.length; k++) {
+      const pm = this.plume[k];
+      if (!sm || age > 62) {
+        pm.visible = false;
+        continue;
+      }
+      const u = (age * 0.045 + k / this.plume.length) % 1;
+      pm.visible = true;
+      pm.position.set(sm.x + u * 70 + Math.sin(u * 5 + k) * 3, 6 + u * 60, sm.z - u * 26);
+      pm.scale.setScalar(3 + u * 15);
+      const mat = pm.material as THREE.MeshStandardMaterial;
+      mat.opacity = Math.pow(1 - u, 1.3) * 0.4 * fade;
+      mat.color.setScalar((0.5 - sm.dark * 0.2 + u * 0.3) * (1 - night * 0.4));
+    }
+    // Birds: five over each place, a while on and a while off, only by day.
+    let n = 0;
+    const t = now / 1000;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3(1.4, 1.4, 1.4);
+    const v = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    if (night < 0.5)
+      for (const [x, z, seed] of this.birdSpots()) {
+        if (Math.sin(t / 23 + seed * 2.1) < 0.2) continue;
+        for (let i = 0; i < 5; i++) {
+          const a = t * 0.35 + i * 0.5 + seed;
+          const r = 16 + i * 2.2;
+          q.setFromAxisAngle(up, -a);
+          sc.y = 1.4 * (0.6 + 0.5 * Math.sin(t * 9 + i));
+          this.birds.setMatrixAt(n++, m.compose(v.set(x + Math.cos(a) * r, 26 + i * 1.5 + Math.sin(t + i) * 1.2, z + Math.sin(a) * r * 0.8), q, sc));
+        }
+      }
+    this.birds.count = n;
+    this.birds.instanceMatrix.needsUpdate = true;
+  }
+  private spots: [number, number, number][] | null = null;
+  private birdSpots() {
+    if (this.spots) return this.spots;
+    const park = this.world.spaces.find((s) => s.name === 'Olive Park');
+    const mosque = this.world.buildings.find((b) => b.kind === 'mosque');
+    this.spots = [];
+    if (park) this.spots.push([park.rect.x + park.rect.w / 2, park.rect.y + park.rect.h / 2, 1]);
+    if (mosque) this.spots.push([mosque.cx, mosque.cy, 2]);
+    return this.spots;
+  }
+
   private burst(plan: Plan, o: Outcome) {
+    this.smokeAt = { x: o.ix, z: o.iy, born: performance.now(), dark: o.secondary.length ? 1 : 0.55 };
     const r = rng(Math.round(o.ix * 97 + o.iy));
     const e = effect(plan, structureAt(this.world, o.ix, o.iy));
     const now = performance.now();

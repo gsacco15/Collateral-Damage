@@ -119,6 +119,8 @@ export class MapView {
   private lastCam = '';
   private tex: HTMLCanvasElement;
   private fx: StrikeFx | null = null;
+  /** After a strike: the column of smoke that drifts off downwind for about a minute, even after "Next target". */
+  private smoke: { x: number; y: number; born: number; dark: number } | null = null;
   private shake = 0;
   private lastPop: Population | null = null;
   private rays: { key: string; full: Float32Array; clear: Float32Array } | null = null;
@@ -557,6 +559,8 @@ export class MapView {
     if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
     if (fx) this.drawFx(g, fx, px);
+    this.drawSmoke(g, night);
+    if (night < 0.5) this.drawBirds(g, px, 1 - night * 2);
 
     // Vignette.
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -764,6 +768,7 @@ export class MapView {
     const o = fx.outcome;
     if (!fx.impacted && fx.t >= fx.impactAt) {
       fx.impacted = true;
+      this.smoke = { x: o.ix, y: o.iy, born: this.time, dark: o.secondary.length ? 1 : 0.55 };
       const r = rng(Math.round(o.ix * 100 + o.iy));
       const w = weapon(fx.plan.weapon);
       this.shake = Math.min(1.4, 0.25 + w.blast / 18); // a small bomb nudges the table; a big one rattles it
@@ -807,6 +812,59 @@ export class MapView {
     if (fx.impacted && fx.t > fx.impactAt + 7) {
       fx.puffs = fx.puffs.filter((p) => p.life < 9);
       if (!fx.puffs.length) this.onSettled?.();
+    }
+  }
+
+  /** A slow column of smoke, drifting off downwind and thinning out over about a minute. */
+  private drawSmoke(g: CanvasRenderingContext2D, night: number) {
+    const sm = this.smoke;
+    if (!sm) return;
+    const age = this.time - sm.born;
+    if (age > 62) {
+      this.smoke = null;
+      return;
+    }
+    const fade = Math.min(1, age / 4) * Math.min(1, (62 - age) / 12);
+    for (let k = 0; k < 16; k++) {
+      const u = (age * 0.045 + k / 16) % 1; // how far along the column this puff is
+      const x = sm.x + u * 70 + Math.sin(u * 5 + k) * 3;
+      const y = sm.y - u * 26 + Math.cos(u * 4 + k) * 2;
+      const rad = 3 + u * 16;
+      const a = Math.pow(1 - u, 1.3) * 0.32 * fade * (1 - night * 0.3);
+      const c = Math.round(150 - sm.dark * 60 + u * 60);
+      g.fillStyle = `rgba(${c},${c - 3},${c - 6},${a})`;
+      g.beginPath();
+      g.arc(x, y, rad, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  /** A few birds circling over the park and the mosque now and then, by day. */
+  private drawBirds(g: CanvasRenderingContext2D, px: number, light: number) {
+    const park = this.world.spaces.find((s) => s.name === 'Olive Park');
+    const mosque = this.world.buildings.find((b) => b.kind === 'mosque');
+    const spots = [park && { x: park.rect.x + park.rect.w / 2, y: park.rect.y + park.rect.h / 2, seed: 1 }, mosque && { x: mosque.cx, y: mosque.cy, seed: 2 }];
+    for (const sp of spots) {
+      if (!sp) continue;
+      const show = Math.sin(this.time / 23 + sp.seed * 2.1); // up for a while, gone for a while
+      if (show < 0.2) continue;
+      const alpha = Math.min(1, (show - 0.2) / 0.3) * light * 0.75;
+      g.strokeStyle = `rgba(40,34,30,${alpha})`;
+      g.lineWidth = Math.max(0.25, 1.1 * px);
+      for (let i = 0; i < 5; i++) {
+        const a = this.time * 0.35 + i * 0.5 + sp.seed;
+        const r = 16 + i * 2.2;
+        const x = sp.x + Math.cos(a) * r;
+        const y = sp.y + Math.sin(a) * r * 0.8;
+        const dir = a + Math.PI / 2;
+        const flap = 0.5 + 0.35 * Math.sin(this.time * 9 + i);
+        const s = Math.max(1.2, 3.2 * px);
+        g.beginPath();
+        g.moveTo(x + Math.cos(dir + Math.PI - flap) * s, y + Math.sin(dir + Math.PI - flap) * s);
+        g.lineTo(x, y);
+        g.lineTo(x + Math.cos(dir + Math.PI + flap) * s, y + Math.sin(dir + Math.PI + flap) * s);
+        g.stroke();
+      }
     }
   }
 
