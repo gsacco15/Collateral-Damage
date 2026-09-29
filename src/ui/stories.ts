@@ -7,6 +7,7 @@ export interface PlaceStory {
   kind: string; // "District", "Park", "Street"…
   line: string;
   when?: string; // when it's busy
+  named?: boolean; // a particular place (a park, a square), not a street or a district
 }
 
 const DISTRICTS: Record<string, Omit<PlaceStory, 'title' | 'kind'>> = {
@@ -51,8 +52,8 @@ const inRect = (q: Rect, x: number, y: number, pad = 0) => x >= q.x - pad && x <
 /** Where you clicked, if it wasn't a building: a named open space, the fountain, a street, the canal or the district. */
 export function placeAt(w: World, x: number, y: number): PlaceStory {
   const sp = w.spaces.find((s) => inRect(s.rect, x, y) && s.name);
-  if (sp?.name) return { title: sp.name, kind: KIND_NAME[sp.kind] ?? 'Open ground', ...(PLACES[sp.name] ?? { line: 'Open ground. Nothing here stops a fragment.' }) };
-  if (Math.hypot(x - w.roundabout.x, y - w.roundabout.y) < w.roundabout.r + 6) return { title: 'Fountain Circus', kind: 'Landmark', ...PLACES['Fountain Circus'] };
+  if (sp?.name) return { title: sp.name, kind: KIND_NAME[sp.kind] ?? 'Open ground', named: true, ...(PLACES[sp.name] ?? { line: 'Open ground. Nothing here stops a fragment.' }) };
+  if (Math.hypot(x - w.roundabout.x, y - w.roundabout.y) < w.roundabout.r + 6) return { title: 'Fountain Circus', kind: 'Landmark', named: true, ...PLACES['Fountain Circus'] };
   if (Math.abs(x - riverX(y)) < w.river.width / 2 + 4) return { title: 'The Canal', kind: 'Water', ...DISTRICTS.canal };
   const rd = w.roads.find((r) => inRect(r.rect, x, y, 1));
   const d = districtAt(w, x, y);

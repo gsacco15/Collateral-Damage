@@ -807,14 +807,20 @@ export default function App() {
     const q = target.rect;
     setPlan({ aimX: Math.max(q.x + 1, Math.min(q.x + q.w - 1, x)), aimY: Math.max(q.y + 1, Math.min(q.y + q.h - 1, y)) });
   };
-  const openPeople = (wx: number, wy: number, px: number, py: number) => {
+  const openPeople = (wx: number, wy: number, px: number, py: number, direct = false) => {
+    // Clicking the map while a card is open just closes it (except when counting people, building after building).
+    if (!direct && (place || pop)) {
+      setPlace(null);
+      return setPop(null);
+    }
     const b = mapRef.current?.buildingAt(wx, wy);
     if (b?.id === target.buildingId) return setPop(null);
     if (!b || !b.capacity) {
-      // Not a building anyone uses: tell the story of the place instead.
-      setPop(null);
+      // Up close only named places (a park, a square) have a card; streets, the canal and whole districts
+      // only when you're high above the city.
+      const high = (mapRef.current?.view.zoom ?? 1) <= 2;
       const st = placeAt(world, wx, wy);
-      if (place && place.story.title === st.title) return setPlace(null); // a second click closes it
+      if (!high && !st.named) return;
       sound.play('ui-toggle', 0, 0.18);
       return setPlace({ story: st, x: px, y: py });
     }
@@ -856,7 +862,7 @@ export default function App() {
     const p = localXY(e);
     const w = m.toWorld(p.x, p.y);
     focusRef.current = null;
-    if (countMode) return openPeople(w.x, w.y, p.x, p.y);
+    if (countMode) return openPeople(w.x, w.y, p.x, p.y, true);
     const { s } = m.cam();
     const nearAim = Math.hypot(w.x - plan.aimX, w.y - plan.aimY) * s < 22;
     const hp = m.toScreen(m.handleWorld(plan).x, m.handleWorld(plan).y);
@@ -1908,7 +1914,7 @@ export default function App() {
                 className="placecard"
                 key={place.story.title}
                 style={{
-                  left: Math.max(10, Math.min(place.x + 18, (canvasRef.current?.clientWidth ?? 400) - 290)),
+                  left: place.x + 18 + 270 < (canvasRef.current?.clientWidth ?? 400) - 10 ? place.x + 18 : Math.max(10, place.x - 18 - 270),
                   top: Math.max(56, Math.min(place.y - 30, (canvasRef.current?.clientHeight ?? 600) - 220)),
                 }}
               >
@@ -1929,7 +1935,7 @@ export default function App() {
               <div
                 className="popcard"
                 style={{
-                  left: Math.max(10, Math.min(pop.x + 24, (canvasRef.current?.clientWidth ?? 400) - 320)),
+                  left: pop.x + 24 + 310 < (canvasRef.current?.clientWidth ?? 400) - 10 ? pop.x + 24 : Math.max(10, pop.x - 24 - 310),
                   top: Math.max(56, Math.min(pop.y - 40, (canvasRef.current?.clientHeight ?? 600) - 340)),
                 }}
               >
