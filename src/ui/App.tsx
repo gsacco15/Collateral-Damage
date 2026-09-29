@@ -1526,7 +1526,8 @@ export default function App() {
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
-      sound.play('impact');
+      // The boom follows the bomb: the 2,000-lb shakes the room, the smallest is a hard crack.
+      sound.play('impact', 0, 0.45 + 0.55 * Math.min(1, weapon(plan.weapon).blast / 22));
       // Whatever else goes off, a beat later. Fuel is the loudest; several tanks together share the volume.
       const each = 1 / Math.sqrt(Math.max(1, o.blasts.length / 2));
       for (const b of o.blasts) sound.play('impact', b.at, (b.kind === 'fuel' ? 0.6 : 0.45) * each);
