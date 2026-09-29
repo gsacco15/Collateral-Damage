@@ -22,7 +22,7 @@ import {
   RULES,
   shownCount,
   sources,
-  targetCentre,
+  targetCentre, aimStart,
   targetOf,
   BRIDGE_RUIN,
   riverX,
@@ -151,8 +151,8 @@ const loadDiscovered = () => {
 
 const planFor = (world: ReturnType<typeof buildCity>, target: TargetId): Plan => {
   const t = targetOf(world, target);
-  const a = targetCentre(t);
-  return { target, weapon: 'small', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
+  const a = aimStart(world, t);
+  return { target, weapon: 'medium', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
 };
 
 export default function App() {
@@ -1202,8 +1202,17 @@ export default function App() {
   };
   const inTarget = (x: number, y: number) => x >= target.rect.x - 2 && x <= target.rect.x + target.rect.w + 2 && y >= target.rect.y - 2 && y <= target.rect.y + target.rect.h + 2;
   const moveAim = (x: number, y: number) => {
-    const q = target.rect;
-    setPlan({ aimX: Math.max(q.x + 1, Math.min(q.x + q.w - 1, x)), aimY: Math.max(q.y + 1, Math.min(q.y + q.h - 1, y)) });
+    // Keep the aim on the target itself: for a building, its nearest wing (not the yard inside an L), else its outline.
+    const tb = target.buildingId != null ? world.buildings[target.buildingId] : null;
+    const rs = tb ? tb.rects : [target.rect];
+    let best = { x, y, d: Infinity };
+    for (const q of rs) {
+      const px = Math.max(q.x + 1, Math.min(q.x + q.w - 1, x));
+      const py = Math.max(q.y + 1, Math.min(q.y + q.h - 1, y));
+      const d = Math.hypot(px - x, py - y);
+      if (d < best.d) best = { x: px, y: py, d };
+    }
+    setPlan({ aimX: best.x, aimY: best.y });
   };
   const openPeople = (wx: number, wy: number, px: number, py: number, direct = false) => {
     // Clicking the map while a card is open just closes it (except when counting people, building after building).
@@ -1244,11 +1253,24 @@ export default function App() {
     for (const b of world.buildings) if (b.kind === 'school' && (!best || Math.hypot(b.cx - cx, b.cy - cy) < Math.hypot(best.cx - cx, best.cy - cy))) best = b;
     return best && Math.hypot(best.cx - cx, best.cy - cy) < 60 ? best : null;
   };
+  // A fingertip is wide: a tap just beside a building (a few pixels off its wall) still picks it.
+  const buildingNear = (x: number, y: number) => {
+    const m = mapRef.current;
+    if (!m) return null;
+    const hit = m.buildingAt(x, y);
+    if (hit) return hit;
+    const r = (phone ? 12 : 6) / m.cam().s;
+    for (const [dx, dy] of [[0, r], [0, -r], [r, 0], [-r, 0], [r, r], [-r, r], [r, -r], [-r, -r]]) {
+      const b = m.buildingAt(x + dx, y + dy);
+      if (b) return b;
+    }
+    return null;
+  };
   const aimAt = (x: number, y: number) => {
     if (onBridge(x, y)) return chooseTarget('bridge');
-    const b = mapRef.current?.buildingAt(x, y) ?? yardSchool(x, y);
+    const b = buildingNear(x, y) ?? yardSchool(x, y);
     if (b && ruins.includes(b.id)) return; // a ruin can't be the target again
-    if (b && b.id === target.buildingId) return;
+    if (b && b.id === target.buildingId) return moveAim(x, y); // tapping the target itself moves the aim there
     if (b) return retargetTo(b.id);
     chooseTarget(groundId(x, y));
   };
@@ -1482,7 +1504,7 @@ export default function App() {
 
   const chooseTarget = (id: TargetId) => {
     const t = targetOf(world, id);
-    const a = targetCentre(t);
+    const a = aimStart(world, t);
     endStrike();
     setPop(null);
     setObs({});
@@ -1508,6 +1530,8 @@ export default function App() {
     const px = m ? 1 / m.cam().s : 0.4;
     const zk = 3.2 / (m?.view.zoom || 3.2);
     flyTo(offset ? c.x - 200 * px * zk : c.x, offset ? c.y + 90 * px * zk : c.y, telling ? 3.2 : 3.6);
+    // In 3D, glide in and circle the target slowly, until you take the controls.
+    if (view === 'model') modelRef.current?.orbit(c.x, c.y, 150, 135, 34, 0.7);
     if (!telling) return;
     const k = id as keyof typeof TARGET_STORIES;
     setStory(k);

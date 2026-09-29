@@ -1296,6 +1296,14 @@ export function buildingTarget(w: World, id: number): Target {
 }
 export const targetCentre = (t: Target) => ({ x: t.rect.x + t.rect.w / 2, y: t.rect.y + t.rect.h / 2 });
 
+/** Where to aim first: the middle of the target, or for a building, the middle of its biggest wing (an L-shaped school's box centre is in its yard). */
+export function aimStart(w: World, t: Target) {
+  const b = t.buildingId != null ? w.buildings[t.buildingId] : null;
+  if (!b || b.rects.length < 2) return targetCentre(t);
+  const q = b.rects.reduce((m, r) => (r.w * r.h > m.w * m.h ? r : m));
+  return { x: q.x + q.w / 2, y: q.y + q.h / 2 };
+}
+
 export function placeName(b: Building): string {
   if (b.name) return b.name;
   switch (b.kind) {
