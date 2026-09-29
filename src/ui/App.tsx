@@ -473,6 +473,12 @@ export default function App() {
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
       if (pick) pans[pick[0]] = pick[2];
       void sound.ambience(levels, pans);
+      // Come close to the mosque during a prayer, and you hear the call from there, once.
+      const pk = prayerNow(h, plan.day);
+      if (pk && !striking && close > 0.35 && near(zones.mosque)[0] < 150 && heardClose.current !== `${pk}|${plan.day}`) {
+        heardClose.current = `${pk}|${plan.day}`;
+        callToPrayer(pk);
+      }
       // Now and then, one small sound that fits where you are and the hour: about every twenty seconds.
       if (!striking && close > 0.15 && Math.random() < 0.02) {
         const at = districtHere(v.cx, v.cy);
@@ -525,25 +531,28 @@ export default function App() {
   // The call to prayer: at dawn and before Friday noon prayers, and softer at the other prayers. It comes from the
   // minaret: clear and close when you're near the mosque, faint and far off across the city, placed left or right.
   const prayerKey = useRef('');
+  const heardClose = useRef(''); // the prayer already heard from close by, so coming near again doesn't repeat it
+  const callToPrayer = (k: string) => {
+    const loud = k === 'dawn' || k === 'friday';
+    const m = mapRef.current;
+    const min = world.buildings.find((b) => b.kind === 'minaret');
+    let near = 0.3;
+    let pan = 0;
+    if (m && min) {
+      const v = m.view;
+      const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4));
+      near = Math.max(0, 1 - Math.hypot(min.cx - v.cx, min.cy - v.cy) / 450) * (0.45 + 0.55 * close);
+      const half = (canvasRef.current?.clientWidth ?? 800) / 2;
+      pan = Math.max(-0.8, Math.min(0.8, ((min.cx - v.cx) * m.cam().s) / half));
+    }
+    if (near > 0.5) heardClose.current = `${k}|${plan.day}`;
+    // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
+    sound.cue('amb-call-to-prayer', pan, (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1));
+  };
   useEffect(() => {
     if (!soundOn) return;
     const k = prayerNow(plan.hour, plan.day);
-    if (k && k !== prayerKey.current) {
-      const loud = k === 'dawn' || k === 'friday';
-      const m = mapRef.current;
-      const min = world.buildings.find((b) => b.kind === 'minaret');
-      let near = 0.3;
-      let pan = 0;
-      if (m && min) {
-        const v = m.view;
-        const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4));
-        near = Math.max(0, 1 - Math.hypot(min.cx - v.cx, min.cy - v.cy) / 450) * (0.45 + 0.55 * close);
-        const half = (canvasRef.current?.clientWidth ?? 800) / 2;
-        pan = Math.max(-0.8, Math.min(0.8, ((min.cx - v.cx) * m.cam().s) / half));
-      }
-      // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
-      sound.cue('amb-call-to-prayer', pan, (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1));
-    }
+    if (k && k !== prayerKey.current) callToPrayer(k);
     prayerKey.current = k;
   }, [soundOn, plan.hour, plan.day]); // eslint-disable-line react-hooks/exhaustive-deps
 
