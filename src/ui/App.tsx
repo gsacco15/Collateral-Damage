@@ -40,8 +40,9 @@ import { JevPool, type PoolStatus } from '../jev/pool';
 import type { JobOut } from '../jev/worker';
 import { MapView, type Layers, type MapFrame, type Outcome } from '../view/map';
 import type { Frame3D, Model3D } from '../view/model3d';
+import { JevTheater } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
-import { Chip, Dial, Seg, SourceBars, Step } from './parts';
+import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
 const SEED = 7;
 type HourWindow = 'any' | 'night' | 'quiet';
@@ -118,6 +119,11 @@ export default function App() {
   const [mobileTab, setMobileTab] = useState<'plan' | 'estimate' | 'jev'>('estimate');
   const [weaponData, setWeaponData] = useState(false);
   const [about, setAbout] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [headingDrag, setHeadingDrag] = useState(false);
+  const [theaterOpen, setTheaterOpen] = useState(true);
+  const [placesOpen, setPlacesOpen] = useState(false);
+  const [simulated, setSimulated] = useState(0);
 
   // Jev's search.
   const [status, setStatus] = useState<PoolStatus>({ running: false, done: 0, total: 0, busy: 0, workers: 0, rate: 0 });
@@ -145,6 +151,11 @@ export default function App() {
   const labels3dRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<Model3D | null>(null);
   const strikeRef = useRef<{ plan: Plan; outcome: Outcome } | null>(null);
+  const theaterCanvas = useRef<HTMLCanvasElement>(null);
+  const theaterRef = useRef<JevTheater | null>(null);
+  const trailRef = useRef<Plan[]>([]);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const bannerRef = useRef<HTMLDivElement>(null);
 
   const rules = RULES.find((r) => r.id === rulesId)!;
   const setPlan = useCallback((p: Partial<Plan>) => {
@@ -211,6 +222,23 @@ export default function App() {
   }, [dayPlay]);
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'Escape') {
+        setConfirm(false);
+        setPop(null);
+        setPlacesOpen(false);
+      }
+      if (e.key === '[') setPlanState((p) => ({ ...p, hour: (p.hour + 23.5) % 24 }));
+      if (e.key === ']') setPlanState((p) => ({ ...p, hour: (p.hour + 0.5) % 24 }));
+      if (e.key === ',') setPlanState((p) => ({ ...p, heading: (p.heading + 345) % 360 }));
+      if (e.key === '.') setPlanState((p) => ({ ...p, heading: (p.heading + 15) % 360 }));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [log]);
@@ -231,6 +259,12 @@ export default function App() {
         setTesting(c);
       },
       onResults: setResults,
+      onStart: (total, _kept, workers) => theaterRef.current?.start(total, poolRef.current?.results ?? [], workers),
+      onDispatch: (wk, cands) => theaterRef.current?.dispatch(wk, cands),
+      onJob: (wk, out, runs, ms) => {
+        theaterRef.current?.job(wk, out, runs, ms);
+        setSimulated((n) => n + runs.reduce((a, r) => a + r.length, 0));
+      },
     });
     poolRef.current = pool;
     return () => {
@@ -243,6 +277,28 @@ export default function App() {
   }, [speed]);
 
   const bestNow = useMemo(() => best(results, minPk), [results, minPk]);
+  const showTheater = theaterOpen && phase !== 'idle';
+  useEffect(() => {
+    if (!showTheater || !theaterCanvas.current) return;
+    const t = new JevTheater(theaterCanvas.current);
+    theaterRef.current = t;
+    const pool = poolRef.current;
+    if (pool && pool.total) t.start(pool.total, pool.results, pool.workers);
+    const ro = new ResizeObserver(() => t.resize());
+    ro.observe(theaterCanvas.current);
+    return () => {
+      ro.disconnect();
+      t.dispose();
+      theaterRef.current = null;
+    };
+  }, [showTheater]);
+  useEffect(() => {
+    const t = theaterRef.current;
+    if (!t) return;
+    t.minPk = minPk;
+    t.best = bestNow;
+    t.paused = phase === 'search' && !status.running;
+  });
   const seenCount = useRef(0);
   useEffect(() => {
     const fresh = results.slice(seenCount.current);
@@ -283,6 +339,9 @@ export default function App() {
     setLog([]);
     bestRef.current = undefined;
     seenCount.current = 0;
+    trailRef.current = [];
+    setSimulated(0);
+    setTheaterOpen(true);
     setPhase('checklist');
     setTab('jev');
     setMobileTab('jev');
@@ -332,6 +391,14 @@ export default function App() {
     const a = candidateAim(ghostCand);
     return { ...plan, weapon: ghostCand.weapon, fuze: ghostCand.fuze, heading: ghostCand.heading, hour: ghostCand.hour, aimX: a.x, aimY: a.y };
   }, [ghostCand, plan]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastTrailKey = useRef('');
+  if (ghostPlan && phase === 'search' && testing) {
+    const k = key(testing);
+    if (k !== lastTrailKey.current) {
+      lastTrailKey.current = k;
+      trailRef.current = [...trailRef.current.slice(-13), ghostPlan];
+    }
+  }
   const following = follow && !!ghostPlan && (status.running || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
   const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow]);
@@ -345,11 +412,13 @@ export default function App() {
     layers,
     circleR: inCircle(world, shownPlan, popShown).radius,
     ghost: following ? null : ghostPlan,
+    trail: phase === 'search' || phase === 'done' ? trailRef.current : [],
     spotMode: countMode,
     hover,
     selected: pop?.bid ?? null,
     outcome,
     aimDrag,
+    headingDrag,
   };
 
   useEffect(() => {
@@ -397,6 +466,16 @@ export default function App() {
         if (Math.abs(f.zoom - v.zoom) < 0.005 && Math.hypot(f.cx - v.cx, f.cy - v.cy) < 0.1) focusRef.current = null;
       }
       if (frameRef.current) map.frame(frameRef.current, dt);
+      const b = bannerRef.current;
+      if (b) {
+        const t = map.strikeTime();
+        if (t == null || t > 4.2) b.style.display = 'none';
+        else {
+          b.style.display = '';
+          b.className = `banner ${t < 2.6 ? 'away' : 'impact'}`;
+          b.textContent = t < 2.6 ? `Weapon away · impact in ${(2.6 - t).toFixed(1)} s` : 'Impact';
+        }
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -437,7 +516,7 @@ export default function App() {
   useEffect(() => () => modelRef.current?.dispose(), []);
 
   // Pointer: drag the aim, pan, zoom, click a building to count its people.
-  const drag = useRef<{ mode: 'aim' | 'pan'; x: number; y: number; cx: number; cy: number } | null>(null);
+  const drag = useRef<{ mode: 'aim' | 'pan' | 'heading'; x: number; y: number; cx: number; cy: number } | null>(null);
   const localXY = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -461,8 +540,13 @@ export default function App() {
     if (countMode) return openPeople(w.x, w.y, p.x, p.y);
     const { s } = m.cam();
     const nearAim = Math.hypot(w.x - plan.aimX, w.y - plan.aimY) * s < 22;
+    const hp = m.toScreen(m.handleWorld(plan).x, m.handleWorld(plan).y);
     (e.target as Element).setPointerCapture(e.pointerId);
-    if (!outcome && (nearAim || inTarget(w.x, w.y))) {
+    hideTip();
+    if (!outcome && Math.hypot(p.x - hp.x, p.y - hp.y) < 18) {
+      drag.current = { mode: 'heading', x: p.x, y: p.y, cx: 0, cy: 0 };
+      setHeadingDrag(true);
+    } else if (!outcome && (nearAim || inTarget(w.x, w.y))) {
       drag.current = { mode: 'aim', x: p.x, y: p.y, cx: 0, cy: 0 };
       setAimDrag(true);
       moveAim(w.x, w.y);
@@ -474,7 +558,10 @@ export default function App() {
     const p = localXY(e);
     const w = m.toWorld(p.x, p.y);
     const d = drag.current;
-    if (d?.mode === 'aim') moveAim(w.x, w.y);
+    if (d?.mode === 'heading') {
+      const deg = (Math.atan2(plan.aimX - w.x, -(plan.aimY - w.y)) * 180) / Math.PI;
+      setPlan({ heading: ((Math.round(deg / 5) * 5) % 360 + 360) % 360 });
+    } else if (d?.mode === 'aim') moveAim(w.x, w.y);
     else if (d?.mode === 'pan') {
       const { s } = m.cam();
       m.view.cx = d.cx - (p.x - d.x) / s;
@@ -482,13 +569,39 @@ export default function App() {
       m.clampView();
     } else {
       const b = m.buildingAt(w.x, w.y);
-      setHover(b ? b.id : null);
+      if ((b?.id ?? null) !== hover) setHover(b ? b.id : null);
+      showTip(p.x, p.y, w.x, w.y, b);
     }
+  };
+  // The cursor readout: who is here, and how dangerous it would be to stand here.
+  const hideTip = () => {
+    if (tipRef.current) tipRef.current.style.display = 'none';
+  };
+  const showTip = (px: number, py: number, wx: number, wy: number, b: ReturnType<MapView['buildingAt']>) => {
+    const el = tipRef.current;
+    if (!el || view !== 'map' || striking) return;
+    let text = '';
+    if (b) {
+      const n = obs[b.id] ?? shownCount(popNow, b);
+      const hurt = est && est.byBuilding[b.id] > 0.05 ? ` · ${est.byBuilding[b.id].toFixed(1)} expected hurt` : '';
+      text = `<b>${placeName(b)}</b><span>${b.capacity ? `${n} inside now` : 'no one inside'} · ${MATERIAL_NAME[b.material].toLowerCase()}${hurt}</span>`;
+    } else if (field && layers.danger) {
+      const i = Math.floor((wx - field.x0) / field.cell);
+      const j = Math.floor((wy - field.y0) / field.cell);
+      const v = i >= 0 && j >= 0 && i < field.cols && j < field.rows ? field.p[j * field.cols + i] : 0;
+      if (v >= 0.01) text = `<b>${v >= 0.95 ? 'Almost certain' : `About 1 in ${Math.max(1, Math.round(1 / v))}`}</b><span>chance someone standing here is killed or badly hurt</span>`;
+      else if (v > 0) text = '<span>Very little danger here</span>';
+    }
+    if (!text) return hideTip();
+    el.innerHTML = text;
+    el.style.display = '';
+    el.style.transform = `translate(${px + 14}px, ${py + 14}px)`;
   };
   const onUp = (e: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
     setAimDrag(false);
+    setHeadingDrag(false);
     const m = mapRef.current;
     if (d?.mode === 'pan' && m && e.type === 'pointerup') {
       const p = localXY(e);
@@ -719,8 +832,8 @@ export default function App() {
 
       <Step n={6} title="Decide" summary={lawful ? 'Release, hold, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
         <div className="decide">
-          <button className="btn primary" onClick={release} disabled={!lawful || striking}>
-            Release
+          <button className="btn danger big" onClick={() => setConfirm(true)} disabled={!lawful || striking || !est}>
+            Authorise strike…
           </button>
           <button className="btn" onClick={holdForHour} disabled={!profile || striking}>
             Hold for the best hour
@@ -819,6 +932,11 @@ export default function App() {
         <div className="progress">
           <div style={{ width: `${status.total ? (100 * status.done) / status.total : 0}%` }} />
         </div>
+        {phase !== 'idle' && !theaterOpen && (
+          <button className="link" onClick={() => setTheaterOpen(true)}>
+            Watch Jev work on the map
+          </button>
+        )}
         <p className="hint mono">
           {status.done.toLocaleString()} / {status.total.toLocaleString()} plans · {status.rate.toFixed(0)}/s · {status.busy}/{status.workers} workers busy
         </p>
@@ -922,9 +1040,9 @@ export default function App() {
           ))}
         </nav>
         <div className="top-right">
-          <span className="explored" title="Places found by exploring the map">
-            Explored {explored}/{world.places.length}
-          </span>
+          <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
+            Explored {explored}/{world.places.length} ▾
+          </button>
           <button className="btn small" onClick={() => goGuide(guide == null ? 0 : null)}>
             {guide == null ? 'Guide' : 'End guide'}
           </button>
@@ -947,7 +1065,10 @@ export default function App() {
               onPointerMove={onMove}
               onPointerUp={onUp}
               onPointerCancel={onUp}
-              onPointerLeave={() => setHover(null)}
+              onPointerLeave={() => {
+                setHover(null);
+                hideTip();
+              }}
               aria-label="The city, seen from above"
             />
             <canvas ref={canvas3dRef} className={`canvas3d ${view === 'model' ? 'on' : ''}`} aria-label="The city as a tilted model" />
@@ -980,7 +1101,7 @@ export default function App() {
               ))}
             </div>
 
-            {layers.danger && view === 'map' && !outcome && (
+            {layers.danger && view === 'map' && !outcome && !showTheater && (
               <div className="hud-legend">
                 <span>Chance someone in the open is killed or badly hurt</span>
                 <div className="ramp">
@@ -1022,6 +1143,117 @@ export default function App() {
                 </>
               )}
             </div>
+
+            <div className="maptip" ref={tipRef} style={{ display: 'none' }} />
+            <div className="banner" ref={bannerRef} style={{ display: 'none' }} />
+
+            {placesOpen && (
+              <div className="places-pop">
+                <div className="places-head">
+                  <b>Places</b>
+                  <span>
+                    {explored} of {world.places.length} found. Pan and zoom to discover more.
+                  </span>
+                </div>
+                {(['district', 'landmark'] as const).map((k) => (
+                  <div key={k} className="places-group">
+                    <span className="k">{k === 'district' ? 'Districts' : 'Landmarks'}</span>
+                    {world.places
+                      .filter((pl) => pl.kind === k)
+                      .map((pl) => {
+                        const found = mapRef.current?.discovered.has(pl.id);
+                        return (
+                          <button
+                            key={pl.id}
+                            disabled={!found}
+                            onClick={() => {
+                              flyTo(pl.x, pl.y, k === 'district' ? 2.4 : 4.5);
+                              setPlacesOpen(false);
+                            }}
+                          >
+                            {found ? pl.name : '???'}
+                            {found && pl.note && <em>{pl.note}</em>}
+                          </button>
+                        );
+                      })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showTheater && (
+              <div className="theater">
+                <div className="theater-head">
+                  <b>Jev at work</b>
+                  <span className="mono">
+                    {status.workers} workers · {status.done.toLocaleString()}/{status.total.toLocaleString()} plans · {simulated.toLocaleString()} simulated strikes · {status.rate.toFixed(0)} plans/s
+                  </span>
+                  <span className="theater-ctl">
+                    <Seg
+                      small
+                      value={speed}
+                      onChange={setSpeed}
+                      options={[
+                        [2, '1×'],
+                        [4, '4×'],
+                        [6, '16×'],
+                        [8, 'Max'],
+                      ]}
+                    />
+                    {phase === 'search' && (
+                      <button className="btn small" onClick={() => (status.running ? poolRef.current?.pause() : poolRef.current?.resume())}>
+                        {status.running ? 'Pause' : 'Resume'}
+                      </button>
+                    )}
+                    <button className="x" onClick={() => setTheaterOpen(false)} aria-label="Hide Jev at work">
+                      ×
+                    </button>
+                  </span>
+                </div>
+                <canvas ref={theaterCanvas} className="theater-canvas" aria-label="Jev's workers scoring plans in parallel" />
+              </div>
+            )}
+
+            {confirm && est && (
+              <div className="sheet">
+                <div className="sheet-card">
+                  <span className="k">Final decision</span>
+                  <h2>Strike {target.name}?</h2>
+                  <p className="plan-line">
+                    {w.name}, {fuze(plan.fuze).name.toLowerCase()} fuze, arriving from the {compassName(plan.heading + 180)}, {plan.day === 'friday' ? 'Friday' : 'a weekday'} at {fmtHour(plan.hour)}.
+                  </p>
+                  <div className="sheet-nums">
+                    <div>
+                      <b>{est.mean < 10 ? est.mean.toFixed(1) : Math.round(est.mean)}</b>
+                      <span>expected killed or badly hurt</span>
+                    </div>
+                    <div>
+                      <b>{est.p90}</b>
+                      <span>nine in ten runs at or below</span>
+                    </div>
+                    <div>
+                      <b>{pct(est.pk)}</b>
+                      <span>chance the target is destroyed</span>
+                    </div>
+                  </div>
+                  <ApprovalLadder a={approval} />
+                  {circle.protectedSites.length > 0 && <p className="hint warn">Protected sites in range: {circle.protectedSites.join(', ')}.</p>}
+                  <p className="hint">The estimate is a spread of possibilities; the strike is one roll of the dice. Whether this harm is excessive for what it achieves is your judgment, not the model's.</p>
+                  <div className="sheet-actions">
+                    <HoldButton
+                      label="Hold to release"
+                      onDone={() => {
+                        setConfirm(false);
+                        release();
+                      }}
+                    />
+                    <button className="btn" onClick={() => setConfirm(false)}>
+                      Stand down
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {toast && (
               <div className="toast" key={toast.id}>

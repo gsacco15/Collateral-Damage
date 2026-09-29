@@ -2,7 +2,7 @@
 import { buildCity } from './city';
 import type { Plan } from './effects';
 import type { Observations } from './life';
-import { candidates, key, score, type Candidate, type Job, type Scored, type SearchSpace } from './search';
+import { candidates, key, scoreDetailed, type Candidate, type Job, type Scored, type SearchSpace } from './search';
 import type { JobOut } from './worker';
 
 export interface PoolStatus {
@@ -18,6 +18,12 @@ export interface PoolEvents {
   onTesting?: (c: Candidate) => void;
   onResults?: (s: Scored[]) => void;
   onStatus?: (s: PoolStatus) => void;
+  /** A worker picked up a batch. */
+  onDispatch?: (worker: number, cands: Candidate[]) => void;
+  /** A worker finished a batch: its plans, each plan's runs, and how long it took. */
+  onJob?: (worker: number, out: Scored[], runs: Uint16Array[], ms: number) => void;
+  /** The search (re)started; kept is how many earlier results survived. */
+  onStart?: (total: number, kept: number, workers: number) => void;
 }
 
 interface Slot {
@@ -89,6 +95,7 @@ export class JevPool {
     this.last = performance.now();
     if (this.timer == null) this.timer = setInterval(() => this.tick(), 40);
     this.ev.onResults?.(this.results);
+    this.ev.onStart?.(this.total, this.results.length, this.slots.length);
     this.emit();
   }
 
@@ -148,8 +155,14 @@ export class JevPool {
       sent += cands.length;
       this.jobGen.set(msg.job, this.generation);
       this.ev.onTesting?.(cands[cands.length - 1]);
+      this.ev.onDispatch?.(this.slots.indexOf(slot), cands);
       if (slot.w) slot.w.postMessage(msg);
-      else setTimeout(() => this.receive(slot, { job: msg.job, out: score(buildCity(msg.seed), msg) }), 0);
+      else
+        setTimeout(() => {
+          const t0 = performance.now();
+          const r = scoreDetailed(buildCity(msg.seed), msg);
+          this.receive(slot, { job: msg.job, out: r.out, runs: r.runs, ms: performance.now() - t0 });
+        }, 0);
     }
     this.emit();
     return sent;
@@ -162,6 +175,7 @@ export class JevPool {
     if (gen !== this.generation) return;
     const now = performance.now();
     for (let i = 0; i < out.out.length; i++) this.doneTimes.push(now);
+    this.ev.onJob?.(this.slots.indexOf(slot), out.out, out.runs, out.ms);
     this.results = this.results.concat(out.out);
     this.ev.onResults?.(this.results);
     this.emit();

@@ -79,6 +79,21 @@ export interface Job {
   cands: Candidate[];
 }
 
+/** Score a batch and keep each plan's individual runs too, for watching Jev work. */
+export function scoreDetailed(world: World, msg: Job): { out: Scored[]; runs: Uint16Array[] } {
+  const pops = new Map<number, ReturnType<typeof population>>();
+  const out: Scored[] = [];
+  const runs: Uint16Array[] = [];
+  for (const c of msg.cands) {
+    let pop = pops.get(c.hour);
+    if (!pop) pops.set(c.hour, (pop = population(world, c.hour, msg.base.day, msg.base.watched, msg.obs)));
+    const e = estimate(world, candidatePlan(world, msg.base, c), pop, msg.runs, 17);
+    out.push({ c, pk: e.pk, mean: e.mean, p90: e.p90 });
+    runs.push(e.counts);
+  }
+  return { out, runs };
+}
+
 /** Score a batch of candidates. Runs in a worker or on the main thread; the numbers are identical. */
 export function score(world: World, msg: Job): Scored[] {
   const pops = new Map<number, ReturnType<typeof population>>();

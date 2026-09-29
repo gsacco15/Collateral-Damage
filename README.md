@@ -66,6 +66,14 @@ A planning HUD around the paper city:
 - **Jev** (right, second tab): the parallel search with throttle, workers, requirement and search space; the trade-off chart with its frontier; Jev's pick; the log.
 - **3D**: the same city, people and strike as a tilted model, loaded on demand.
 
+### Playing with it
+
+- **Drag the aim** on the target, and **drag the approach handle** (the dark arrow circling the aim) to choose the direction of attack. `,` and `.` turn it too; `[` and `]` step the hour.
+- **Point anywhere**: the readout says who is inside a building, or how likely someone standing in the open there is to be killed or badly hurt.
+- **Explore**: landmarks and streets are named as you find them; the Explored menu flies you back to anything you've found.
+- **Jev at work**: when Jev runs, a panel over the map shows its workers spinning up, the queue draining, each worker lane scoring a plan and flashing the grid of its simulated strikes, and each result flying into the trade-off chart, with a running count of simulated strikes. Change the speed, pause it, or change the plan's assumptions and watch it re-score.
+- **The decision is yours**: Authorise strike opens a final-decision screen with the numbers, who must approve and any protected sites in range. Press and hold the red button until the ring fills; let go early and nothing happens. Then: weapon away, a countdown, impact, one outcome.
+
 ## Later
 
 - A **live clock**: people move continuously and Jev re-estimates as they do, instead of stepping by the hour.

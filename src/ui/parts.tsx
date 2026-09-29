@@ -1,5 +1,5 @@
 // Small controls.
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { Sources } from '../jev';
 
 export function Seg<T extends string | number>({ value, onChange, options, small }: { value: T; onChange: (v: T) => void; options: [T, string][]; small?: boolean }) {
@@ -117,5 +117,52 @@ export function Dial({ value, onChange }: { value: number; onChange: (v: number)
       </g>
       <circle r={3} className="hub" />
     </svg>
+  );
+}
+
+/** Press and hold until the ring fills. Letting go early cancels. */
+export function HoldButton({ label, onDone, ms = 1600 }: { label: string; onDone: () => void; ms?: number }) {
+  const [p, setP] = useState(0);
+  const raf = useRef(0);
+  const start = useRef(0);
+  const go = () => {
+    start.current = performance.now();
+    const tick = () => {
+      const k = Math.min(1, (performance.now() - start.current) / ms);
+      setP(k);
+      if (k >= 1) {
+        onDone();
+        setP(0);
+        return;
+      }
+      raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+  };
+  const stop = () => {
+    cancelAnimationFrame(raf.current);
+    setP(0);
+  };
+  const C = 2 * Math.PI * 44;
+  return (
+    <button
+      className={`hold ${p > 0 ? 'holding' : ''}`}
+      onPointerDown={go}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+      onKeyDown={(e) => {
+        if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && p === 0) go();
+      }}
+      onKeyUp={stop}
+      onContextMenu={(e) => e.preventDefault()}
+      aria-label={`${label}: press and hold`}
+    >
+      <svg viewBox="-50 -50 100 100" aria-hidden>
+        <circle r={44} className="track" />
+        <circle r={44} className="fill" strokeDasharray={C} strokeDashoffset={C * (1 - p)} transform="rotate(-90)" />
+      </svg>
+      <span>{p > 0 ? `${Math.ceil((1 - p) * (ms / 1000) * 10) / 10}s` : label}</span>
+    </button>
   );
 }

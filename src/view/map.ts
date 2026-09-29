@@ -68,16 +68,19 @@ export interface MapFrame {
   layers: Layers;
   circleR: number;
   ghost: Plan | null;
+  trail: Plan[]; // the plans Jev tried most recently, newest last
   spotMode: boolean;
   hover: number | null;
   selected: number | null;
   outcome: Outcome | null;
   aimDrag: boolean;
+  headingDrag: boolean;
 }
 
 const STACKED = new Set(['home', 'apartment', 'villa', 'office', 'hospital']);
 export const slotZ = (b: Building, i: number) => ((STACKED.has(b.kind) ? i % b.floors : 0) * 3.1 + 1.5);
 const WORLD_SCALE = 2; // pixels per metre in the pan cache
+const HANDLE_PX = 70; // how far out the approach handle sits, in screen pixels
 
 interface StrikeFx {
   plan: Plan;
@@ -165,6 +168,13 @@ export class MapView {
     const a = this.toWorld(0, 0);
     const b = this.toWorld(this.cw, this.ch);
     return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+  }
+
+  /** Where the approach handle is: behind the aim point, on the way in. */
+  handleWorld(plan: Plan) {
+    const { s } = this.cam();
+    const h = (plan.heading * Math.PI) / 180;
+    return { x: plan.aimX - (Math.sin(h) * HANDLE_PX) / s, y: plan.aimY + (Math.cos(h) * HANDLE_PX) / s };
   }
 
   buildingAt(x: number, y: number) {
@@ -434,7 +444,47 @@ export class MapView {
       for (const q of b.rects) g.strokeRect(q.x - 0.6, q.y - 0.6, q.w + 1.2, q.h + 1.2);
     }
 
-    if (!shown && !striking) drawAim(g, plan.aimX, plan.aimY, px, f.aimDrag ? 1.25 : 1, C.ink);
+    // Jev's trail: the last plans it tried, fading.
+    f.trail.forEach((tp, i) => {
+      const a = ((i + 1) / f.trail.length) * 0.6;
+      const h = (tp.heading * Math.PI) / 180;
+      g.strokeStyle = hexA(C.jev, a);
+      g.lineWidth = 1.4 * px;
+      g.beginPath();
+      g.arc(tp.aimX, tp.aimY, 5 * px, 0, Math.PI * 2);
+      g.moveTo(tp.aimX - Math.sin(h) * 30 * px, tp.aimY + Math.cos(h) * 30 * px);
+      g.lineTo(tp.aimX - Math.sin(h) * 7 * px, tp.aimY + Math.cos(h) * 7 * px);
+      g.stroke();
+    });
+    if (!shown && !striking) {
+      drawAim(g, plan.aimX, plan.aimY, px, f.aimDrag ? 1.25 : 1, C.ink);
+      // The approach handle: drag it around the aim to choose the direction of attack.
+      const hp = this.handleWorld(plan);
+      const h = (plan.heading * Math.PI) / 180;
+      g.strokeStyle = 'rgba(29,27,24,0.5)';
+      g.lineWidth = 1.2 * px;
+      g.beginPath();
+      g.arc(plan.aimX, plan.aimY, HANDLE_PX * px, 0, Math.PI * 2);
+      g.setLineDash([2 * px, 4 * px]);
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = f.headingDrag ? C.red : C.ink;
+      g.beginPath();
+      g.arc(hp.x, hp.y, 11 * px, 0, Math.PI * 2);
+      g.fill();
+      g.save();
+      g.translate(hp.x, hp.y);
+      g.rotate(h);
+      g.fillStyle = '#f3efe7';
+      g.beginPath();
+      g.moveTo(0, -6 * px);
+      g.lineTo(5 * px, 5 * px);
+      g.lineTo(0, 2 * px);
+      g.lineTo(-5 * px, 5 * px);
+      g.closePath();
+      g.fill();
+      g.restore();
+    }
     if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
     if (fx) this.drawFx(g, fx, px);
