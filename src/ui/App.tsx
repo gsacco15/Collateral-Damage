@@ -72,6 +72,7 @@ import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
 import { SettingsPanel } from './Settings';
+import { tallyOf } from './tally';
 import { readIntel } from './jevLive';
 import { addSceneExtra } from '../view/lifeScene';
 import { bakerLine, current, DONE, EARLY, ENDINGS, FIGURES, figureAt, HANDLER_BRIEF, inHours, loadMission, MEETS, missionEnts, newMission, SAMIR, saveMission, scatterLetters, setLive, STRANGER, type FigureId, type MissionState } from '../mission/mission';
@@ -494,6 +495,8 @@ export default function App() {
   const struckEst = useRef<Estimate | null>(null);
   // Living: the truth about armed men at the target, known to the game all along, shown only after the strike.
   const [armedThere, setArmedThere] = useState<number | null>(null);
+  // After a strike: who it hurt, by age, where they were, and (Living) which group, on a button.
+  const [showTally, setShowTally] = useState(false);
   // Living: Jev's reading of how the city's people are behaving (per district this hour, and round each strike).
   // Rules act at once; Jev's answers arrive in the background and nudge them. Offline, the rules stand alone.
   const [cityMood, setCityMood] = useState<{ id: string; districts: Behaviour['districts'] } | null>(null);
@@ -799,6 +802,11 @@ export default function App() {
     const districts = cityMood?.id === cityKeyId ? cityMood.districts : {};
     return Object.keys(districts).length || Object.keys(afterMoods).length ? { districts, after: afterMoods } : null;
   }, [alive, cityMood, cityKeyId, afterMoods]);
+  const tally = useMemo(() => {
+    const m = mapRef.current;
+    if (!outcome || !showTally || !m) return null;
+    return tallyOf(world, outcome, m.crowd.walkers, m.crowd.cars, plan.hour, plan.day === 'friday');
+  }, [outcome, showTally, world]); // eslint-disable-line react-hooks/exhaustive-deps
   const behaveRef = useRef(behave);
   behaveRef.current = behave;
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive, marks, behave), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive, marks, behave]);
@@ -2043,6 +2051,7 @@ export default function App() {
     // The outcome is compared with the estimate the strike was planned on, not the one after it (the ruins and the
     // city's reaction change the numbers straight away). Rolling again keeps the first.
     if (!outcome) struckEst.current = est;
+    setShowTally(false);
     setArmedThere(aliveRef.current && targetOf(world, plan.target).buildingId != null ? armedTruth(world, targetOf(world, plan.target).buildingId, plan.hour, plan.day) : null);
     setRuins(before);
     setMarks(marksBefore);
@@ -3100,6 +3109,40 @@ export default function App() {
                   <p>
                     The estimate: half the runs at or below {(struckEst.current ?? est)!.p50}, nine in ten at or below {(struckEst.current ?? est)!.p90}. This roll: {outcome.count}.
                   </p>
+                )}
+                <button className="btn small tally-btn" onClick={() => setShowTally(!showTally)} aria-expanded={showTally}>
+                  Who was hurt {showTally ? '▴' : '▾'}
+                </button>
+                {showTally && tally && (
+                  <div className="tally">
+                    <div className="tally-who">
+                      <span><b>{tally.who.children}</b> {tally.who.children === 1 ? 'child' : 'children'}</span>
+                      <span><b>{tally.who.adults}</b> {tally.who.adults === 1 ? 'adult' : 'adults'}</span>
+                      <span><b>{tally.who.elderly}</b> elderly</span>
+                    </div>
+                    <span className="k">Where they were</span>
+                    {tally.where.map(([k, n]) => (
+                      <div key={k} className="tally-row">
+                        <span>{k}</span>
+                        <i style={{ width: `${Math.max(4, (n / Math.max(1, tally.total)) * 100)}%` }} />
+                        <b>{n}</b>
+                      </div>
+                    ))}
+                    {tally.groups.length > 0 && (
+                      <>
+                        <span className="k">Among them</span>
+                        {tally.groups.map(([k, n]) => (
+                          <div key={k} className="tally-row">
+                            <span>{k}</span>
+                            <i style={{ width: `${Math.max(4, (n / Math.max(1, tally.total)) * 100)}%` }} />
+                            <b>{n}</b>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {tally.total === 0 && <p className="hint">Nobody was killed or badly hurt.</p>}
+                    <p className="hint">Counted person by person from this one outcome, not the estimate.</p>
+                  </div>
                 )}
                 {armedThere != null && (
                   <p className={`armed-reveal ${armedThere ? 'yes' : 'no'}`}>

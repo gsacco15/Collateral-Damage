@@ -98,6 +98,15 @@ const FEMALE_WEAR = new Set(['hijab', 'shawl', 'abaya', 'burqa']);
 export function personOut(w: Walker, hour: number, place?: string): Person {
   const r = rng(w.id * 6007 + 3);
   const female = FEMALE_WEAR.has(w.wear) || (w.wear === 'bare' && r() < 0.5);
+  // Living: the groups outside the usual pattern, and those who came after a strike, say who they were.
+  const group = w.role ?? w.crowd?.split('@')[0];
+  if (group === 'security') return named(r, false, between(r, 20, 50), pick(r, ['a police officer at the cordon', 'a police officer on duty at the checkpoint']));
+  if (group === 'medic') return named(r, female, between(r, 22, 55), pick(r, ['a medic, treating the wounded', 'a paramedic, carrying a stretcher']));
+  if (group === 'vendor') return named(r, female, between(r, 14, 70), pick(r, ['selling tea from a flask', 'selling sweets from a tray', 'selling phone cards and cigarettes']));
+  if (group === 'unhoused') return named(r, female, between(r, 12, 80), pick(r, ['sleeping rough, with nowhere else to go', 'living on the street since the war took the house']));
+  if (group === 'help') return named(r, female, between(r, 14, 70), pick(r, ['came back to dig out the wounded', 'searching the rubble for a neighbour', 'carrying the injured out']));
+  if (group === 'gate') return named(r, female, between(r, 22, 60), 'a parent, come to take their child home');
+  if (group === 'hospital') return named(r, female, between(r, 16, 75), 'waiting at the hospital for news of a relative');
   if (place && /school yard/i.test(place)) return named(r, female, between(r, 6, 12), 'playing in the school yard');
   if (place && /market|souk/i.test(place)) return named(r, female, household(r) || 30, 'shopping at the market');
   if (place && /park|garden/i.test(place)) return named(r, female, household(r), 'sitting in the park');
