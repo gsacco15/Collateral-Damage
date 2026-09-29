@@ -221,6 +221,34 @@ function foldedGeo(q: Rect, h: number) {
   return g;
 }
 
+/** Paint on a folded roof: the same folds, a hair above, with texture coordinates laid flat across the roof. */
+function foldedDecalGeo(q: Rect, h: number) {
+  const g = foldedGeo(q, h + 0.03);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const uv = g.attributes.uv as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) - q.x) / q.w, (pos.getZ(i) - q.y) / q.h);
+  return g;
+}
+
+/** "14", painted big on the roof years ago and fading. */
+let fourteen: THREE.Texture | null = null;
+function fourteenTex(aspect: number) {
+  if (fourteen) return fourteen;
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = Math.round(512 / aspect);
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(60,50,40,0.5)';
+  g.font = `700 ${Math.min(c.width, c.height) * 0.62}px "IBM Plex Sans", sans-serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('14', c.width / 2, c.height / 2 + 2);
+  fourteen = new THREE.CanvasTexture(c);
+  fourteen.flipY = false;
+  fourteen.colorSpace = THREE.SRGBColorSpace;
+  return fourteen;
+}
+
 function tornSheet(w: number, d: number, r: () => number) {
   const s = new THREE.Shape();
   const n = 14;
@@ -950,6 +978,11 @@ export class Model3D {
         const wallTile = b.kind === 'warehouse' || b.kind === 'stand' || b.kind === 'shelter' ? 8 : 4;
         put(b.kind === 'stand' ? M.stand : b.name === 'Cotton Street School' ? M.schoolWall : wallOf[p], wallsGeo(q, b.h, 0, wallTile, 3.1));
         if (b.kind === 'warehouse' && p === 'white') put(M.fold, foldedGeo(q, b.h));
+        if (b.name === 'Warehouse 14' && q === b.rects[0]) {
+          const decal = new THREE.Mesh(foldedDecalGeo(q, b.h), new THREE.MeshStandardMaterial({ map: fourteenTex(q.w / q.h), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
+          decal.receiveShadow = true;
+          this.city.add(decal);
+        }
         else if (p === 'terracotta') put(M.terracottaRoof, hipGeo(q, b.h, Math.min(q.w, q.h) * 0.35));
         else put(b.kind === 'stand' ? M.stand : roofOf[p], roofGeo(q, b.h, 12));
         // Crenellated parapets on some kraft roofs; plain parapets on some white ones.

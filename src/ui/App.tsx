@@ -1449,6 +1449,12 @@ export default function App() {
     }
     stopDemo();
     stopTour();
+    // Past the briefing, the guide works on the flat map: leave 3D, however it got there.
+    if (guide === 0 && i !== 0 && viewRef.current === 'model') {
+      modelRef.current?.stopOrbit();
+      tourBack.current = true;
+      setView('map');
+    }
     if (i != null && GUIDE[i].tour) startTour();
     if (i != null && GUIDE[i].demo) void startDemo();
     else if (phaseRef.current !== 'idle' && (i == null || (guide != null && GUIDE[guide].demo))) {
