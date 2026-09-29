@@ -33,7 +33,23 @@ export interface Census {
   drawn: number;
 }
 
-export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census }: { dark: boolean; setDark: (v: boolean) => void; alive: boolean; setAlive: (v: boolean) => void; onClose: () => void; census: Census }) {
+/** One strike, as the ledger keeps it. */
+export interface StrikeLog {
+  target: string;
+  hour: number;
+  day: 'weekday' | 'friday';
+  hurt: number;
+  who: { children: number; adults: number; elderly: number };
+  buildings: number; // destroyed by this strike
+  homes: number;
+  homeless: number; // people who lived in the homes it destroyed
+  armed: number | null; // Living: armed men who were really there
+}
+
+const hhmm = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census, ledger }: { dark: boolean; setDark: (v: boolean) => void; alive: boolean; setAlive: (v: boolean) => void; onClose: () => void; census: Census; ledger: StrikeLog[] }) {
+  const sum = (f: (l: StrikeLog) => number) => ledger.reduce((t, l) => t + f(l), 0);
   const [reads, setReads] = useState<Check>({ state: 'idle', text: 'Reads the conflicting reports on a target and judges how many people are inside.' });
   const [city, setCity] = useState<Check>({ state: 'idle', text: 'Judges how each district is behaving this hour (Living only).' });
   const [after, setAfter] = useState<Check>({ state: 'idle', text: 'Judges how the area round a strike responds (Living only).' });
@@ -131,6 +147,53 @@ export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census 
             <b>{census.drawn.toLocaleString()}</b>
           </div>
           <p className="set-foot">{alive ? 'Living: groups listed separately. ' : 'Classic: no separate groups. '}The map draws a sample of those outside; the estimate counts them all.</p>
+        </div>
+
+        <div className="set-sec">
+          <b>Since the city was last rebuilt</b>
+          {ledger.length === 0 ? (
+            <p className="set-foot">No strikes yet. Every strike is added here: who it hurt, and what it destroyed.</p>
+          ) : (
+            <>
+              <div className="census">
+                <span>Strikes</span>
+                <b>{ledger.length}</b>
+                <span>Killed or badly hurt</span>
+                <b className="bad">{sum((l) => l.hurt)}</b>
+                <span className="grp">Children</span>
+                <b>{sum((l) => l.who.children)}</b>
+                <span className="grp">Adults</span>
+                <b>{sum((l) => l.who.adults)}</b>
+                <span className="grp">Elderly</span>
+                <b>{sum((l) => l.who.elderly)}</b>
+                <span>Buildings destroyed</span>
+                <b>{sum((l) => l.buildings)}</b>
+                <span>Homes destroyed</span>
+                <b>{sum((l) => l.homes)}</b>
+                <span>People who lost their home</span>
+                <b>{sum((l) => l.homeless)}</b>
+                <span>Residents with a home left</span>
+                <b>{Math.max(0, census.residents - sum((l) => l.homeless)).toLocaleString()}</b>
+                {ledger.some((l) => l.armed != null) && (
+                  <>
+                    <span>Armed men who were really there</span>
+                    <b>{sum((l) => l.armed ?? 0)}</b>
+                  </>
+                )}
+              </div>
+              <ol className="ledger">
+                {ledger.map((l, i) => (
+                  <li key={i}>
+                    <span>
+                      {l.target}, {l.day === 'friday' ? 'Fri' : ''} {hhmm(l.hour)}
+                    </span>
+                    <b>{l.hurt} hurt</b>
+                  </li>
+                ))}
+              </ol>
+              <p className="set-foot">Each strike's own outcome, counted person by person. Rolling again replaces the last; Rebuild the city starts the count again.</p>
+            </>
+          )}
         </div>
 
         <div className="set-sec">

@@ -71,7 +71,7 @@ import { personIn, personInCar, personLine, personOut } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
-import { SettingsPanel } from './Settings';
+import { SettingsPanel, type StrikeLog } from './Settings';
 import { tallyOf } from './tally';
 import { readIntel } from './jevLive';
 import { addSceneExtra } from '../view/lifeScene';
@@ -488,10 +488,14 @@ export default function App() {
   const down3d = useRef<{ x: number; y: number } | null>(null);
   const labels3dRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<Model3D | null>(null);
-  const strikeRef = useRef<{ plan: Plan; outcome: Outcome; before: number[]; marksBefore: Mark[] } | null>(null);
+  const strikeRef = useRef<{ plan: Plan; outcome: Outcome; before: number[]; marksBefore: Mark[]; ledgerBefore: StrikeLog[] } | null>(null);
   // Living: the strikes the city remembers, for the hours after each (crowds at the ruin, the souk shut, parents at
   // the school gate, families at the hospital). Cleared with the ruins.
   const [marks, setMarks] = useState<Mark[]>([]);
+  // What the strikes have cost, since the city was last rebuilt: one entry per strike (rolling again replaces the last).
+  const [ledger, setLedger] = useState<StrikeLog[]>([]);
+  const ledgerRef = useRef(ledger);
+  ledgerRef.current = ledger;
   const struckEst = useRef<Estimate | null>(null);
   // Living: the truth about armed men at the target, known to the game all along, shown only after the strike.
   const [armedThere, setArmedThere] = useState<number | null>(null);
@@ -2072,6 +2076,8 @@ export default function App() {
     // Rolling again replaces the last strike; a new strike adds to the ruins.
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     const marksBefore = outcome && strikeRef.current ? strikeRef.current.marksBefore : marksRef.current;
+    const ledgerBefore = outcome && strikeRef.current ? strikeRef.current.ledgerBefore : ledgerRef.current;
+    setLedger(ledgerBefore);
     // The outcome is compared with the estimate the strike was planned on, not the one after it (the ruins and the
     // city's reaction change the numbers straight away). Rolling again keeps the first.
     if (!outcome) struckEst.current = est;
@@ -2090,6 +2096,14 @@ export default function App() {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
       setMarks([...marksBefore, { x: o.ix, y: o.iy, hour: plan.hour, day: plan.day, sev: Math.min(1, 0.3 + o.count / 30 + weapon(plan.weapon).blast / 60) }]);
+      {
+        // The ledger: who this strike hurt, and what it destroyed that was still standing.
+        const HOMES = new Set(['home', 'apartment', 'villa', 'shack', 'tent', 'barracks']);
+        const fresh = o.damaged.filter((id) => id >= 0 && !before.includes(id)).map((id) => world.buildings[id]).filter(Boolean);
+        const homes = fresh.filter((b) => HOMES.has(b.kind));
+        const t = tallyOf(world, o, m.crowd.walkers, m.crowd.cars, plan.hour, plan.day === 'friday');
+        setLedger([...ledgerBefore, { target: targetOf(world, plan.target).name, hour: plan.hour, day: plan.day, hurt: o.count, who: t.who, buildings: fresh.length, homes: homes.length, homeless: Math.round(homes.reduce((n, b) => n + b.capacity, 0)), armed: aliveRef.current ? armedTruth(world, targetOf(world, plan.target).buildingId, plan.hour, plan.day) : null }]);
+      }
       // The debrief: when the strike hits Warehouse 14 (destroyed or not) or touches the school, a closing word on the story. Not in
       // the guide (it tells its own), and not at the end of the secret file.
       const schoolB = world.buildings.find((b) => b.name === 'Cotton Street School');
@@ -2148,7 +2162,7 @@ export default function App() {
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));
-    strikeRef.current = { plan, outcome: o, before, marksBefore };
+    strikeRef.current = { plan, outcome: o, before, marksBefore, ledgerBefore };
   };
   /** Clear the last strike's effects, keeping the ruins. */
   function endStrike() {
@@ -2164,6 +2178,7 @@ export default function App() {
     setRuins([]);
     setMarks([]);
     setAfterMoods({});
+    setLedger([]);
   }
   // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
   const callOff = () => {
@@ -3478,7 +3493,7 @@ export default function App() {
       </nav>
       <div className="mobile-panel">{mobileTab === 'plan' ? planDock : mobileTab === 'estimate' ? estimateDock : jevDock}</div>
       {secretBtn('phone')}
-      {settingsOpen && <SettingsPanel dark={dark} setDark={setDark} alive={alive} setAlive={switchPeople} onClose={() => setSettingsOpen(false)} census={census()} />}
+      {settingsOpen && <SettingsPanel dark={dark} setDark={setDark} alive={alive} setAlive={switchPeople} onClose={() => setSettingsOpen(false)} census={census()} ledger={ledger} />}
     </div>
   );
 }
