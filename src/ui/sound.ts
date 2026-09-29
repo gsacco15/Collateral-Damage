@@ -84,6 +84,7 @@ class SoundEngine {
     if (on) {
       this.ensure();
       void this.ctx?.resume();
+      this.unlock();
       this.master?.gain.setTargetAtTime(1, this.ctx!.currentTime, 0.2);
     } else if (this.ctx && this.master) {
       this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
@@ -93,9 +94,37 @@ class SoundEngine {
     this.listeners.forEach((f) => f(on));
   }
 
+  /** Called on taps and key presses until the browser lets audio run. True once it does. */
+  wake(): boolean {
+    if (!this.enabled) return true;
+    if (this.ctx?.state === 'running') return true;
+    this.ensure();
+    void this.ctx!.resume();
+    this.unlock();
+    this.master?.gain.setTargetAtTime(1, this.ctx!.currentTime, 0.2);
+    return (this.ctx!.state as string) === 'running'; // resume() is async: the next tap will see it running
+  }
+
+  /** iPhones and iPads: play through the silent switch, and start the audio inside this tap. */
+  private unlock() {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, 22050);
+    src.connect(ctx.destination);
+    src.start(0);
+  }
+
   private ensure() {
     if (this.ctx) return;
-    this.ctx = new AudioContext();
+    try {
+      // Safari 17+: treat this as media playback, so the ring/silent switch doesn't mute it.
+      const nav = navigator as Navigator & { audioSession?: { type: string } };
+      if (nav.audioSession) nav.audioSession.type = 'playback';
+    } catch {
+      /* not supported */
+    }
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    this.ctx = new AC();
     this.master = this.ctx.createGain();
     this.master.gain.value = 0;
     this.master.connect(this.ctx.destination);

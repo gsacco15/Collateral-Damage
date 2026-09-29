@@ -165,12 +165,16 @@ export default function App() {
   const [layersOpen, setLayersOpen] = useState(false);
   const [soundOn, setSoundOn] = useState(sound.enabled);
   useEffect(() => sound.onChange(setSoundOn), []);
-  // Browsers only start audio after a click: if sound was left on, wake it on the first one.
+  // Browsers only start audio after a tap: if sound was left on, wake it on the first ones.
+  // iOS only counts a finished tap (touchend / click), so keep listening until audio is actually running.
   useEffect(() => {
-    if (!sound.enabled) return;
-    const wake = () => sound.setEnabled(true);
-    window.addEventListener('pointerdown', wake, { once: true });
-    return () => window.removeEventListener('pointerdown', wake);
+    const events = ['pointerdown', 'touchend', 'click', 'keydown'] as const;
+    const off = () => events.forEach((e) => window.removeEventListener(e, wake));
+    const wake = () => {
+      if (sound.wake()) off();
+    };
+    events.forEach((e) => window.addEventListener(e, wake));
+    return off;
   }, []);
   // Quiet paper clicks for every button.
   useEffect(() => {
@@ -1279,6 +1283,9 @@ export default function App() {
           <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
             Explored {explored}/{world.places.length} ▾
           </button>
+          <button className={`sound-btn ${soundOn ? 'on' : ''}`} onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound is on (M)' : 'Sound is off (M)'}>
+            <span aria-hidden>{soundOn ? '🔊' : '🔇'}</span> {soundOn ? 'Sound on' : 'Sound off'}
+          </button>
           <button className="btn small" onClick={() => (guide == null ? setIntro(true) : goGuide(null))}>
             {guide == null ? 'Guide' : 'End guide'}
           </button>
@@ -1298,9 +1305,6 @@ export default function App() {
             </button>
             <button className={`full ${!panels.plan && !panels.side && !panels.drawer ? 'on' : ''}`} onClick={() => setPanels(fullMap)} title="Full map (F)" aria-label="Full map">
               ⛶
-            </button>
-            <button className={`full ${soundOn ? 'on' : ''}`} onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound on (M)' : 'Sound off (M)'} aria-label="Sound">
-              {soundOn ? '🔈' : '🔇'}
             </button>
           </div>
         </div>

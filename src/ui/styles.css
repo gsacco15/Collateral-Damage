@@ -477,6 +477,10 @@ a { color: var(--text-1); }
 .chart .hov { fill: none; stroke: var(--ink); stroke-width: 1.5; }
 
 /* ---------------------------------------------------------------- interaction and drama */
+/* Sound: its own button, shown at every width. */
+.sound-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sound-btn:hover { color: var(--text-1); border-color: var(--text-3); }
+.sound-btn.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 button.explored { border: 1px solid var(--line-2); background: transparent; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
 button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .maptip { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; max-width: 260px; padding: 7px 10px; border-radius: 9px; background: rgba(251, 250, 246, 0.97); border: 1px solid rgba(40, 30, 20, 0.12); box-shadow: var(--float); font-size: 11.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 1px; will-change: transform; }
