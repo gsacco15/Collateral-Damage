@@ -3,6 +3,7 @@
 import { BRIDGE_RUIN, riverX, rng, shownCount, type Building, type Population, type Rect, type Space, type World } from '../jev';
 import { C, grade, nightness, shade, sun, type Sun } from './paper';
 import { brokenLights, powerCut, streetLights } from './streetLights';
+import { brokenPoles, wireEnds, wiring } from './wires';
 import { laid } from './textures';
 
 export interface CityOpts {
@@ -305,6 +306,58 @@ export function drawCityTop(g: CanvasRenderingContext2D, w: World, o: CityOpts) 
     g.fillStyle = '#e9e2cf';
     g.fillRect(l.x - 0.3, l.y - 0.3, 0.6, 0.6);
   });
+  // Power and phone lines: thin cables with their shadows on the ground, poles with a crossarm, the odd transformer.
+  if (o.scale > 1.9) {
+    const bp = brokenPoles(w, o.damaged, o.blast ?? null);
+    const inV = (x: number, y: number) => x > v.x - 40 && x < v.x + v.w + 40 && y > v.y - 40 && y < v.y + v.h + 40;
+    for (const e of wireEnds(w, bp, o.damaged)) {
+      if (!inV(e.a[0], e.a[2]) && !inV(e.b[0], e.b[2])) continue;
+      g.strokeStyle = 'rgba(40,30,20,0.12)';
+      g.lineWidth = 0.08;
+      g.beginPath();
+      g.moveTo(e.a[0] + sh.dx * e.a[1], e.a[2] + sh.dy * e.a[1]);
+      g.lineTo(e.b[0] + sh.dx * e.b[1], e.b[2] + sh.dy * e.b[1]);
+      g.stroke();
+      g.strokeStyle = e.main ? 'rgba(35,32,30,0.7)' : 'rgba(35,32,30,0.5)';
+      g.lineWidth = e.main ? 0.12 : 0.07;
+      g.beginPath();
+      g.moveTo(e.a[0], e.a[2]);
+      // A little sag, seen as a bow toward the sun's side.
+      g.quadraticCurveTo((e.a[0] + e.b[0]) / 2 + sh.dx * 0.6, (e.a[2] + e.b[2]) / 2 + sh.dy * 0.6, e.b[0], e.b[2]);
+      g.stroke();
+    }
+    wiring(w).poles.forEach((p, i) => {
+      if (!inV(p.x, p.y)) return;
+      const f = bp.get(i);
+      if (f != null) {
+        g.strokeStyle = '#5a4a3a';
+        g.lineWidth = p.main ? 0.4 : 0.3;
+        g.beginPath();
+        g.moveTo(p.x, p.y);
+        g.lineTo(p.x + Math.cos(f) * p.h * 0.95, p.y + Math.sin(f) * p.h * 0.95);
+        g.stroke();
+        return;
+      }
+      g.strokeStyle = 'rgba(40,30,20,0.2)';
+      g.lineWidth = 0.3;
+      g.beginPath();
+      g.moveTo(p.x, p.y);
+      g.lineTo(p.x + sh.dx * p.h, p.y + sh.dy * p.h);
+      g.stroke();
+      g.fillStyle = p.main ? '#6a5a48' : '#7a6650';
+      g.beginPath();
+      g.arc(p.x, p.y, p.main ? 0.32 : 0.24, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#4a3e34';
+      g.fillRect(p.x - (p.main ? 1.1 : 0.7), p.y - 0.07, p.main ? 2.2 : 1.4, 0.14);
+      if (p.can) {
+        g.fillStyle = '#8a8e90';
+        g.beginPath();
+        g.arc(p.x + 0.4, p.y + 0.3, 0.28, 0, Math.PI * 2);
+        g.fill();
+      }
+    });
+  }
   g.lineCap = 'butt';
 }
 

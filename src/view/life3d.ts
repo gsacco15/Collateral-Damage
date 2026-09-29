@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { type World } from '../jev';
 import { HULLS, type Ent } from './lifeScene';
 import { brokenLights, powerCut, streetLights } from './streetLights';
+import { brokenPoles, wireEnds, wiring } from './wires';
 
 const box = (x: number, y: number, z: number, w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed();
 const up = new THREE.Vector3(0, 1, 0);
@@ -85,6 +86,10 @@ export class Life3D {
   private world: World;
   private brokenKey = '';
   private cut = false;
+  private poleMesh!: THREE.InstancedMesh;
+  private armMesh!: THREE.InstancedMesh;
+  private canMesh!: THREE.InstancedMesh;
+  private wireLines!: THREE.LineSegments;
   private lampHeadMat!: THREE.MeshStandardMaterial;
 
   constructor(scene: THREE.Scene, world: World) {
@@ -216,6 +221,20 @@ export class Life3D {
     deadHeads.frustumCulled = false;
     this.group.add(deadHeads);
     this.lampParts = { posts, arms, heads, deadHeads };
+    // Power and phone lines: wooden poles with a crossarm, transformer cans, sagging cables.
+    const np = wiring(world).poles.length;
+    this.poleMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.11, 0.15, 1, 6).translate(0, 0.5, 0), std({ color: '#7a6650' }), np);
+    this.armMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.1, 0.1), std({ color: '#4a3e34' }), np);
+    this.canMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.28, 0.28, 0.7, 8), std({ color: '#8a8e90', roughness: 0.5 }), np);
+    this.wireLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: '#2a2622', transparent: true, opacity: 0.75 }));
+    for (const im of [this.poleMesh, this.armMesh, this.canMesh]) {
+      im.frustumCulled = false;
+      im.castShadow = true;
+      this.group.add(im);
+    }
+    this.wireLines.frustumCulled = false;
+    this.group.add(this.wireLines);
+    this.placeWires(new Map(), new Set());
     lights.forEach((l, i) => this.pools.setColorAt(i, this.c.set(l.flood ? '#dfe9ff' : '#ffd9a0')));
     this.placeLamps(new Map());
     for (const im of [this.pools, posts, arms, heads]) {
@@ -261,6 +280,52 @@ export class Life3D {
     }
   }
 
+  /** Stand the poles (or lay the fallen ones down) and string the wires between them, sagging in the middle. */
+  private placeWires(broken: Map<number, number>, damaged: Set<number>) {
+    const { poles } = wiring(this.world);
+    const zero = new THREE.Vector3(0, 0, 0);
+    poles.forEach((p, i) => {
+      const f = broken.get(i);
+      if (f != null) {
+        const d = new THREE.Vector3(Math.cos(f), 0, Math.sin(f));
+        const axis = new THREE.Vector3().crossVectors(up, d).normalize();
+        this.q.setFromAxisAngle(axis, 1.5);
+        this.poleMesh.setMatrixAt(i, this.m.compose(this.v.set(p.x, 0.15, p.y), this.q, this.s.set(1, p.h, 1)));
+        this.armMesh.setMatrixAt(i, this.m.compose(this.v, this.q, zero));
+        this.canMesh.setMatrixAt(i, this.m.compose(this.v, this.q, zero));
+        return;
+      }
+      this.q.setFromAxisAngle(up, (i * 0.7) % Math.PI);
+      this.poleMesh.setMatrixAt(i, this.m.compose(this.v.set(p.x, 0, p.y), this.q.identity(), this.s.set(p.main ? 1.4 : 1, p.h, p.main ? 1.4 : 1)));
+      this.armMesh.setMatrixAt(i, this.m.compose(this.v.set(p.x, p.h - 0.3, p.y), this.q.setFromAxisAngle(up, (i * 0.9) % Math.PI), this.s.set(p.main ? 1.5 : 1, 1, 1)));
+      this.canMesh.setMatrixAt(i, this.m.compose(this.v.set(p.x + 0.35, p.h - 1.4, p.y), this.q.identity(), p.can ? this.s.set(1, 1, 1) : zero));
+    });
+    for (const im of [this.poleMesh, this.armMesh, this.canMesh]) im.instanceMatrix.needsUpdate = true;
+    const pos: number[] = [];
+    for (const e of wireEnds(this.world, broken, damaged)) {
+      const n = 6;
+      const len = Math.hypot(e.b[0] - e.a[0], e.b[2] - e.a[2]);
+      const sag = Math.min(1.4, len * 0.035);
+      let px = e.a[0];
+      let py = e.a[1];
+      let pz = e.a[2];
+      for (let k = 1; k <= n; k++) {
+        const u = k / n;
+        const x = e.a[0] + (e.b[0] - e.a[0]) * u;
+        const z = e.a[2] + (e.b[2] - e.a[2]) * u;
+        const y = Math.max(0.1, e.a[1] + (e.b[1] - e.a[1]) * u - sag * 4 * u * (1 - u));
+        pos.push(px, py, pz, x, y, z);
+        px = x;
+        py = y;
+        pz = z;
+      }
+    }
+    this.wireLines.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.wireLines.geometry = g;
+  }
+
   /** After a strike (or a rebuild), knock down or darken the lamps it reached. */
   setDamage(damaged: Set<number>, blast: { x: number; y: number; r: number } | null) {
     const key = `${[...damaged].join('.')}|${blast ? `${blast.x.toFixed(1)},${blast.y.toFixed(1)},${blast.r}` : ''}`;
@@ -268,6 +333,7 @@ export class Life3D {
     this.brokenKey = key;
     this.cut = powerCut(this.world, damaged);
     this.placeLamps(brokenLights(this.world, damaged, blast));
+    this.placeWires(brokenPoles(this.world, damaged, blast), damaged);
   }
 
   private put(name: string, x: number, y: number, z: number, rotY: number, sx: number, sy: number, sz: number, col?: string, tiltX = 0) {
