@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type World } from '../jev';
 import { HULLS, type Ent } from './lifeScene';
-import { streetLights } from './streetLights';
+import { brokenLights, streetLights } from './streetLights';
 
 const box = (x: number, y: number, z: number, w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed();
 const up = new THREE.Vector3(0, 1, 0);
@@ -67,9 +67,13 @@ export class Life3D {
   private pools: THREE.InstancedMesh;
   private poolMat: THREE.MeshBasicMaterial;
   private dpoolMat!: THREE.MeshBasicMaterial;
+  private lampParts!: { posts: THREE.InstancedMesh; arms: THREE.InstancedMesh; heads: THREE.InstancedMesh; deadHeads: THREE.InstancedMesh };
+  private world: World;
+  private brokenKey = '';
   private lampHeadMat!: THREE.MeshStandardMaterial;
 
   constructor(scene: THREE.Scene, world: World) {
+    this.world = world;
     scene.add(this.group);
     const std = (o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true, ...o });
     const add = (name: string, geo: THREE.BufferGeometry, mat: THREE.Material, cap: number, shadow = true) => {
@@ -157,22 +161,62 @@ export class Life3D {
     const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.14, 0.14).translate(0.5, 0, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
     this.lampHeadMat = new THREE.MeshStandardMaterial({ color: '#e9e2cf', emissive: '#ffd79a', emissiveIntensity: 0, roughness: 0.5 });
     const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 0.26, 0.55), this.lampHeadMat, lights.length);
-    lights.forEach((l, i) => {
-      const len = Math.hypot(l.x - l.px, l.y - l.py);
-      const yaw = Math.atan2(-(l.y - l.py), l.x - l.px);
-      const cold = l.flood;
-      this.pools.setMatrixAt(i, this.m.compose(this.v.set(l.x, 0.3, l.y), this.q.identity(), this.s.set(l.r, 1, l.r)));
-      this.pools.setColorAt(i, this.c.set(cold ? '#dfe9ff' : '#ffd9a0'));
-      posts.setMatrixAt(i, this.m.compose(this.v.set(l.px, 0, l.py), this.q.identity(), this.s.set(1, cold ? 1.4 : 1, 1)));
-      arms.setMatrixAt(i, this.m.compose(this.v.set(l.px, cold ? 8.3 : 5.95, l.py), this.q.setFromAxisAngle(up, yaw), this.s.set(Math.max(0.01, len), 1, 1)));
-      heads.setMatrixAt(i, this.m.compose(this.v.set(l.x, cold ? 8.2 : 5.85, l.y), this.q.setFromAxisAngle(up, yaw), this.s.set(1, 1, 1)));
-    });
+    // Dead lamps get a separate head with no glow.
+    const deadHeads = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 0.26, 0.55), std({ color: '#4a4742', roughness: 0.8 }), lights.length);
+    deadHeads.frustumCulled = false;
+    this.group.add(deadHeads);
+    this.lampParts = { posts, arms, heads, deadHeads };
+    lights.forEach((l, i) => this.pools.setColorAt(i, this.c.set(l.flood ? '#dfe9ff' : '#ffd9a0')));
+    this.placeLamps(new Map());
     for (const im of [this.pools, posts, arms, heads]) {
       im.frustumCulled = false;
       this.group.add(im);
     }
     posts.castShadow = true;
     this.pools.renderOrder = 2;
+  }
+
+  /** Stand every street light up, except those a strike knocked flat (lying away from it) or left dark. */
+  private placeLamps(broken: Map<number, number | null>) {
+    const { posts, arms, heads, deadHeads } = this.lampParts;
+    const zero = new THREE.Vector3(0, 0, 0);
+    streetLights(this.world).forEach((l, i) => {
+      const len = Math.hypot(l.x - l.px, l.y - l.py);
+      const yaw = Math.atan2(-(l.y - l.py), l.x - l.px);
+      const cold = l.flood;
+      const hy = cold ? 1.4 : 1;
+      const fall = broken.get(i);
+      const dead = broken.has(i);
+      this.pools.setMatrixAt(i, this.m.compose(this.v.set(l.x, 0.3, l.y), this.q.identity(), dead ? zero : this.s.set(l.r, 1, l.r)));
+      if (fall != null) {
+        // Flat on the ground: the post turned about the axis across its fall, the head smashed at the far end.
+        const d = new THREE.Vector3(Math.cos(fall), 0, Math.sin(fall));
+        const axis = new THREE.Vector3().crossVectors(up, d).normalize();
+        this.q.setFromAxisAngle(axis, 1.5);
+        posts.setMatrixAt(i, this.m.compose(this.v.set(l.px, 0.15, l.py), this.q, this.s.set(1, hy, 1)));
+        arms.setMatrixAt(i, this.m.compose(this.v, this.q, zero));
+        deadHeads.setMatrixAt(i, this.m.compose(this.v.set(l.px + d.x * 6 * hy, 0.15, l.py + d.z * 6 * hy), this.q.setFromAxisAngle(up, -fall + 0.6), this.s.set(1, 1, 1)));
+        heads.setMatrixAt(i, this.m.compose(this.v, this.q, zero));
+      } else {
+        posts.setMatrixAt(i, this.m.compose(this.v.set(l.px, 0, l.py), this.q.identity(), this.s.set(1, hy, 1)));
+        arms.setMatrixAt(i, this.m.compose(this.v.set(l.px, cold ? 8.3 : 5.95, l.py), this.q.setFromAxisAngle(up, yaw), this.s.set(Math.max(0.01, len), 1, 1)));
+        this.m.compose(this.v.set(l.x, cold ? 8.2 : 5.85, l.y), this.q.setFromAxisAngle(up, yaw), this.s.set(1, 1, 1));
+        heads.setMatrixAt(i, dead ? new THREE.Matrix4().makeScale(0, 0, 0) : this.m);
+        deadHeads.setMatrixAt(i, dead ? this.m : new THREE.Matrix4().makeScale(0, 0, 0));
+      }
+    });
+    for (const im of [this.pools, posts, arms, heads, deadHeads]) {
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
+  }
+
+  /** After a strike (or a rebuild), knock down or darken the lamps it reached. */
+  setDamage(damaged: Set<number>, blast: { x: number; y: number; r: number } | null) {
+    const key = `${[...damaged].join('.')}|${blast ? `${blast.x.toFixed(1)},${blast.y.toFixed(1)},${blast.r}` : ''}`;
+    if (key === this.brokenKey) return;
+    this.brokenKey = key;
+    this.placeLamps(brokenLights(this.world, damaged, blast));
   }
 
   private put(name: string, x: number, y: number, z: number, rotY: number, sx: number, sy: number, sz: number, col?: string, tiltX = 0) {

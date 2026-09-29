@@ -1,7 +1,7 @@
 // Where the street lights stand: along both sides of the boulevard, the canal quays, the other streets (every 34 m,
 // alternating sides) and at the corners of the warehouses and factories. One list, so the flat map and the 3D model
 // put the same lamp in the same place, and its pool of light falls right under it.
-import { buildingAt, riverX, type World } from '../jev';
+import { buildingAt, buildingDist, riverX, type World } from '../jev';
 
 export interface StreetLight {
   x: number; // the lamp head, over the edge of the road
@@ -59,5 +59,24 @@ export function streetLights(w: World): StreetLight[] {
   }
   cache = out;
   cacheFor = w;
+  return out;
+}
+
+/**
+ * What a strike did to the street lights. Close in, the blast knocks the post flat, away from the bomb (fall: the
+ * direction it lies, in radians); a little further out it still stands but the lamp is dead (fall: null), cables cut.
+ * Lights beside a building brought down (by this strike or an earlier one) go with it, so the ruins stay dark.
+ */
+export function brokenLights(w: World, damaged: Set<number>, blast: { x: number; y: number; r: number } | null) {
+  const out = new Map<number, number | null>();
+  const fallen = [...damaged].map((id) => w.buildings[id]).filter(Boolean);
+  streetLights(w).forEach((l, i) => {
+    if (blast) {
+      const d = Math.hypot(l.px - blast.x, l.py - blast.y);
+      if (d < blast.r * 1.6) return void out.set(i, Math.atan2(l.py - blast.y, l.px - blast.x));
+      if (d < blast.r * 3) return void out.set(i, null);
+    }
+    for (const b of fallen) if (buildingDist(b, l.px, l.py) < 4) return void out.set(i, Math.atan2(l.py - b.cy, l.px - b.cx));
+  });
   return out;
 }

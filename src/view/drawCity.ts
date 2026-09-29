@@ -2,7 +2,7 @@
 // Used twice: once into a large world-sized cache for smooth panning, and again sharp for the current view.
 import { BRIDGE_RUIN, riverX, rng, shownCount, type Building, type Population, type Rect, type Space, type World } from '../jev';
 import { C, grade, nightness, shade, sun, type Sun } from './paper';
-import { streetLights } from './streetLights';
+import { brokenLights, streetLights } from './streetLights';
 import { laid } from './textures';
 
 export interface CityOpts {
@@ -10,6 +10,7 @@ export interface CityOpts {
   pop: Population;
   damaged: Set<number>;
   crater: { x: number; y: number; r: number } | null;
+  blast?: { x: number; y: number; r: number } | null; // the last strike's heavy-blast radius: street lights near it are down
   view: Rect; // world rect to draw (culling)
   scale: number; // device pixels per metre, for detail decisions
 }
@@ -261,8 +262,30 @@ export function drawCityTop(g: CanvasRenderingContext2D, w: World, o: CityOpts) 
   for (const b of w.buildings) if (visible(v, b.rects[0], 10)) drawBuilding(g, b, sh, o.damaged.has(b.id), o.scale);
   // Street lights: a thin post on the kerb, its arm out over the road, and a long shadow.
   g.lineCap = 'round';
-  for (const l of streetLights(w)) {
-    if (l.px < v.x - 5 || l.px > v.x + v.w + 5 || l.py < v.y - 5 || l.py > v.y + v.h + 5) continue;
+  const broken = brokenLights(w, o.damaged, o.blast ?? null);
+  streetLights(w).forEach((l, i) => {
+    if (l.px < v.x - 5 || l.px > v.x + v.w + 5 || l.py < v.y - 5 || l.py > v.y + v.h + 5) return;
+    const fall = broken.get(i);
+    if (fall != null) {
+      // Knocked flat, lying away from the blast, the lamp head smashed at its end.
+      const ex = l.px + Math.cos(fall) * 6;
+      const ey = l.py + Math.sin(fall) * 6;
+      g.strokeStyle = 'rgba(40,30,20,0.25)';
+      g.lineWidth = 0.3;
+      g.beginPath();
+      g.moveTo(l.px + 0.2, l.py + 0.2);
+      g.lineTo(ex + 0.2, ey + 0.2);
+      g.stroke();
+      g.strokeStyle = '#4d4944';
+      g.lineWidth = 0.2;
+      g.beginPath();
+      g.moveTo(l.px, l.py);
+      g.lineTo(ex, ey);
+      g.stroke();
+      g.fillStyle = '#9a9488';
+      for (let k = 0; k < 4; k++) g.fillRect(ex + Math.cos(k * 1.9) * 0.5 - 0.1, ey + Math.sin(k * 1.9) * 0.5 - 0.1, 0.2, 0.2);
+      return;
+    }
     g.strokeStyle = 'rgba(40,30,20,0.18)';
     g.lineWidth = 0.22;
     g.beginPath();
@@ -281,7 +304,7 @@ export function drawCityTop(g: CanvasRenderingContext2D, w: World, o: CityOpts) 
     g.fill();
     g.fillStyle = '#e9e2cf';
     g.fillRect(l.x - 0.3, l.y - 0.3, 0.6, 0.6);
-  }
+  });
   g.lineCap = 'butt';
 }
 
@@ -386,10 +409,12 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
       g.fillStyle = grd;
       g.fillRect(x - r, y - r, r * 2, r * 2);
     };
-    for (const l of streetLights(w)) {
-      if (l.flood) continue; // the works' floodlights are drawn above, cold white
+    // Dead where the strike reached: knocked down, or standing with the cables cut.
+    const dead = brokenLights(w, o.damaged, o.blast ?? null);
+    streetLights(w).forEach((l, i) => {
+      if (l.flood || dead.has(i)) return; // the works' floodlights are drawn above, cold white
       lamp(l.x, l.y, l.r, 0.32);
-    }
+    });
     g.globalCompositeOperation = 'source-over';
   }
   g.restore();

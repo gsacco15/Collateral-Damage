@@ -242,7 +242,8 @@ export class MapView {
   private cityOpts(f: MapFrame, damaged: Set<number>, view: Rect, scale: number): CityOpts {
     const o = f.outcome;
     const crater = o ? { x: o.ix, y: o.iy, r: weapon(this.fx?.plan.weapon ?? f.plan.weapon).blast * 0.35 } : null;
-    return { hour: f.plan.hour, pop: f.pop, damaged, crater, view, scale };
+    const blast = o ? { x: o.ix, y: o.iy, r: weapon(this.fx?.plan.weapon ?? f.plan.weapon).blast } : null;
+    return { hour: f.plan.hour, pop: f.pop, damaged, crater, blast, view, scale };
   }
 
   private render(g: CanvasRenderingContext2D, width: number, height: number, t: [number, number, number, number, number, number], opts: CityOpts, sharp: boolean) {

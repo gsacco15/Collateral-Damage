@@ -1317,6 +1317,9 @@ export class Model3D {
         clock,
         night,
       );
+      // Street lights the blast reached: down, or dark. Only once the bomb has landed.
+      const landed = !f.strike || f.strike.t >= IMPACT_AT;
+      this.life.setDamage(landed ? damaged : new Set(f.ruins), landed && o ? { x: o.ix, y: o.iy, r: weapon(f.plan.weapon).blast } : null);
     }
     this.strike(f, now, dt);
     this.drift(now, nightness(f.plan.hour));
