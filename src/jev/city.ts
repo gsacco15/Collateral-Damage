@@ -162,6 +162,8 @@ export interface Extras {
   tankers: Rect[]; // at the fuel depot
   pipes: [number, number, number, number][];
   canopies: Rect[]; // the depot's pump island
+  transformers: Rect[]; // the power station's yard
+  pylons: { x: number; y: number }[]; // the line out of town
   hoops: { x: number; y: number }[]; // a basketball hoop, facing east
   swings: Rect[];
   slides: Rect[];
@@ -797,7 +799,7 @@ export function buildCity(seed = 7): World {
 
   // ---- The outskirts, placed by hand, from their own random stream so the city inside South Road stays as it was.
   cur = ro;
-  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [], doors: [], trucks: [], crates: [], kiosks: [], stripes: [], hopscotch: [], rings: [], mural: [], bikes: [], lamps: [], words: [], tankers: [], pipes: [], canopies: [], hoops: [], swings: [], slides: [], berms: [], tyres: [], wrecks: [], pens: [], goats: [], wells: [], tracks: [], panels: [] };
+  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [], doors: [], trucks: [], crates: [], kiosks: [], stripes: [], hopscotch: [], rings: [], mural: [], bikes: [], lamps: [], words: [], tankers: [], pipes: [], canopies: [], transformers: [], pylons: [], hoops: [], swings: [], slides: [], berms: [], tyres: [], wrecks: [], pens: [], goats: [], wells: [], tracks: [], panels: [] };
   // The opening scene: Warehouse 14's loading doors, a truck at the bay and crates by the wall; a kiosk on the corner;
   // zebra crossings where the children cross; hopscotch, a game circle and a mural in the school yard. Fixed, not random.
   {
@@ -842,6 +844,13 @@ export function buildCity(seed = 7): World {
     ex.pipes.push([159, 612, 165, 612], [159, 638, 165, 638], [150, 621, 150, 629], [174, 621, 174, 629], [162, 612, 162, 638], [174, 638, 186, 644]);
   }
   reserved.push({ x: -120, y: RAIL_Y - 6, w: 700, h: 12 });
+  // The power station, just outside the Workshops: a diesel generator hall, three stacks, the transformer yard, pylons out of town.
+  special({ kind: 'factory', material: 'steel', paper: 'grey', rects: [{ x: 16, y: 716, w: 54, h: 22 }], floors: 1, h: 11, district: 'kilns', name: 'Power Station', landmark: true });
+  for (let i = 0; i < 3; i++) special({ kind: 'chimney', material: 'steel', paper: 'grey', rects: [{ x: 76 + i * 8, y: 720, w: 4.5, h: 4.5 }], floors: 1, h: 24, district: 'kilns', name: 'Power station stack' });
+  reserved.push({ x: 14, y: 742, w: 84, h: 62 });
+  for (let r0 = 0; r0 < 3; r0++) for (let c0 = 0; c0 < 5; c0++) ex.transformers.push({ x: 22 + c0 * 14, y: 750 + r0 * 16, w: 5, h: 4 });
+  ex.fences.push({ x: 14, y: 742, w: 84, h: 0.4 }, { x: 14, y: 804, w: 84, h: 0.4 }, { x: 14, y: 742, w: 0.4, h: 62 }, { x: 98, y: 742, w: 0.4, h: 62 });
+  for (let x = 6; x > -130; x -= 28) ex.pylons.push({ x, y: 772 });
   // The Kilnworks, north of the line: the flour mill and its silos, the workers' hostel.
   special({ kind: 'factory', material: 'steel', paper: 'grey', rects: [{ x: 404, y: 716, w: 74, h: 34 }], floors: 2, h: 14, district: 'kilns', name: 'Flour Mill', landmark: true });
   for (let i = 0; i < 4; i++) special({ kind: 'silo', material: 'concrete', paper: 'grey', rects: [{ x: 488 + i * 19, y: 718, w: 16, h: 16 }], floors: 1, h: 26, district: 'kilns', name: 'Grain Silos', landmark: i === 0, round: true });

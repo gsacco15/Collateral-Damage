@@ -772,6 +772,42 @@ function drawOutskirts(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) 
       g.restore();
     }
   }
+  // The power station's transformer yard, and the pylons carrying the line out of town.
+  for (const q of e.transformers) {
+    g.fillStyle = 'rgba(40,30,20,0.25)';
+    g.fillRect(q.x + sh.dx * 1.4, q.y + sh.dy * 1.4, q.w, q.h);
+    g.fillStyle = '#7c7a73';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = '#9fa3a3';
+    for (let i = 0; i < 3; i++) g.fillRect(q.x + 0.6 + i * 1.5, q.y + 0.6, 0.8, q.h - 1.2);
+  }
+  if (e.pylons.length) {
+    g.strokeStyle = 'rgba(60,60,60,0.45)';
+    g.lineWidth = 0.12;
+    for (const off of [-1, 0, 1]) {
+      g.beginPath();
+      g.moveTo(40, 772 + off);
+      for (const p of e.pylons) g.lineTo(p.x, p.y + off);
+      g.stroke();
+    }
+    for (const p of e.pylons) {
+      g.strokeStyle = 'rgba(40,30,20,0.25)';
+      g.lineWidth = 0.4;
+      g.beginPath();
+      g.moveTo(p.x, p.y);
+      g.lineTo(p.x + sh.dx * 14, p.y + sh.dy * 14);
+      g.stroke();
+      g.strokeStyle = '#5a5a58';
+      g.lineWidth = 0.3;
+      g.strokeRect(p.x - 1.2, p.y - 1.2, 2.4, 2.4);
+      g.beginPath();
+      g.moveTo(p.x - 1.2, p.y - 1.2);
+      g.lineTo(p.x + 1.2, p.y + 1.2);
+      g.moveTo(p.x + 1.2, p.y - 1.2);
+      g.lineTo(p.x - 1.2, p.y + 1.2);
+      g.stroke();
+    }
+  }
   // Irrigation channels.
   g.fillStyle = 'rgba(110,150,165,0.8)';
   for (const q of e.channels) if (visible(v, q)) g.fillRect(q.x, q.y, q.w, q.h);

@@ -64,6 +64,8 @@ const PLACES: Record<string, Omit<PlaceStory, 'title' | 'kind'>> = {
   'Water tanks': { line: 'Filled by truck every morning. When the truck is late, everyone knows.', when: '' },
   'Camp Taps': { line: 'Six taps for the whole camp. Girls carry the water home in yellow jerrycans, talking the whole way.', when: 'Early morning and evening.' },
   'Dirt Pitch': { line: 'Goals made from tent poles. The camp league has eleven teams, all named after villages that are not there any more.', when: 'Late afternoon.' },
+  'Power Station': { line: 'Six diesel generators and the only steady power in the south of the city. When they stop, the hospital runs on its own, the bakeries don’t, and the water pumps on Tin Hill go quiet.', when: 'Always running; a crew of twelve, day and night.' },
+  'Power station stack': { line: 'Black smoke when a generator starts up, grey when it settles. People on Tin Hill read it like weather.', when: '' },
   'Old barracks': { line: 'Built for training, years ago, and left. One room now has carpets on the floor and a gas stove: Salem’s family winters here.', when: 'Full at night.' },
   Guardhouse: { line: 'Empty. Someone has painted a goat on the door.', when: '' },
   'Old radio mast': { line: 'Rusting, and no longer connected to anything. It is the tallest thing for twenty kilometres; the herders steer by it.', when: '' },

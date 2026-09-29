@@ -673,6 +673,21 @@ export class Model3D {
         put(M.door1, boxGeo(q.x + q.w / 2, 0.9, q.y + q.h * 0.17, q.w, 1.8, q.h * 0.34));
         put(M.door5, boxGeo(0, 0, 0, q.w - 0.3, 0.08, q.h * 0.72).rotateX(-0.33).translate(q.x + q.w / 2, 1, q.y + q.h * 0.63));
       }
+      // The power station's transformers, and pylons carrying the line away west.
+      for (const q of ex.transformers) {
+        put(M.steelGrey, boxGeo(q.x + q.w / 2, 1.4, q.y + q.h / 2, q.w, 2.8, q.h));
+        for (let i = 0; i < 3; i++) put(M.plastic, new THREE.CylinderGeometry(0.18, 0.28, 1.2, 6).translate(q.x + 1 + i * 1.5, 3.4, q.y + q.h / 2));
+      }
+      for (const p of ex.pylons) {
+        put(M.lamp, new THREE.CylinderGeometry(0.3, 1.4, 22, 4).translate(p.x, 11, p.y));
+        put(M.lamp, boxGeo(p.x, 20, p.y, 0.3, 0.3, 6));
+      }
+      for (let i = 0; i < ex.pylons.length; i++) {
+        const a = i === 0 ? { x: 40, y: 772 } : ex.pylons[i - 1];
+        const b = ex.pylons[i];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        for (const off of [-2.6, 0, 2.6]) put(M.line, boxGeo((a.x + b.x) / 2, i === 0 ? 14 : 19.6, (a.y + b.y) / 2 + off, len, 0.04, 0.04));
+      }
       // Street lamps along Cotton Street.
       for (const l of ex.lamps) {
         put(M.lamp, new THREE.CylinderGeometry(0.07, 0.1, 5, 5).translate(l.x, 2.5, l.y));
