@@ -3,11 +3,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { buildingAt, buildingDist, effect, lobe, riverX, rng, structureAt, targetOf, weapon, type Building, type Estimate, type Plan, type Population, type Rect, type World } from '../jev';
+import { BRIDGE_RUIN, buildingAt, buildingDist, effect, lobe, riverX, rng, structureAt, targetOf, weapon, type Building, type Estimate, type Plan, type Population, type Rect, type World } from '../jev';
 import type { Car, Walker } from './crowd';
 import { drawCity } from './drawCity';
 import type { Layers, Outcome } from './map';
 import { grade, nightness, sun } from './paper';
+import { Life3D } from './life3d';
+import { lifeScene } from './lifeScene';
 
 export interface Frame3D {
   ruins: number[]; // destroyed by earlier strikes
@@ -21,6 +23,7 @@ export interface Frame3D {
   strike: { plan: Plan; outcome: Outcome; t: number } | null; // t: seconds since release, on the map's clock
   walkers: Walker[];
   cars: Car[];
+  clock?: number; // the map's clock, so the city's life is at the same moment in both views
 }
 
 const IMPACT_AT = 2.6;
@@ -335,6 +338,7 @@ export class Model3D {
   private plane: THREE.Group;
   private bomb: THREE.Mesh;
   private last = performance.now();
+  private life!: Life3D;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -364,6 +368,7 @@ export class Model3D {
     this.sunLight.target.position.set(world.w / 2, 0, world.h / 2);
 
     this.buildStatic();
+    this.life = new Life3D(s, world);
 
     const bodyGeo = new THREE.CylinderGeometry(0.34, 0.42, 1.25, 7);
     bodyGeo.translate(0, 0.62, 0);
@@ -1198,6 +1203,25 @@ export class Model3D {
     this.overlays(f);
     this.damage(f);
     this.crowd(f);
+    {
+      const night = nightness(f.plan.hour);
+      const o = f.outcome;
+      const damaged = new Set([...f.ruins, ...(o ? o.damaged : [])]);
+      const clock = f.clock ?? now / 1000;
+      this.life.update(
+        lifeScene({
+          world: this.world,
+          time: clock,
+          hour: f.plan.hour,
+          night,
+          damaged,
+          away: o ? { x: o.ix, y: o.iy, r: Math.max(70, weapon(f.plan.weapon).blast * 4) } : null,
+          brokenBridge: damaged.has(BRIDGE_RUIN) ? targetOf(this.world, 'bridge').rect : null,
+        }),
+        clock,
+        night,
+      );
+    }
     this.strike(f, now, dt);
     this.drift(now, nightness(f.plan.hour));
     this.renderer.render(this.scene, this.camera);

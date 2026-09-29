@@ -1084,7 +1084,7 @@ export default function App() {
         if (!f || !m) return null;
         const st = strikeRef.current;
         const t = m.strikeTime();
-        return { world: f.world, plan: f.plan, pop: f.pop, est: f.est, layers: f.layers, circleR: f.circleR, outcome: f.outcome, ruins: f.ruins, strike: st && t != null ? { ...st, t } : null, walkers: m.crowd.visible(), cars: m.crowd.cars };
+        return { world: f.world, plan: f.plan, pop: f.pop, est: f.est, layers: f.layers, circleR: f.circleR, outcome: f.outcome, ruins: f.ruins, strike: st && t != null ? { ...st, t } : null, walkers: m.crowd.visible(), cars: m.crowd.cars, clock: m.time };
       };
       modelRef.current = new Model3D(canvas3dRef.current, labels3dRef.current, world, getFrame);
       modelRef.current.paused = viewRef.current !== 'model';
