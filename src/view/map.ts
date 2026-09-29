@@ -102,6 +102,32 @@ interface StrikeFx {
 }
 
 export class MapView {
+  private shownOutcome: Outcome | null = null;
+  /** The person behind the nearest red ring within r metres of (x, y), once a strike's result is showing. */
+  hurtAt(x: number, y: number, r: number): { kind: 'in'; b: Building; i: number } | { kind: 'out'; w: Walker } | { kind: 'car'; c: Car } | null {
+    const o = this.shownOutcome;
+    if (!o) return null;
+    let best: { kind: 'in'; b: Building; i: number } | { kind: 'out'; w: Walker } | { kind: 'car'; c: Car } | null = null;
+    let bd = r;
+    for (const [id, slots] of Object.entries(o.hurtSlots)) {
+      const b = this.world.buildings[+id];
+      for (const i of slots) {
+        const d = Math.hypot(b.slots[i * 2] - x, b.slots[i * 2 + 1] - y);
+        if (d < bd) (bd = d), (best = { kind: 'in', b, i });
+      }
+    }
+    for (const w of this.crowd.walkers) {
+      if (!w.hurt) continue;
+      const d = Math.hypot(w.x - x, w.y - y);
+      if (d < bd) (bd = d), (best = { kind: 'out', w });
+    }
+    for (const c of this.crowd.cars) {
+      if (!c.hurt) continue;
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < bd) (bd = d), (best = { kind: 'car', c });
+    }
+    return best;
+  }
   view: ViewState = { cx: 225, cy: 470, zoom: 3 };
   crowd: Crowd;
   discovered = new Set<string>();
@@ -323,6 +349,7 @@ export class MapView {
     this.explore(f);
 
     const shown = f.outcome;
+    this.shownOutcome = shown;
     const damaged = new Set([...f.ruins, ...(shown ? shown.damaged : [])]);
     const sharp = this.ensureCaches(f, damaged);
 

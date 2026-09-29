@@ -428,11 +428,17 @@ export class Model3D {
     this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1: t1.clone().add(dir.multiplyScalar(dist)), k: 0, dur };
   }
 
-  /** Glide down to a low angle over a spot, then circle it slowly until someone takes the controls. */
-  orbit(x: number, y: number, dist = 120) {
-    const t1 = new THREE.Vector3(x, 4, y);
-    const p1 = t1.clone().add(new THREE.Vector3(-0.7, 0.55, 0.62).normalize().multiplyScalar(dist));
+  /**
+   * Glide down over a spot, then circle it slowly until someone takes the controls.
+   * from: the compass bearing the camera starts from (0 north, 90 east); pitch: how far it looks down, in degrees.
+   */
+  orbit(x: number, y: number, dist = 120, from = 90, pitch = 40, speed = 1) {
+    const t1 = new THREE.Vector3(x, 2, y);
+    const b = (from * Math.PI) / 180;
+    const p = (pitch * Math.PI) / 180;
+    const p1 = t1.clone().add(new THREE.Vector3(Math.sin(b) * Math.cos(p), Math.sin(p), -Math.cos(b) * Math.cos(p)).multiplyScalar(dist));
     this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1, k: 0, dur: 2.4 };
+    this.controls.autoRotateSpeed = speed;
     this.controls.autoRotate = true;
   }
   stopOrbit() {

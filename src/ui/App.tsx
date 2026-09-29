@@ -54,6 +54,7 @@ import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
+import { personIn, personInCar, personLine, personOut } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
@@ -286,6 +287,7 @@ export default function App() {
   const storyTimer = useRef(0);
   const [spotlight, setSpotlight] = useState<MapFrame['spotlight']>(null);
   const tourTimers = useRef<number[]>([]);
+  const tipHide = useRef(0);
   const [place, setPlace] = useState<{ story: PlaceStory; x: number; y: number } | null>(null);
   const [retarget, setRetarget] = useState<{ x: number; y: number; bid: number | null } | null>(null);
   const [explored, setExplored] = useState(0);
@@ -1274,7 +1276,9 @@ export default function App() {
     if (!el || view !== 'map' || striking) return;
     let text = '';
     let named: PlaceStory;
-    if (b && mapMode === 'target') {
+    const who = outcome ? personAtPoint(px, py, wx, wy) : '';
+    if (who) text = who;
+    else if (b && mapMode === 'target') {
       const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
     } else if (!b && mapMode === 'target') {
@@ -1296,6 +1300,19 @@ export default function App() {
     el.innerHTML = text;
     el.style.display = '';
     el.style.transform = `translate(${px + 14}px, ${py + 14}px)`;
+  };
+  // A red ring under the pointer: who they were.
+  const personAtPoint = (px: number, py: number, wx: number, wy: number) => {
+    const m = mapRef.current;
+    if (!m) return '';
+    const r = Math.abs(m.toWorld(px + (phone ? 16 : 9), py).x - wx);
+    const h = m.hurtAt(wx, wy, r);
+    if (!h) return '';
+    const friday = plan.day === 'friday';
+    if (h.kind === 'in') return personLine(personIn(h.b, h.i, plan.hour, friday), placeName(h.b));
+    if (h.kind === 'car') return personLine(personInCar(h.c), 'in a car');
+    const here = placeAt(world, h.w.x, h.w.y);
+    return personLine(personOut(h.w, plan.hour, here.named ? here.title : undefined), here.named ? here.title : undefined);
   };
   const onUp = (e: React.PointerEvent) => {
     fingers.current.delete(e.pointerId);
@@ -1329,6 +1346,17 @@ export default function App() {
       const p = localXY(e);
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
         const w = m.toWorld(p.x, p.y);
+        // After a strike, tapping a red ring says who it was (phones have no hover).
+        const who = outcome && !striking ? personAtPoint(p.x, p.y, w.x, w.y) : '';
+        const el = tipRef.current;
+        if (who && el) {
+          el.innerHTML = who;
+          el.style.display = '';
+          el.style.transform = `translate(${Math.min(p.x + 10, (canvasRef.current?.clientWidth ?? 400) - 200)}px, ${p.y + 12}px)`;
+          window.clearTimeout(tipHide.current);
+          tipHide.current = window.setTimeout(hideTip, 4000);
+          return;
+        }
         openPeople(w.x, w.y, p.x, p.y);
       }
     }
@@ -1514,16 +1542,17 @@ export default function App() {
         15000,
         () => {
           setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' });
-          const cx = (schoolBox.x0 + schoolBox.x1) / 2;
-          const cy = (schoolBox.y0 + schoolBox.y1) / 2;
+          // Circle the playground itself, where the children are.
+          const cx = yard ? yard.rect.x + yard.rect.w / 2 : (schoolBox.x0 + schoolBox.x1) / 2;
+          const cy = yard ? yard.rect.y + yard.rect.h / 2 : (schoolBox.y0 + schoolBox.y1) / 2;
           focusRef.current = { cx, cy, zoom: 6, dur: 1.2 };
-          if (view === 'model') return modelRef.current?.orbit(cx, cy, 125);
+          if (view === 'model') return modelRef.current?.orbit(cx + 10, cy, 105, 100, 29, 1);
           tour3d.current = true;
           // The model may still be building: wait for it, and for the switch to place the camera, then glide in and circle.
           const wait = (n: number) =>
             tourTimers.current.push(
               window.setTimeout(() => {
-                if (modelRef.current) tourTimers.current.push(window.setTimeout(() => modelRef.current?.orbit(cx, cy, 125), 350));
+                if (modelRef.current) tourTimers.current.push(window.setTimeout(() => modelRef.current?.orbit(cx + 10, cy, 105, 100, 29, 1), 350));
                 else if (n < 60) wait(n + 1);
               }, 150),
             );
@@ -2427,7 +2456,7 @@ export default function App() {
                   Target {outcome.destroyed ? 'destroyed' : 'not destroyed'}. Landed {Math.round(Math.hypot(outcome.ix - plan.aimX, outcome.iy - plan.aimY))} m from the aim.
                   {outcome.secondary.length > 0 && ` Also went off: ${outcome.secondary.join(', ')}.`}
                 </p>
-                <p className="muted rings">Every red ring on the map is a person killed or badly hurt.</p>
+                <p className="muted rings">Every red ring on the map is a person killed or badly hurt. {phone ? 'Tap' : 'Point at'} one to see who.</p>
                 <p>The ruins stay{ruins.length > 1 ? ` (${ruins.length} buildings so far)` : ''}. Pick another target above, or click any building on the map.</p>
                 <div className="row">
                   <button className="btn primary small" onClick={endStrike} disabled={striking}>
