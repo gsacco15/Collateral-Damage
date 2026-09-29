@@ -30,7 +30,7 @@ import {
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
-import { C, hexA, mix, nightness, sun, type Sun } from './paper';
+import { C, hexA, mix, nightness, shade, sun, type Sun } from './paper';
 
 export interface ViewState {
   cx: number;
@@ -1257,17 +1257,25 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
       g.fill();
       break;
     case 'hijab': // a coloured scarf over the head and shoulders, the face at the front
-      g.fillStyle = w.cloth === '#e7e1d4' || w.cloth === '#d9c7a4' ? '#5b6d80' : w.cloth;
+    case 'shawl': // the same, lighter, with a little pattern
+      g.fillStyle = w.tint;
       g.beginPath();
-      g.arc(hx - fx * hr * 0.12, hy - fy * hr * 0.12, hr * 1.12, 0, Math.PI * 2);
+      g.arc(hx - fx * hr * 0.12, hy - fy * hr * 0.12, hr * (w.wear === 'shawl' ? 1.25 : 1.12), 0, Math.PI * 2);
       g.fill();
+      if (w.wear === 'shawl' && near) {
+        g.fillStyle = 'rgba(255,250,240,0.55)';
+        for (let i = 0; i < 5; i++) {
+          const k = (i / 5) * Math.PI * 2 + w.phase;
+          g.fillRect(hx - fx * hr * 0.3 + Math.cos(k) * hr * 0.75 - hr * 0.06, hy - fy * hr * 0.3 + Math.sin(k) * hr * 0.75 - hr * 0.06, hr * 0.12, hr * 0.12);
+        }
+      }
       g.fillStyle = w.skin;
       g.beginPath();
       g.arc(hx + fx * hr * 0.55, hy + fy * hr * 0.55, hr * 0.42, 0, Math.PI * 2);
       g.fill();
       break;
     case 'turban': // a wide wrapped crown
-      g.fillStyle = w.phase > 5 ? '#f0ebe0' : '#3b3a44';
+      g.fillStyle = w.tint;
       g.beginPath();
       g.arc(hx, hy, hr * 1.2, 0, Math.PI * 2);
       g.fill();
@@ -1294,6 +1302,40 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
         g.stroke();
       }
       break;
+    case 'ghutra': // a plain white head cloth falling behind, held by a black cord
+      g.fillStyle = '#f5f2ea';
+      g.beginPath();
+      g.ellipse(hx - fx * hr * 0.35, hy - fy * hr * 0.35, hr * 1.25, hr * 1.05, a, 0, Math.PI * 2);
+      g.fill();
+      if (near) {
+        g.strokeStyle = '#1d1b1e';
+        g.lineWidth = hr * 0.14;
+        g.beginPath();
+        g.arc(hx, hy, hr * 0.62, 0, Math.PI * 2);
+        g.stroke();
+      }
+      break;
+    case 'straw': // a wide straw hat with a band
+      g.fillStyle = '#d8b878';
+      g.beginPath();
+      g.arc(hx, hy, hr * 1.9, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(90,60,25,0.55)';
+      g.lineWidth = hr * 0.16;
+      g.beginPath();
+      g.arc(hx, hy, hr * 0.95, 0, Math.PI * 2);
+      g.stroke();
+      break;
+    case 'ballcap': // a baseball cap, the peak pointing the way they face
+      g.fillStyle = w.tint;
+      g.beginPath();
+      g.arc(hx, hy, hr, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = shade(w.tint, -0.2);
+      g.beginPath();
+      g.ellipse(hx + fx * hr * 0.95, hy + fy * hr * 0.95, hr * 0.45, hr * 0.75, a, 0, Math.PI * 2);
+      g.fill();
+      break;
     case 'cap': // a small white cap on dark hair
       g.fillStyle = '#231b16';
       g.beginPath();
@@ -1314,8 +1356,8 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
       g.arc(hx - fx * hr * 0.28, hy - fy * hr * 0.28, hr * 0.78, 0, Math.PI * 2);
       g.fill();
   }
-  // Two dots for eyes, on the side they're facing.
-  if (near) {
+  // Two dots for eyes, on the side they're facing (not under a hat brim).
+  if (near && w.wear !== 'straw' && w.wear !== 'ballcap') {
     const ex = hx + fx * hr * (w.wear === 'hijab' ? 0.72 : 0.78);
     const ey = hy + fy * hr * (w.wear === 'hijab' ? 0.72 : 0.78);
     const sx = -fy * hr * 0.3;
