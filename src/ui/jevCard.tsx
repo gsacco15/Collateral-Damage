@@ -1,8 +1,24 @@
 // What Jev made of the intelligence: one typed judgment per site, the chance of each head count, and what the call cost.
-import { AGREE, fmtHour, LEVELS, readingCost, type JevReading, type JevReply } from '../jev';
+import { AGREE, ARMED, fmtHour, LEVELS, readingCost, type ArmedChoice, type JevReading, type JevReply } from '../jev';
 
 /** Where a report comes from, from how it begins. */
-const sourceOf = (r: string) => (/^Overhead/.test(r) ? 'Overhead' : /^Phone/.test(r) ? 'Phones' : /^Census|^Records/.test(r) ? 'Records' : /^Observer/.test(r) ? 'Observer' : 'Note');
+const sourceOf = (r: string) => (/^Overhead/.test(r) ? 'Overhead' : /^Phone/.test(r) ? 'Phones' : /^Census|^Records/.test(r) ? 'Records' : /^Observer/.test(r) ? 'Observer' : /^Informant|informant/.test(r) ? 'Informant' : 'Note');
+
+/** Armed presence, as Jev judged it (or the rule's reading offline). Never the truth: that shows only after a strike. */
+function ArmedRow({ choice, confidence, rule }: { choice: ArmedChoice; confidence?: number; rule?: boolean }) {
+  return (
+    <div className={`judgment armed ${choice}`}>
+      <span className="k">armed</span>
+      <span className="q">
+        Armed men at the target?
+        <em className="role">{rule ? 'read by rule: Jev offline' : 'from informants and watching'}</em>
+      </span>
+      <span />
+      <b title={ARMED[choice]}>{choice === 'none' ? 'no evidence' : choice}</b>
+      <span className="conf">{confidence != null ? <><b>{Math.round(confidence * 100)}%</b> {sureWord(confidence)}</> : 'a guess'}</span>
+    </div>
+  );
+}
 
 /** Does a report's count fit Jev's answer for its site? Reports with no count (notes) aren't compared. */
 function fits(r: string, reading: JevReading) {
@@ -18,7 +34,7 @@ function fits(r: string, reading: JevReading) {
 /** How sure, in words: a plain label for the confidence number. */
 const sureWord = (c: number) => (c >= 0.8 ? 'sure' : c >= 0.5 ? 'fairly sure' : 'a guess');
 
-export function JevCard({ reading, hour }: { reading: JevReply | null; hour: number }) {
+export function JevCard({ reading, hour, armedGuess }: { reading: JevReply | null; hour: number; armedGuess?: ArmedChoice | null }) {
   const n = reading && reading.ok ? (reading.reports?.length ?? 0) : 0;
   return (
     <section className="card jevcard">
@@ -41,7 +57,13 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
               ? 'Jev is offline here (no server). The simulator is using its built-in guess of who is inside.'
               : `Jev didn't answer${reading.status ? ` (${reading.status})` : ''}. The simulator is using its built-in guess of who is inside.`}
         </p>
-      ) : (
+      ) : null}
+      {reading && !reading.ok && armedGuess && (
+        <div className="judgments">
+          <ArmedRow choice={armedGuess} rule />
+        </div>
+      )}
+      {!reading || !reading.ok ? null : (
         <>
           <div className="judgments">
             {reading.sites.map((s) => {
@@ -74,6 +96,7 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
                 <b>{Math.round(reading.agree.confidence * 100)}%</b> {sureWord(reading.agree.confidence)}
               </span>
             </div>
+            {reading.armed ? <ArmedRow choice={reading.armed.choice} confidence={reading.armed.confidence} /> : reading.key.armed && armedGuess ? <ArmedRow choice={armedGuess} rule /> : null}
           </div>
           <details className="jev-fold">
             <summary>Details</summary>

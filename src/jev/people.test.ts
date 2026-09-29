@@ -110,3 +110,29 @@ describe('Groups outside the usual pattern (Living)', () => {
     expect(day.some((c) => c.kind === 'security')).toBe(true);
   });
 });
+
+import { armedReports, armedTruth, intelId, intelKey, jevRequest, ruleArmed } from '.';
+
+describe('Armed presence (hidden truth, read through reports)', () => {
+  const wh = targetOf(city, 'warehouse');
+  it('knows the truth: men at Warehouse 14 in the evening, none at midday', () => {
+    expect(armedTruth(city, wh.buildingId, 20, 'weekday')).toBeGreaterThan(0);
+    expect(armedTruth(city, wh.buildingId, 12, 'weekday')).toBe(0);
+    const school = city.buildings.find((b) => b.name === 'Cotton Street School')!;
+    expect(armedTruth(city, school.id, 10, 'weekday')).toBe(0);
+  });
+  it('only asks Jev about it with Living on, and keeps the two readings apart in the cache', () => {
+    const plain = jevRequest(city, intelKey('warehouse', 20, 'weekday', 12));
+    const armed = jevRequest(city, intelKey('warehouse', 20, 'weekday', 12, true));
+    expect('armed' in plain.body.questions).toBe(false);
+    expect('armed' in armed.body.questions).toBe(true);
+    expect(armed.reports.some((r) => /armed|weapons|long bags/i.test(r))).toBe(true);
+    expect(intelId(intelKey('warehouse', 20, 'weekday', 12))).not.toBe(intelId(intelKey('warehouse', 20, 'weekday', 12, true)));
+  });
+  it('offline, reads the same reports by rule', () => {
+    expect(ruleArmed(['No informant reporting on armed men at X.'])).toBe('none');
+    expect(ruleArmed(['Informant (reliability unknown): armed men use X, mostly at night.'])).toBe('possible');
+    const r = armedReports(city, wh.buildingId!, 'Warehouse 14', 20.5, 'weekday', 24);
+    expect(['none', 'possible', 'likely']).toContain(ruleArmed(r));
+  });
+});

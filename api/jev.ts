@@ -27,7 +27,7 @@ export default async function handler(req: Request): Promise<Response> {
   const apiKey = process.env.TYPESAFE_API_KEY ?? process.env.JEV_API_KEY;
   if (!apiKey) return json({ ok: false, reason: 'no-key' }, 503);
 
-  const id = `${key.target}|${key.hour}|${key.day}|${key.watched}`;
+  const id = `${key.target}|${key.hour}|${key.day}|${key.watched}${key.armed ? '|armed' : ''}`;
   const hit = memo.get(id);
   if (hit) return new Response(hit, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600, s-maxage=2592000' } });
 

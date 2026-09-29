@@ -1403,6 +1403,7 @@ export class Model3D {
           away: o ? { x: o.ix, y: o.iy, r: Math.max(70, weapon(f.plan.weapon).blast * 4) } : null,
           brokenBridge: damaged.has(BRIDGE_RUIN) ? targetOf(this.world, 'bridge').rect : null,
           hush: f.pop.hush,
+          sirens: f.pop.crowds?.filter((q) => q.kind === 'medic').map((q) => ({ x: q.x, y: q.y })),
         }),
         clock,
         night,
@@ -1824,6 +1825,10 @@ export class Model3D {
         this.wraps.setMatrixAt(nw, hm);
         this.wraps.setColorAt(nw++, c.set(col));
       };
+      // What marks them out: a medic's red band; a vendor's tray of goods; a bedroll for someone sleeping rough.
+      if (w.role === 'medic') wrap(1.05, 1.12, 0.18, 0, '#c0392b');
+      else if (w.role === 'vendor') wrap(0.95, 1.1, 0.25, -0.45, '#b08a5e');
+      else if (w.role === 'unhoused' && nightness(f.plan.hour) > 0.4) wrap(0.1, 2.2, 0.35, 0.6, '#6f665a');
       switch (w.wear) {
         case 'hijab':
         case 'shawl':
@@ -1842,7 +1847,8 @@ export class Model3D {
           wrap(1.62, 1.2, 0.8, 0, w.tint);
           break;
         case 'cap':
-          wrap(1.62, 0.95, 0.45, 0, '#f2eee6');
+          wrap(1.62, 0.95, 0.45, 0, w.tint);
+          if (w.role === 'security') wrap(1.58, 0.7, 0.15, -0.18, w.tint); // the peak
           break;
         case 'burqa':
           wrap(1.44, 1.18, 1.3, 0.02, w.tint);

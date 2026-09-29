@@ -1088,3 +1088,8 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .settings-scrim { align-items: flex-end; padding: 0; }
   .settings { width: 100%; border-radius: 16px 16px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 }
+/* Armed presence: Jev's judgement in the card, and the truth on the result card after a strike. */
+.judgment.armed.likely b, .judgment.armed.confirmed b { color: var(--critical); }
+.judgment.armed.possible b { color: #8a5d12; }
+.outcome .armed-reveal { font-weight: 600; padding: 6px 9px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--text-3); }
+.outcome .armed-reveal.yes { border-left-color: var(--critical); }

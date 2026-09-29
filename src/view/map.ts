@@ -607,6 +607,7 @@ export class MapView {
         away: shown ? { x: shown.ix, y: shown.iy, r: Math.max(70, wpn.blast * 4) } : null,
         brokenBridge: f.ruins.includes(BRIDGE_RUIN) || (shown?.damaged.includes(BRIDGE_RUIN) ?? false) ? targetOf(this.world, 'bridge').rect : null,
         hush: f.pop.hush,
+        sirens: f.pop.crowds?.filter((q) => q.kind === 'medic').map((q) => ({ x: q.x, y: q.y })),
       });
       drawLife2D(g, ents, {
         time: this.time,
@@ -1706,10 +1707,31 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
   g.beginPath();
   g.ellipse(w.x + sh.dx * 0.9 * scale, w.y + sh.dy * 0.9 * scale, 0.55 * scale, 0.4 * scale, 0, 0, Math.PI * 2);
   g.fill();
+  // Someone sleeping rough, at night: a bedroll on the ground beside them.
+  if (w.role === 'unhoused' && night > 0.4) {
+    g.fillStyle = '#6f665a';
+    g.beginPath();
+    g.ellipse(w.x + 0.9 * scale, w.y + 0.3 * scale, 1.0 * scale, 0.38 * scale, 0.3, 0, Math.PI * 2);
+    g.fill();
+  }
   g.fillStyle = w.cloth;
   g.beginPath();
   g.ellipse(w.x, w.y + bob, 0.62 * scale, 0.45 * scale, 0, 0, Math.PI * 2);
   g.fill();
+  // What marks them out: a medic's red band; a vendor's tray of goods held in front.
+  if (w.role === 'medic') {
+    g.fillStyle = '#c0392b';
+    g.fillRect(w.x - 0.62 * scale, w.y + bob - 0.08 * scale, 1.24 * scale, 0.16 * scale);
+  }
+  if (w.role === 'vendor') {
+    const t = w.phase;
+    const tx = w.x + Math.cos(t) * 0.75 * scale;
+    const ty = w.y + Math.sin(t) * 0.75 * scale;
+    g.fillStyle = '#b08a5e';
+    g.fillRect(tx - 0.45 * scale, ty - 0.3 * scale, 0.9 * scale, 0.6 * scale);
+    g.fillStyle = ['#c9a44c', '#b8574a', '#6f8f4a'][Math.floor(t * 10) % 3];
+    g.fillRect(tx - 0.3 * scale, ty - 0.18 * scale, 0.6 * scale, 0.36 * scale);
+  }
   // The head, and what's on it. Detail only when zoomed in enough to see it.
   const hx = w.x;
   const hy = w.y + bob - 0.05 * scale;
@@ -1803,10 +1825,16 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
       g.beginPath();
       g.arc(hx, hy, hr, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = '#f2eee6';
+      g.fillStyle = w.tint; // white for most; a police or medic's cap in their uniform colour
       g.beginPath();
       g.arc(hx - fx * hr * 0.1, hy - fy * hr * 0.1, hr * 0.72, 0, Math.PI * 2);
       g.fill();
+      if (w.role === 'security') {
+        g.fillStyle = w.tint; // the peak
+        g.beginPath();
+        g.ellipse(hx + fx * hr * 0.75, hy + fy * hr * 0.75, hr * 0.5, hr * 0.28, a, 0, Math.PI * 2);
+        g.fill();
+      }
       break;
     default: // bare: hair on top, the face at the front
       g.fillStyle = w.skin;

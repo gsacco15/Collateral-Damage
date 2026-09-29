@@ -44,6 +44,10 @@ import {
   type Plan,
   type AfterMood,
   type Behaviour,
+  armedReports,
+  armedTruth,
+  ruleArmed,
+  watchBucket,
   cityId,
   districtAt,
   markKey,
@@ -488,6 +492,8 @@ export default function App() {
   // the school gate, families at the hospital). Cleared with the ruins.
   const [marks, setMarks] = useState<Mark[]>([]);
   const struckEst = useRef<Estimate | null>(null);
+  // Living: the truth about armed men at the target, known to the game all along, shown only after the strike.
+  const [armedThere, setArmedThere] = useState<number | null>(null);
   // Living: Jev's reading of how the city's people are behaving (per district this hour, and round each strike).
   // Rules act at once; Jev's answers arrive in the background and nudge them. Offline, the rules stand alone.
   const [cityMood, setCityMood] = useState<{ id: string; districts: Behaviour['districts'] } | null>(null);
@@ -517,8 +523,8 @@ export default function App() {
   const [reading, setReading] = useState<JevReply | null>(null);
   const intelRef = useRef(intel);
   intelRef.current = intel;
-  const scopeKey = intelKey(plan.target, plan.hour, plan.day, plan.watched);
-  const scope = `${scopeKey.target}|${scopeKey.day}|${scopeKey.watched}`;
+  const scopeKey = intelKey(plan.target, plan.hour, plan.day, plan.watched, alive);
+  const scope = `${scopeKey.target}|${scopeKey.day}|${scopeKey.watched}|${alive ? 'armed' : ''}`;
   const scopeRef = useRef(scope);
   useEffect(() => {
     if (scopeRef.current === scope) return;
@@ -529,7 +535,7 @@ export default function App() {
     if (dayPlay) return; // while the day plays, keep the last reading; read again once it stops
     let alive = true;
     const k = scopeKey;
-    setReading((r) => (r && r.ok && r.key.target === k.target && r.key.hour === k.hour && r.key.day === k.day && r.key.watched === k.watched ? r : null));
+    setReading((r) => (r && r.ok && r.key.target === k.target && r.key.hour === k.hour && r.key.day === k.day && r.key.watched === k.watched && !!r.key.armed === !!k.armed ? r : null));
     const id = window.setTimeout(() => {
       readIntel(k).then((r) => {
         if (!alive) return;
@@ -542,9 +548,16 @@ export default function App() {
       clearTimeout(id);
     };
   }, [scope, scopeKey.hour, dayPlay]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Living: a plain reading of the reports on armed men at the target, for when Jev is offline.
+  const armedGuess = useMemo(() => {
+    if (!alive) return null;
+    const t = targetOf(world, plan.target);
+    if (t.buildingId == null) return null;
+    return ruleArmed(armedReports(world, t.buildingId, t.name, Math.floor(plan.hour) + 0.5, plan.day, watchBucket(plan.watched)));
+  }, [alive, world, plan.target, plan.hour, plan.day, plan.watched]);
   /** Jev's readings for a set of hours, fetched together; whatever doesn't come back is left to the built-in guess. */
   const readHours = async (hs: number[]) => {
-    const got = await Promise.all([...new Set(hs.map((h) => Math.floor(h) % 24))].map((h) => readIntel(intelKey(plan.target, h, plan.day, plan.watched))));
+    const got = await Promise.all([...new Set(hs.map((h) => Math.floor(h) % 24))].map((h) => readIntel(intelKey(plan.target, h, plan.day, plan.watched, alive))));
     const add: IntelByHour = {};
     for (const r of got) if (r.ok) add[r.key.hour] = intelOf(r);
     setIntel((m) => ({ ...m, ...add }));
@@ -2030,6 +2043,7 @@ export default function App() {
     // The outcome is compared with the estimate the strike was planned on, not the one after it (the ruins and the
     // city's reaction change the numbers straight away). Rolling again keeps the first.
     if (!outcome) struckEst.current = est;
+    setArmedThere(aliveRef.current && targetOf(world, plan.target).buildingId != null ? armedTruth(world, targetOf(world, plan.target).buildingId, plan.hour, plan.day) : null);
     setRuins(before);
     setMarks(marksBefore);
     // The sound of it: the aircraft, the call, the impact, the stamp, then what the radio says.
@@ -2363,7 +2377,7 @@ export default function App() {
         </div>
       </section>
       <div className={`jev-slot ${guide != null && GUIDE[guide].glow === 'jev-card' ? 'glow' : ''}`}>
-        <JevCard reading={reading} hour={plan.hour} />
+        <JevCard reading={reading} hour={plan.hour} armedGuess={armedGuess} />
       </div>
       <section className="card">
         <h3>
@@ -3085,6 +3099,11 @@ export default function App() {
                 {(struckEst.current ?? est) && (
                   <p>
                     The estimate: half the runs at or below {(struckEst.current ?? est)!.p50}, nine in ten at or below {(struckEst.current ?? est)!.p90}. This roll: {outcome.count}.
+                  </p>
+                )}
+                {armedThere != null && (
+                  <p className={`armed-reveal ${armedThere ? 'yes' : 'no'}`}>
+                    {armedThere ? `Armed men were there: ${armedThere}. They are not counted in the civilian figures above.` : 'No armed men were there. Whatever the reports said.'}
                   </p>
                 )}
                 <p>

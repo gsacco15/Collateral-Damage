@@ -10,7 +10,7 @@ export function readIntel(key: IntelKey): Promise<JevReply> {
   const id = intelId(key);
   let p = cache.get(id);
   if (!p) {
-    const q = new URLSearchParams({ target: key.target, hour: String(key.hour), day: key.day, watched: String(key.watched) });
+    const q = new URLSearchParams({ target: key.target, hour: String(key.hour), day: key.day, watched: String(key.watched), ...(key.armed ? { armed: '1' } : {}) });
     p = fetch(`/api/jev?${q}`, { signal: AbortSignal.timeout(12000) })
       .then(async (r) => {
         const ct = r.headers.get('content-type') ?? '';

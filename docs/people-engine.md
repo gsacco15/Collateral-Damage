@@ -56,6 +56,18 @@ Small counted groups with their own hours, drawn in the scene and counted by the
 - **After a strike:** medics at the ruin for the first hours (white, red band); police hold a cordon for longer.
   Vendors and people sleeping rough nearby move off.
 
+## Armed presence (built, Living only; `src/jev/armed.ts`)
+- **Hidden truth:** armed men use Warehouse 14 in the evenings (and a guard some weekday mornings) and two safehouses
+  (Tin Hill, Old Town) at night. Never drawn, never counted as civilians, never changes the harm estimate.
+- **What you see:** an informant line (right about 70% of the time when they are there, a false tip about 18% when
+  not) and, after 12+ hours watching, an observer line. Jev judges No evidence / Possible / Likely / Confirmed;
+  offline, a simple rule reads the same reports.
+- **After the strike:** the result card reveals the truth ("Armed men were there: 3. Not counted in the civilian
+  figures." or "No armed men were there. Whatever the reports said.").
+
+## Characters (2D and 3D)
+Police in dark blue with peaked caps; medics in white with a red band; vendors with a tray of goods; people
+sleeping rough with a bedroll at night. At a strike: a patrol car with lights, a fire engine and a white ambulance.
+
 ## Still to come
-- Armed presence as hidden truth vs Jev's reports (a design decision; not started).
-- Named characters for the new groups (a first responder, an officer, an operative) once the groups settle.
+- Named characters for the new groups (a first responder, an officer, an operative).

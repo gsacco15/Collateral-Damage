@@ -7,6 +7,7 @@ import { buildingDist, targetCentre, targetOf, type Building, type TargetId, typ
 import { fmtHour, partOfDay, population, sources, type Day } from './life';
 import { LEVELS, type Intel } from './levels';
 import { rng } from './rng';
+import { ARMED, armedReports, type ArmedChoice } from './armed';
 
 export { LEVELS, judgedMean, sampleJudged } from './levels';
 
@@ -31,9 +32,10 @@ export interface IntelKey {
   hour: number; // whole hour, 0–23
   day: Day;
   watched: number; // a bucket
+  armed?: boolean; // Living: also read the reports on armed presence at the target
 }
-export const intelKey = (target: TargetId, hour: number, day: Day, watched: number): IntelKey => ({ target, hour: ((Math.floor(hour) % 24) + 24) % 24, day, watched: watchBucket(watched) });
-export const intelId = (k: IntelKey) => `${k.target}|${k.hour}|${k.day}|${k.watched}`;
+export const intelKey = (target: TargetId, hour: number, day: Day, watched: number, armed = false): IntelKey => ({ target, hour: ((Math.floor(hour) % 24) + 24) % 24, day, watched: watchBucket(watched), ...(armed ? { armed: true } : {}) });
+export const intelId = (k: IntelKey) => `${k.target}|${k.hour}|${k.day}|${k.watched}${k.armed ? '|armed' : ''}`;
 
 const TARGETS: TargetId[] = ['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station', 'mill', 'pump', 'camp', 'mosque', 'outpost'];
 export function parseKey(q: URLSearchParams): IntelKey | null {
@@ -42,7 +44,7 @@ export function parseKey(q: URLSearchParams): IntelKey | null {
   const day = q.get('day') as Day;
   const watched = Number(q.get('watched'));
   if (!(TARGETS.includes(target) || /^b:\d{1,4}$/.test(target)) || !Number.isInteger(hour) || hour < 0 || hour > 23 || (day !== 'weekday' && day !== 'friday') || !WATCH_BUCKETS.includes(watched)) return null;
-  return { target, hour, day, watched };
+  return { target, hour, day, watched, ...(q.get('armed') === '1' ? { armed: true } : {}) };
 }
 
 export interface Site {
@@ -105,6 +107,9 @@ export function jevRequest(world: World, key: IntelKey): { body: JevRequest; sit
   const t = targetOf(world, key.target);
   const sites = sitesFor(world, key.target);
   const reports = sites.flatMap((s) => reportsFor(world, key, world.buildings[s.id], s.name));
+  // Living: what the sources say about armed men at the target itself.
+  const tgt = sites.find((s) => s.role === 'target');
+  if (key.armed && tgt) reports.push(...armedReports(world, tgt.id, tgt.name, key.hour + 0.5, key.day, key.watched));
   const questions: Record<string, unknown> = {};
   sites.forEach((s, i) => {
     questions[`inside_${i}`] = {
@@ -117,6 +122,7 @@ export function jevRequest(world: World, key: IntelKey): { body: JevRequest; sit
     };
   });
   questions.agree = { type: 'choice', instructions: 'Do the reports about these sites agree with each other?', criteria: { ...AGREE } };
+  if (key.armed && tgt) questions.armed = { type: 'choice', instructions: { site: tgt.name, question: 'Going by the reports, are armed men at `site` right now? Informants can be wrong or have motives of their own; an observer who watched longer is more reliable.' }, criteria: { ...ARMED } };
   const state = {
     time: `${key.day === 'friday' ? 'Friday' : 'A weekday'}, ${fmtHour(key.hour)} (${partOfDay(key.hour + 0.5).toLowerCase()})`,
     target: `${t.name}: ${t.note}`,
@@ -137,6 +143,7 @@ export interface JevReading {
   model: string;
   sites: SiteReading[];
   agree: { choice: Agreement; confidence: number };
+  armed?: { choice: ArmedChoice; confidence: number };
   reports: string[];
   usage: { input_tokens: number; output_tokens: number };
   ms: number;
@@ -164,7 +171,9 @@ export function readAnswers(key: IntelKey, sites: Site[], reports: string[], res
   });
   const ag = res.answers.agree as ChoiceAnswer | undefined;
   const choice = ag && ag.choice in AGREE ? (ag.choice as Agreement) : 'mixed';
-  return { ok: true, key, model: res.model, sites: read, agree: { choice, confidence: ag?.confidence ?? 0 }, reports, usage: res.usage ?? { input_tokens: 0, output_tokens: 0 }, ms };
+  const ar = res.answers.armed as ChoiceAnswer | undefined;
+  const armed = key.armed && ar && ar.choice in ARMED ? { choice: ar.choice as ArmedChoice, confidence: ar.confidence ?? 0 } : undefined;
+  return { ok: true, key, model: res.model, sites: read, agree: { choice, confidence: ag?.confidence ?? 0 }, armed, reports, usage: res.usage ?? { input_tokens: 0, output_tokens: 0 }, ms };
 }
 
 export type { Intel } from './levels';

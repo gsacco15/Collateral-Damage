@@ -8,3 +8,4 @@ export * from './estimate';
 export * from './search';
 export * from './intel';
 export * from './behave';
+export * from './armed';

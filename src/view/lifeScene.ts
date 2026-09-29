@@ -15,6 +15,7 @@ export interface SceneCtx {
   away: { x: number; y: number; r: number } | null; // near a strike, everything has gone
   brokenBridge: Rect | null;
   hush?: { x: number; y: number; r: number }[] | null; // Living, after a strike: small life has cleared from round it, for a while
+  sirens?: { x: number; y: number }[] | null; // Living, after a strike: where the medics are working (the vehicles stand by)
 }
 
 export type Ent =
@@ -1007,6 +1008,13 @@ export function lifeScene(c: SceneCtx): Ent[] {
         return !H.some((q) => Math.hypot(e.x - q.x, e.y - q.y) < q.r);
       })
     : out;
+  // The emergency vehicles at a strike: a patrol car with its lights going, a fire engine, a white ambulance.
+  for (const [i, z] of (c.sirens ?? []).entries()) {
+    const blink = Math.floor(t * 3 + i) % 2;
+    kept.push({ t: 'police', x: z.x + 14, y: z.y + 9, h: true, dir: 1, flash: 1 + blink });
+    kept.push({ t: 'engine', x: z.x - 15, y: z.y + 10, h: true, dir: -1 });
+    kept.push({ t: 'car', x: z.x + 12, y: z.y - 11, h: true, dir: -1, col: '#f4f2ec' });
+  }
   for (const f of extras) kept.push(...f(c));
   return kept;
 }
