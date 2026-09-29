@@ -293,7 +293,8 @@ export interface MatrixCell {
   pk: number;
 }
 
-const HARM = ['#3a2622', '#5c2b22', '#833226', '#ab3d2b', '#d25236', '#f07a55'];
+// One hue, light to dark: fewer to more people hurt.
+const HARM = ['#f4e7df', '#efc9b8', '#e3a288', '#d27a5a', '#b95236', '#8e3320'];
 
 export function OptionsMatrix({ cells, weapons, fuzes, current, minPk, onPick }: { cells: MatrixCell[]; weapons: [string, string][]; fuzes: [string, string][]; current: [string, string]; minPk: number; onPick: (w: string, f: string) => void }) {
   const max = Math.max(1, ...cells.map((c) => c.p90));
@@ -321,7 +322,7 @@ export function OptionsMatrix({ cells, weapons, fuzes, current, minPk, onPick }:
                 key={f}
                 role="cell"
                 className={`cell ${ok ? '' : 'fails'} ${current[0] === w && current[1] === f ? 'current' : ''}`}
-                style={{ background: HARM[i], color: i >= 4 ? '#1a1a19' : '#f3efe7' }}
+                style={{ background: HARM[i], color: i >= 3 ? '#fff' : '#1c1a17' }}
                 onClick={() => onPick(w, f)}
                 title={`${c.label[0]}, ${c.label[1].toLowerCase()} fuze: planning figure ${c.p90}, destroys the target in ${pct(c.pk)} of runs${ok ? '' : ' (below the requirement)'}`}
               >

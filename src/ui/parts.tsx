@@ -19,7 +19,7 @@ export function Step({ n, title, summary, status, open, onToggle, children }: { 
   return (
     <section className={`step ${open ? 'open' : ''}`}>
       <button className="step-head" onClick={onToggle} aria-expanded={open}>
-        <span className={`num ${status ?? ''}`}>{status === 'stop' ? '✕' : status === 'warn' ? '!' : n}</span>
+        <span className={`num ${status ?? ''}`}>{status === 'stop' ? '✕' : status === 'warn' ? '!' : String(n).padStart(2, '0')}</span>
         <span className="t">
           <b>{title}</b>
           <em>{summary}</em>

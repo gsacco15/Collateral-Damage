@@ -20,7 +20,13 @@ interface Particle {
   born: number;
 }
 
-const HARM = ['#5c2b22', '#833226', '#ab3d2b', '#d25236', '#f07a55'];
+const HARM = ['#efc9b8', '#e3a288', '#d27a5a', '#b95236', '#8e3320'];
+// Drawn on the off-white drawer.
+const INK = '#1c1a17';
+const INK2 = '#56514a';
+const INK3 = '#8c8579';
+const LINE = '#e1dbcf';
+const BLUE = '#2a6bc4';
 const SHORT: Record<string, string> = { large: '2000', medium: '500', small: '250', focused: 'LC', instant: 'imp', delay: 'dly', airburst: 'air' };
 
 export class JevTheater {
@@ -132,14 +138,14 @@ export class JevTheater {
     const qh = this.h - 40;
     const ticks = 40;
     const left = this.total ? this.queued / this.total : 0;
-    g.fillStyle = '#8e8b84';
+    g.fillStyle = INK3;
     g.fillText('QUEUE', 10, 12);
     for (let i = 0; i < ticks; i++) {
       const on = i / ticks < left;
-      g.fillStyle = on ? '#3987e5' : '#2a2927';
+      g.fillStyle = on ? BLUE : LINE;
       g.fillRect(10, 24 + qh - (i + 1) * (qh / ticks) + 1, 52, qh / ticks - 1.5);
     }
-    g.fillStyle = '#f3efe7';
+    g.fillStyle = INK;
     g.fillText(this.queued.toLocaleString(), 10, this.h - 8);
 
     // The lanes.
@@ -150,12 +156,12 @@ export class JevTheater {
       const y = this.laneY(i);
       const booting = now < l.bootAt + 260;
       if (now < l.bootAt) return;
-      g.fillStyle = booting ? `rgba(57,135,229,${0.25 + 0.4 * Math.random()})` : '#1e1d1b';
+      g.fillStyle = booting ? `rgba(42,107,196,${0.12 + 0.25 * Math.random()})` : '#ece8df';
       g.fillRect(L, y, R - L, lh);
-      g.fillStyle = '#8e8b84';
+      g.fillStyle = INK3;
       g.fillText(`W${i + 1}`, L - 26, y + lh / 2);
       if (booting) {
-        g.fillStyle = '#c3c2b7';
+        g.fillStyle = INK2;
         g.fillText('spinning up…', L + 8, y + lh / 2);
         return;
       }
@@ -164,12 +170,12 @@ export class JevTheater {
         const t = ((now - l.since) / 700) % 1;
         const grd = g.createLinearGradient(L, 0, R, 0);
         const p = Math.min(0.98, Math.max(0.02, t));
-        grd.addColorStop(Math.max(0, p - 0.18), 'rgba(57,135,229,0)');
-        grd.addColorStop(p, 'rgba(57,135,229,0.55)');
-        grd.addColorStop(Math.min(1, p + 0.02), 'rgba(57,135,229,0)');
+        grd.addColorStop(Math.max(0, p - 0.18), 'rgba(42,107,196,0)');
+        grd.addColorStop(p, 'rgba(42,107,196,0.3)');
+        grd.addColorStop(Math.min(1, p + 0.02), 'rgba(42,107,196,0)');
         g.fillStyle = grd;
         g.fillRect(L, y, R - L, lh);
-        g.fillStyle = '#f3efe7';
+        g.fillStyle = INK;
         g.fillText(l.label, L + 8, y + lh / 2);
       }
       // The last plan's runs: one cell per simulated strike, dark for none hurt, red for more.
@@ -184,11 +190,11 @@ export class JevTheater {
         g.globalAlpha = a;
         for (let k = 0; k < n; k++) {
           const v = l.grid[k];
-          g.fillStyle = v === 0 ? '#2c3a33' : HARM[Math.min(HARM.length - 1, Math.floor((v / l.gridMax) * (HARM.length - 1) + 0.5))];
+          g.fillStyle = v === 0 ? '#d3e3d8' : HARM[Math.min(HARM.length - 1, Math.floor((v / l.gridMax) * (HARM.length - 1) + 0.5))];
           g.fillRect(gx + Math.floor(k / rows) * cw, y + 2 + (k % rows) * chh, cw - 0.6, chh - 0.6);
         }
         g.globalAlpha = 1;
-        g.fillStyle = `rgba(195,194,183,${a})`;
+        g.fillStyle = `rgba(86,81,74,${a})`;
         g.textAlign = 'right';
         g.fillText(`${Math.round(l.lastMs)} ms`, R - 6, y + lh / 2);
         g.textAlign = 'left';
@@ -198,32 +204,32 @@ export class JevTheater {
     // The trade-off chart: every result lands here.
     const b = this.scatter();
     const maxX = Math.max(10, ...this.dots.map((d) => d.p90), ...this.particles.map((p) => p.s.p90));
-    g.strokeStyle = '#2e2d2a';
+    g.strokeStyle = LINE;
     g.lineWidth = 1;
     g.strokeRect(b.x + 0.5, b.y + 0.5, b.w, b.h);
-    g.fillStyle = 'rgba(12,163,12,0.07)';
+    g.fillStyle = 'rgba(29,138,58,0.07)';
     g.fillRect(b.x, b.y, b.w, b.h * (1 - this.minPk));
-    g.strokeStyle = '#6d6a63';
+    g.strokeStyle = INK3;
     g.setLineDash([3, 3]);
     g.beginPath();
     g.moveTo(b.x, b.y + b.h * (1 - this.minPk));
     g.lineTo(b.x + b.w, b.y + b.h * (1 - this.minPk));
     g.stroke();
     g.setLineDash([]);
-    g.fillStyle = '#8e8b84';
+    g.fillStyle = INK3;
     g.fillText('TARGET DESTROYED ↑', b.x, 12);
     g.textAlign = 'right';
     g.fillText('HARM →', b.x + b.w, this.h - 8);
     g.textAlign = 'left';
     for (const d of this.dots) {
       const p = this.dotXY(d, maxX);
-      g.fillStyle = d.pk >= this.minPk ? '#3987e5' : '#4a4843';
+      g.fillStyle = d.pk >= this.minPk ? BLUE : '#c9c2b4';
       g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
     }
     if (this.best) {
       const p = this.dotXY(this.best, maxX);
       const pulse = 5 + Math.sin(now / 180) * 1.5;
-      g.strokeStyle = '#f3efe7';
+      g.strokeStyle = INK;
       g.lineWidth = 2;
       g.beginPath();
       g.arc(p.x, p.y, pulse, 0, Math.PI * 2);
@@ -245,7 +251,7 @@ export class JevTheater {
       const e = t * t * (3 - 2 * t);
       const x = pt.x0 + (to.x - pt.x0) * e;
       const y = pt.y0 + (to.y - pt.y0) * e - Math.sin(Math.PI * e) * 18;
-      g.fillStyle = pt.s.pk >= this.minPk ? '#8fc0ea' : '#8e8b84';
+      g.fillStyle = pt.s.pk >= this.minPk ? BLUE : '#a8a194';
       g.beginPath();
       g.arc(x, y, 2.5, 0, Math.PI * 2);
       g.fill();
@@ -259,9 +265,9 @@ export class JevTheater {
       g.fillRect(0, 0, this.w * st, this.h);
     }
     if (this.paused && this.lanes.length) {
-      g.fillStyle = 'rgba(18,17,16,0.55)';
+      g.fillStyle = 'rgba(244,241,234,0.78)';
       g.fillRect(L, 20, R - L, this.h - 30);
-      g.fillStyle = '#f3efe7';
+      g.fillStyle = INK;
       g.textAlign = 'center';
       g.fillText('PAUSED', (L + R) / 2, this.h / 2);
       g.textAlign = 'left';
