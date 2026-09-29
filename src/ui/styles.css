@@ -1,11 +1,14 @@
 /* Collateral Damage: an off-white planning desk around a paper city. */
 :root {
-  --bg: #e8e3d8;
-  --panel: #eeeae1;
-  --panel-2: #f6f3ec;
-  --sunk: #ece8df;
-  --line: #e1dbcf;
-  --line-2: #cec6b6;
+  /* A touch softer than paper-white, so the desk doesn't glare. */
+  --bg: #e1dcd0;
+  --panel: #e7e2d8;
+  --panel-2: #efebe3;
+  --sunk: #e4dfd5;
+  --line: #d9d2c5;
+  --line-2: #c7bfaf;
+  --glass: 244, 241, 234; /* floating cards over the map */
+  --hi: #f7f4ee; /* hover and chosen surfaces */
   --text-1: #1c1a17;
   --text-2: #56514a;
   --text-3: #8c8579;
@@ -76,8 +79,8 @@ a { color: var(--text-1); }
 .picon { opacity: 0.9; }
 
 /* Slim tabs on the map's edge, to bring a hidden panel back. */
-.edge-tab { position: absolute; z-index: 5; border: 1px solid rgba(40, 30, 20, 0.12); background: rgba(251, 250, 246, 0.95); color: var(--text-1); font-size: 12px; font-weight: 500; cursor: pointer; backdrop-filter: blur(8px); white-space: nowrap; box-shadow: var(--shadow); }
-.edge-tab:hover { background: #fff; }
+.edge-tab { position: absolute; z-index: 5; border: 1px solid rgba(40, 30, 20, 0.12); background: rgba(var(--glass), 0.95); color: var(--text-1); font-size: 12px; font-weight: 500; cursor: pointer; backdrop-filter: blur(8px); white-space: nowrap; box-shadow: var(--shadow); }
+.edge-tab:hover { background: var(--hi); }
 .edge-tab.left { left: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; padding: 12px 6px; border-radius: 0 10px 10px 0; border-left: 0; }
 .edge-tab.right { right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; padding: 12px 6px; border-radius: 10px 0 0 10px; border-right: 0; font-family: var(--mono); font-size: 11px; }
 .edge-tab.bottom { position: static; width: 100%; padding: 6px 12px; border-radius: 0; border: 0; border-top: 1px solid var(--line); background: var(--panel); color: var(--text-2); font-family: var(--mono); font-size: 11px; text-align: center; backdrop-filter: none; box-shadow: none; }
@@ -96,9 +99,9 @@ a { color: var(--text-1); }
 .map:has(.canvas3d.on) .canvas { visibility: hidden; }
 .labels3d { position: absolute; inset: 0; pointer-events: none; overflow: hidden; display: none; }
 .labels3d.on { display: block; }
-.cd3-label { position: absolute; left: 0; top: 0; padding: 3px 8px; background: rgba(251, 250, 246, 0.94); font: 600 12px var(--sans); color: var(--text-1); white-space: nowrap; border-radius: 4px; box-shadow: 0 1px 3px rgba(40, 30, 20, 0.2); will-change: transform; }
+.cd3-label { position: absolute; left: 0; top: 0; padding: 3px 8px; background: rgba(var(--glass), 0.94); font: 600 12px var(--sans); color: var(--text-1); white-space: nowrap; border-radius: 4px; box-shadow: 0 1px 3px rgba(40, 30, 20, 0.2); will-change: transform; }
 .cd3-label.hurt { color: var(--critical); font-size: 14px; }
-.cd3-label.soft { background: rgba(251, 250, 246, 0.75); color: var(--text-2); font-weight: 500; }
+.cd3-label.soft { background: rgba(var(--glass), 0.75); color: var(--text-2); font-weight: 500; }
 .cd3-label.target { border-left: 3px solid var(--critical); }
 .cd3-label.protect { border-left: 3px solid var(--protect); }
 .cd3-label.hazard { border-left: 3px solid var(--hazard); }
@@ -106,20 +109,20 @@ a { color: var(--text-1); }
 
 /* ---------------------------------------------------------------- on the map: paper cards */
 .hud-time, .hud-layers, .hud-zoom, .toast, .guide, .outcome, .popcard { position: absolute; z-index: 5; }
-.hud-time { top: 12px; left: 12px; display: flex; align-items: baseline; gap: 10px; padding: 8px 13px; border-radius: 10px; background: rgba(251, 250, 246, 0.95); border: 1px solid rgba(40, 30, 20, 0.08); box-shadow: var(--shadow); pointer-events: none; }
+.hud-time { top: 12px; left: 12px; display: flex; align-items: baseline; gap: 10px; padding: 8px 13px; border-radius: 10px; background: rgba(var(--glass), 0.95); border: 1px solid rgba(40, 30, 20, 0.08); box-shadow: var(--shadow); pointer-events: none; }
 .hud-time b { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
 .hud-time span { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); }
 .hud-time em { font-style: normal; font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--s1); }
 .hud-layers { top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.hud-layers button, .hud-zoom button { font-size: 12.5px; font-weight: 500; padding: 6px 11px; border-radius: 9px; border: 1px solid rgba(40, 30, 20, 0.1); background: rgba(251, 250, 246, 0.95); color: var(--text-1); cursor: pointer; box-shadow: var(--shadow); }
-.hud-layers button:hover, .hud-zoom button:hover { background: #fff; }
+.hud-layers button, .hud-zoom button { font-size: 12.5px; font-weight: 500; padding: 6px 11px; border-radius: 9px; border: 1px solid rgba(40, 30, 20, 0.1); background: rgba(var(--glass), 0.95); color: var(--text-1); cursor: pointer; box-shadow: var(--shadow); }
+.hud-layers button:hover, .hud-zoom button:hover { background: var(--hi); }
 .layers-btn.on { background: var(--ink) !important; color: var(--on-ink) !important; border-color: var(--ink) !important; }
 .layers-btn .mono { font-size: 10.5px; opacity: 0.6; margin-left: 2px; }
 .layers-pop { width: 272px; padding: 6px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); display: flex; flex-direction: column; box-shadow: var(--float); animation: rise 0.18s ease; }
 .hud-layers .layers-pop button { display: grid; grid-template-columns: 18px 1fr; align-items: start; gap: 10px; text-align: left; width: 100%; border: 0; border-radius: 8px; background: none; padding: 8px 8px; box-shadow: none; }
 .hud-layers .layers-pop button + button { border-top: 1px solid var(--line); border-radius: 0; }
 .hud-layers .layers-pop button:hover { background: var(--sunk); }
-.layers-pop .tick { width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--line-2); background: #fff; display: grid; place-items: center; font-style: normal; font-size: 10px; color: var(--on-ink); margin-top: 1px; }
+.layers-pop .tick { width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--hi); display: grid; place-items: center; font-style: normal; font-size: 10px; color: var(--on-ink); margin-top: 1px; }
 .layers-pop button.on .tick { background: var(--ink); border-color: var(--ink); }
 .layers-pop b { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-1); }
 .layers-pop em { display: block; font-style: normal; font-size: 11px; color: var(--text-3); margin-top: 1px; line-height: 1.35; }
@@ -264,16 +267,16 @@ a { color: var(--text-1); }
 .options button { text-align: left; padding: 9px 12px 9px 30px; border: 0; border-bottom: 1px solid var(--line); background: var(--panel-2); cursor: pointer; display: flex; flex-direction: column; gap: 2px; position: relative; }
 .options button:last-child { border-bottom: 0; }
 .options button::before { content: ''; position: absolute; left: 11px; top: 13px; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--line-2); }
-.options button:hover { background: #fff; }
+.options button:hover { background: var(--hi); }
 .options button b { font-size: 13px; font-weight: 600; }
 .options button span { font: 400 11px var(--mono); color: var(--text-3); }
-.options button.on { background: #fff; }
+.options button.on { background: var(--hi); }
 .options button.on::before { background: var(--dot); border-color: var(--dot); }
 .make-target { align-self: flex-start; }
 .targets button.picked { max-width: 180px; overflow: hidden; text-overflow: ellipsis; cursor: default; }
 
 /* The chosen weapon, folded from paper. */
-.armoury { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 10px 12px; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #fff 0%, var(--sunk) 100%); border: 1px solid var(--line); text-align: center; }
+.armoury { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 10px 12px; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, var(--hi) 0%, var(--sunk) 100%); border: 1px solid var(--line); text-align: center; }
 .armoury b { display: block; font-size: 13px; font-weight: 600; }
 .armoury span { display: block; font-size: 11.5px; color: var(--text-2); line-height: 1.4; }
 .origami { display: block; overflow: visible; }
@@ -286,7 +289,7 @@ a { color: var(--text-1); }
 .dir { display: grid; grid-template-columns: 104px 1fr; gap: 12px; align-items: center; }
 .dir > div { display: flex; flex-direction: column; gap: 6px; }
 .dial { width: 104px; height: 104px; cursor: pointer; touch-action: none; outline: none; }
-.dial .ring { fill: #fff; stroke: var(--line-2); stroke-width: 1.2; }
+.dial .ring { fill: var(--hi); stroke: var(--line-2); stroke-width: 1.2; }
 .dial:focus-visible .ring { stroke: var(--s1); }
 .dial .tick { stroke: var(--line-2); stroke-width: 1; }
 .dial text { font: 500 9.5px var(--mono); fill: var(--text-3); }
@@ -362,7 +365,7 @@ a { color: var(--text-1); }
 /* The one weapon Jev never picks: set apart from the rest. */
 .options button.special { margin-top: 6px; border-color: rgba(140, 47, 34, 0.4); }
 .options button.special b { color: #8c2f22; }
-.stamp { position: absolute; left: 50%; top: 42%; z-index: 7; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 22px 10px; border: 4px double currentColor; border-radius: 10px; background: rgba(251, 250, 246, 0.82); transform: translate(-50%, -50%) rotate(-7deg); animation: stamp 3.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.5s both; mix-blend-mode: multiply; }
+.stamp { position: absolute; left: 50%; top: 42%; z-index: 7; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 22px 10px; border: 4px double currentColor; border-radius: 10px; background: rgba(var(--glass), 0.82); transform: translate(-50%, -50%) rotate(-7deg); animation: stamp 3.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.5s both; mix-blend-mode: multiply; }
 .stamp.hit { color: #b02a1e; }
 .stamp.miss { color: #3f5f78; }
 .stamp b { font: 700 30px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -376,7 +379,7 @@ a { color: var(--text-1); }
 
 /* The opening scene. */
 .intro { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(40, 32, 24, 0.22); animation: fade 0.6s ease; transition: background 0.5s ease; }
-.intro-card { width: min(540px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 28px 30px 24px; border-radius: 20px; background: rgba(251, 250, 246, 0.88); backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: var(--float); display: flex; flex-direction: column; gap: 12px; animation: introIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); transition: transform 0.5s ease, opacity 0.5s ease; }
+.intro-card { width: min(540px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 28px 30px 24px; border-radius: 20px; background: rgba(var(--glass), 0.88); backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: var(--float); display: flex; flex-direction: column; gap: 12px; animation: introIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); transition: transform 0.5s ease, opacity 0.5s ease; }
 /* The card's lines arrive one after another. */
 .intro-card > * { animation: introLine 0.6s ease both; }
 .intro-card > *:nth-child(1) { animation-delay: 0.15s; }
@@ -440,7 +443,7 @@ a { color: var(--text-1); }
 .chart .dot { fill: var(--s1); stroke: var(--panel-2); stroke-width: 2; }
 .chart .cross { stroke: var(--text-3); stroke-width: 1; }
 .chart-note { margin: 2px 0 0; font-size: 11px; color: var(--text-3); }
-.tip { position: absolute; z-index: 3; pointer-events: none; min-width: 150px; padding: 7px 10px; border-radius: 9px; background: #fff; border: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 1px; font-size: 11.5px; color: var(--text-2); box-shadow: var(--float); }
+.tip { position: absolute; z-index: 3; pointer-events: none; min-width: 150px; padding: 7px 10px; border-radius: 9px; background: var(--hi); border: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 1px; font-size: 11.5px; color: var(--text-2); box-shadow: var(--float); }
 .tip b { color: var(--text-1); font-size: 12px; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--text-2); }
 .legend.small { font-size: 11px; margin-top: 2px; }
@@ -510,7 +513,7 @@ a { color: var(--text-1); }
 .sound-btn.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 button.explored { border: 1px solid var(--line-2); background: transparent; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
 button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
-.maptip { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; max-width: 260px; padding: 7px 10px; border-radius: 9px; background: rgba(251, 250, 246, 0.97); border: 1px solid rgba(40, 30, 20, 0.12); box-shadow: var(--float); font-size: 11.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 1px; will-change: transform; }
+.maptip { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; max-width: 260px; padding: 7px 10px; border-radius: 9px; background: rgba(var(--glass), 0.97); border: 1px solid rgba(40, 30, 20, 0.12); box-shadow: var(--float); font-size: 11.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 1px; will-change: transform; }
 .maptip b { color: var(--text-1); font-size: 12.5px; }
 .banner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 7; padding: 9px 18px; border-radius: 10px; font: 600 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; box-shadow: var(--float); }
 .banner.away { background: var(--panel-2); color: var(--critical); border: 1px solid rgba(200, 55, 43, 0.4); animation: pulse 0.6s ease-in-out infinite alternate; }
@@ -607,7 +610,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .hud-zoom .tgt-btn:hover { background: #a91f16; }
 .tgt-btn span, .hud-mode .tgt span { font-size: 14px; line-height: 0; vertical-align: -1px; }
 
-.hud-mode { position: absolute; z-index: 5; top: 56px; left: 12px; display: flex; padding: 3px; gap: 2px; border-radius: 10px; background: rgba(251, 250, 246, 0.95); border: 1px solid rgba(40, 30, 20, 0.08); box-shadow: var(--shadow); }
+.hud-mode { position: absolute; z-index: 5; top: 56px; left: 12px; display: flex; padding: 3px; gap: 2px; border-radius: 10px; background: rgba(var(--glass), 0.95); border: 1px solid rgba(40, 30, 20, 0.08); box-shadow: var(--shadow); }
 .hud-mode button { border: 0; background: none; padding: 5px 11px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--text-2); cursor: pointer; }
 .hud-mode button.on { background: var(--ink); color: var(--on-ink); }
 .hud-mode button:not(.on):hover { color: var(--text-1); background: rgba(40, 30, 20, 0.05); }
@@ -616,11 +619,11 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 
 /* The decision, always in reach on the map. */
 .strike-dock { position: absolute; z-index: 6; left: 12px; bottom: 12px; display: flex; align-items: center; animation: fade 0.2s ease; }
-.strike-dock.open { gap: 6px; padding: 6px; border-radius: 14px; background: rgba(251, 250, 246, 0.9); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid rgba(40, 30, 20, 0.1); box-shadow: var(--float); }
+.strike-dock.open { gap: 6px; padding: 6px; border-radius: 14px; background: rgba(var(--glass), 0.9); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid rgba(40, 30, 20, 0.1); box-shadow: var(--float); }
 .act.strike.tab { padding: 9px 16px; font-size: 13.5px; }
 .dock-close { border: 0; background: none; font-size: 20px; line-height: 1; padding: 0 6px; color: var(--text-3); cursor: pointer; }
 .dock-close:hover { color: var(--text-1); }
-.action-bar { position: absolute; z-index: 6; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 14px; background: rgba(251, 250, 246, 0.9); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid rgba(40, 30, 20, 0.1); box-shadow: var(--float); }
+.action-bar { position: absolute; z-index: 6; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 14px; background: rgba(var(--glass), 0.9); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid rgba(40, 30, 20, 0.1); box-shadow: var(--float); }
 .act { border-radius: 10px; padding: 10px 16px; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; border: 1px solid transparent; }
 .act:disabled { opacity: 0.45; cursor: not-allowed; }
 .act.strike { background: #c8281e; border-color: #a91f16; color: #fff; padding: 10px 22px; font-size: 14.5px; letter-spacing: 0.01em; box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
@@ -631,12 +634,12 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .act.off:hover { background: #1d4f96 !important; }
 .btn.calm { background: #2a6bc4; border-color: #1d4f96; color: #fff; }
 .guide { bottom: 64px; }
-.map-note { position: absolute; z-index: 7; left: 50%; bottom: 74px; transform: translateX(-50%); max-width: min(520px, calc(100% - 24px)); padding: 9px 14px; border-radius: 10px; font-size: 13px; color: var(--text-1); background: rgba(251, 250, 246, 0.95); border: 1px solid var(--line); box-shadow: var(--float); animation: up 0.25s ease; text-align: center; }
+.map-note { position: absolute; z-index: 7; left: 50%; bottom: 74px; transform: translateX(-50%); max-width: min(520px, calc(100% - 24px)); padding: 9px 14px; border-radius: 10px; font-size: 13px; color: var(--text-1); background: rgba(var(--glass), 0.95); border: 1px solid var(--line); box-shadow: var(--float); animation: up 0.25s ease; text-align: center; }
 
 /* Cards over the map: see-through, so the city stays visible; solid when you're reading them. */
-.popcard, .outcome { background: rgba(251, 250, 246, 0.8); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); transition: background 0.2s; }
-.popcard:hover, .outcome:hover { background: rgba(251, 250, 246, 0.96); }
-.maptip { background: rgba(251, 250, 246, 0.66) !important; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border-color: rgba(40, 30, 20, 0.07) !important; box-shadow: 0 2px 8px rgba(40, 30, 20, 0.08) !important; padding: 5px 9px !important; }
+.popcard, .outcome { background: rgba(var(--glass), 0.8); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); transition: background 0.2s; }
+.popcard:hover, .outcome:hover { background: rgba(var(--glass), 0.96); }
+.maptip { background: rgba(var(--glass), 0.66) !important; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border-color: rgba(40, 30, 20, 0.07) !important; box-shadow: 0 2px 8px rgba(40, 30, 20, 0.08) !important; padding: 5px 9px !important; }
 .maptip b { font-size: 12px !important; }
 .maptip span { opacity: 0.85; }
 
@@ -668,8 +671,8 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .mix-pop input[type='range'] { width: 100%; accent-color: #2a6bc4; }
 
 /* A place's story: open ground, streets, districts. */
-.placecard { position: absolute; z-index: 5; width: 270px; padding: 12px 14px; border-radius: 12px; background: rgba(251, 250, 246, 0.86); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border: 1px solid var(--line); box-shadow: var(--float); display: flex; flex-direction: column; gap: 6px; animation: placein 0.22s ease; }
-.placecard:hover { background: rgba(251, 250, 246, 0.97); }
+.placecard { position: absolute; z-index: 5; width: 270px; padding: 12px 14px; border-radius: 12px; background: rgba(var(--glass), 0.86); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border: 1px solid var(--line); box-shadow: var(--float); display: flex; flex-direction: column; gap: 6px; animation: placein 0.22s ease; }
+.placecard:hover { background: rgba(var(--glass), 0.97); }
 .placecard .kind { display: block; font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 2px; }
 .placecard b { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 17px; font-weight: 500; }
 .placecard p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
@@ -716,17 +719,17 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 @keyframes fleeting { 0% { opacity: 0; } 8% { opacity: 1; } 78% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
 
 /* The controls on the map: see-through, so the city shows behind them; solid under the pointer. */
-.hud-time, .hud-mode, .hud-layers > button, .hud-zoom button:not(.tgt-btn), .toast { background: rgba(251, 250, 246, 0.6) !important; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); box-shadow: 0 1px 6px rgba(40, 30, 20, 0.08) !important; }
-.hud-layers > button:not(.on):hover, .hud-zoom button:not(.tgt-btn):hover, .hud-mode:hover { background: rgba(251, 250, 246, 0.94) !important; }
+.hud-time, .hud-mode, .hud-layers > button, .hud-zoom button:not(.tgt-btn), .toast { background: rgba(var(--glass), 0.6) !important; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); box-shadow: 0 1px 6px rgba(40, 30, 20, 0.08) !important; }
+.hud-layers > button:not(.on):hover, .hud-zoom button:not(.tgt-btn):hover, .hud-mode:hover { background: rgba(var(--glass), 0.94) !important; }
 .hud-layers > button.layers-btn.on { background: var(--ink) !important; }
 .hud-zoom .tgt-btn { background: rgba(200, 40, 30, 0.82); }
 .strike-dock > .act.tab, .strike-dock:not(.open) > button { opacity: 0.9; }
-.strike-dock.open { background: rgba(251, 250, 246, 0.68); }
+.strike-dock.open { background: rgba(var(--glass), 0.68); }
 
 /* Phones: small, see-through cards; the narrator tells the stories and the guide. */
 @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px) {
   /* The guide on a phone: a small pill at the bottom. Step, title, and ‹ › ✕; the narrator does the telling. */
-  .guide.compact { bottom: 10px; width: auto; max-width: calc(100% - 20px); padding: 4px 4px 4px 12px; gap: 6px; align-items: center; border-radius: 999px; background: rgba(251, 250, 246, 0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 10px rgba(40, 30, 20, 0.14); }
+  .guide.compact { bottom: 10px; width: auto; max-width: calc(100% - 20px); padding: 4px 4px 4px 12px; gap: 6px; align-items: center; border-radius: 999px; background: rgba(var(--glass), 0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 10px rgba(40, 30, 20, 0.14); }
   .guide.compact .n { padding-top: 0; font-size: 10px; }
   .guide.compact > div:nth-child(2) { flex: 0 1 auto; min-width: 0; }
   .guide.compact h4 { font-size: 12px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -744,17 +747,17 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .hud-mode button { padding: 4px 9px; font-size: 11.5px; }
   .hud-layers button, .hud-zoom button { font-size: 11px; padding: 4px 8px; min-width: 0; }
   .hud-zoom { bottom: 12px; gap: 3px; }
-  .placecard { width: min(230px, calc(100% - 24px)); padding: 8px 10px; background: rgba(251, 250, 246, 0.72); }
+  .placecard { width: min(230px, calc(100% - 24px)); padding: 8px 10px; background: rgba(var(--glass), 0.72); }
   .placecard b { font-size: 14.5px; }
   .placecard p { font-size: 11.5px; line-height: 1.4; }
-  .popcard { padding: 10px 12px; gap: 6px; background: rgba(251, 250, 246, 0.74); }
+  .popcard { padding: 10px 12px; gap: 6px; background: rgba(var(--glass), 0.74); }
   .toast { padding: 6px 12px; }
   .toast b { font-size: 13px; }
   .toast span { display: none; }
   .maptip { max-width: 190px; }
   .hud-hint { top: 80px; font-size: 11px; }
   /* The building card: small, bottom-left above the Strike button, see-through. */
-  .popcard { left: 10px !important; right: auto; top: auto !important; bottom: 58px; width: min(250px, calc(100% - 20px)) !important; max-height: 55%; overflow-y: auto; padding: 8px 10px; gap: 6px; border-radius: 12px; font-size: 11.5px; background: rgba(251, 250, 246, 0.74); }
+  .popcard { left: 10px !important; right: auto; top: auto !important; bottom: 58px; width: min(250px, calc(100% - 20px)) !important; max-height: 55%; overflow-y: auto; padding: 8px 10px; gap: 6px; border-radius: 12px; font-size: 11.5px; background: rgba(var(--glass), 0.74); }
   .popcard .pop-head b { font-size: 13px; }
   .popcard .pop-head span { font-size: 10.5px; }
   .popcard .story, .popcard .hint { font-size: 11px; line-height: 1.4; margin: 0; }
@@ -772,7 +775,6 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 @property --text-2 { syntax: '<color>'; inherits: true; initial-value: #56514a; }
 @property --text-3 { syntax: '<color>'; inherits: true; initial-value: #8c8579; }
 .app { background: var(--bg); transition: --bg 1.6s ease, --panel 1.6s ease, --panel-2 1.6s ease, --sunk 1.6s ease, --line 1.6s ease, --line-2 1.6s ease, --text-2 1.6s ease, --text-3 1.6s ease; }
-.app.night { --bg: #bdb6a8; --panel: #c7c0b2; --panel-2: #d0cabd; --sunk: #c2bbad; --line: #b3ab9b; --line-2: #a0988a; --text-2: #48433c; --text-3: #6c665b; }
 @media (prefers-reduced-motion: reduce) { .app { transition: none; } }
 
 /* The strike dock: when it opens, Authorise strike breathes once or twice so it's clear what the choice is. */
@@ -789,7 +791,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .stamp { top: 29%; padding: 6px 12px 5px; border-width: 3px; }
   .stamp b { font-size: 15px; }
   .stamp span { font-size: 8.5px; white-space: nowrap; }
-  .outcome { top: auto; bottom: 10px; left: 10px; right: 10px; width: auto; padding: 9px 12px 10px; background: rgba(251, 250, 246, 0.7); }
+  .outcome { top: auto; bottom: 10px; left: 10px; right: 10px; width: auto; padding: 9px 12px 10px; background: rgba(var(--glass), 0.7); }
   .outcome .k, .outcome p { display: none; }
   .outcome p.rings { display: block; margin: -2px 0 8px; font-size: 11.5px; line-height: 1.35; }
   .outcome .big { margin: 0 0 8px; padding-bottom: 7px; }
@@ -804,7 +806,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .intro-card p:not(.lede) { display: none; }
   .intro-actions { gap: 6px; margin-top: 4px; }
   .intro-actions .btn { padding: 7px 12px; font-size: 13px; }
-  .strike-dock.open { right: auto; gap: 4px; padding: 4px; background: rgba(251, 250, 246, 0.5); }
+  .strike-dock.open { right: auto; gap: 4px; padding: 4px; background: rgba(var(--glass), 0.5); }
   .strike-dock.open .act { flex: 0 0 auto; padding: 7px 12px; font-size: 12px; }
   .act.strike.tab { padding: 7px 12px; font-size: 12.5px; }
   .sheet { background: rgba(40, 30, 22, 0.25); backdrop-filter: none; align-items: end; padding-bottom: 12px; }
@@ -878,7 +880,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .talk p span { opacity: 0.12; transition: opacity 0.25s ease; }
 .talk p span.on { opacity: 1; }
 .talk-acts { display: flex; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
-.talk-acts button { font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 9px; border: 1px solid rgba(40, 30, 20, 0.15); background: #fff; color: var(--text-1); cursor: pointer; }
+.talk-acts button { font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 9px; border: 1px solid rgba(40, 30, 20, 0.15); background: var(--hi); color: var(--text-1); cursor: pointer; }
 .talk-acts button.primary { background: #3a2c14; border-color: #3a2c14; color: #f6e7c4; }
 .talk.red .talk-acts button.primary { background: #b02a1e; border-color: #b02a1e; color: #fff; }
 .mission-end { position: absolute; z-index: 9; right: 12px; top: 60px; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 72px); overflow: auto; padding: 22px 24px 18px; border-radius: 6px; background: #fbf7ec; border: 1px solid rgba(80, 60, 30, 0.2); box-shadow: 0 30px 70px rgba(30, 20, 10, 0.35), 0 2px 0 rgba(255, 255, 255, 0.6) inset; animation: fade 0.6s ease both; }
@@ -902,3 +904,49 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .mission-end { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 62%; padding: 16px 16px 14px; }
 }
 .map:has(.mission-end) .outcome { display: none; }
+
+/* ---------------------------------------------------------------- dark mode (a switch at the foot of the page) */
+:root[data-theme='dark'] {
+  --bg: #1b1a18;
+  --panel: #22211e;
+  --panel-2: #2a2825;
+  --sunk: #201f1c;
+  --line: #36332e;
+  --line-2: #4a463f;
+  --text-1: #ebe6dc;
+  --text-2: #b8b1a4;
+  --text-3: #8a8377;
+  --ink: #ebe6dc;
+  --on-ink: #1b1a18;
+  --accent: #ebe6dc;
+  --glass: 38, 36, 33;
+  --hi: #34312c;
+  --s1: #5b93e0;
+  --protect: #5a9cc0;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px -6px rgba(0, 0, 0, 0.5);
+  --float: 0 2px 4px rgba(0, 0, 0, 0.3), 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+:root[data-theme='dark'] body { background: var(--bg); }
+:root[data-theme='dark'] .card, :root[data-theme='dark'] .step { background: var(--panel-2); }
+:root[data-theme='dark'] input, :root[data-theme='dark'] select { background: var(--sunk); color: var(--text-1); }
+:root[data-theme='dark'] .mission-hud { background: #2b2518; border-color: rgba(217, 163, 58, 0.25); }
+:root[data-theme='dark'] .mission-hud b, :root[data-theme='dark'] .mh-where, :root[data-theme='dark'] .mh-clues li { color: #eadfc6; }
+:root[data-theme='dark'] .talk, :root[data-theme='dark'] .mission-end { background: #2a2620; border-color: rgba(255, 240, 210, 0.12); }
+:root[data-theme='dark'] .talk p, :root[data-theme='dark'] .talk-who b, :root[data-theme='dark'] .me-line, :root[data-theme='dark'] .me-names li { color: #efe6d4; }
+:root[data-theme='dark'] .talk.handler { background: #23272a; }
+:root[data-theme='dark'] .talk-acts button:not(.primary) { background: var(--hi); color: var(--text-1); border-color: var(--line-2); }
+.theme-btn { font-size: 12px; font-weight: 500; padding: 6px 11px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.theme-btn:hover { color: var(--text-1); }
+.secret-foot { gap: 8px; flex-wrap: wrap; }
+
+/* Jev's reading of the reports: a notch smaller, it's a lot of text for a side card. */
+.jevcard h3 { font-size: 13.5px; }
+.jevcard .sub { font-size: 11px; line-height: 1.45; }
+.jevcard .jev-meta { font-size: 9.5px; }
+.jevcard .judgment { padding: 7px 0; gap: 6px; grid-template-columns: 38px minmax(0, 1fr) 40px auto 30px; }
+.jevcard .judgment .q, .jevcard .judgment b { font-size: 11.5px; }
+.jevcard .judgment .k { font-size: 9.5px; }
+.jevcard .judgment .role { font-size: 9px; }
+.jevcard .judgment .conf { font-size: 10px; }
+.jevcard .hint, .jevcard details, .jevcard summary { font-size: 11px; }

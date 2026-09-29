@@ -21,12 +21,22 @@ interface Particle {
 }
 
 const HARM = ['#efc9b8', '#e3a288', '#d27a5a', '#b95236', '#8e3320'];
-// Drawn on the off-white drawer.
-const INK = '#1c1a17';
-const INK2 = '#56514a';
-const INK3 = '#8c8579';
-const LINE = '#e1dbcf';
-const BLUE = '#2a6bc4';
+// Drawn on the drawer: off-white, or dark in dark mode (see setTheaterDark).
+let INK = '#1c1a17';
+let INK2 = '#56514a';
+let INK3 = '#8c8579';
+let LINE = '#e1dbcf';
+let BLUE = '#2a6bc4';
+let SUNK = '#ece8df';
+let SAFE = '#d3e3d8';
+let OFF = '#c9c2b4';
+let OFF2 = '#a8a194';
+let VEIL = 'rgba(244,241,234,0.78)';
+export function setTheaterDark(dark: boolean) {
+  [INK, INK2, INK3, LINE, BLUE, SUNK, SAFE, OFF, OFF2, VEIL] = dark
+    ? ['#ebe6dc', '#b8b1a4', '#8a8377', '#36332e', '#5b93e0', '#201f1c', '#2c3a31', '#4a463f', '#5d584f', 'rgba(34,33,30,0.8)']
+    : ['#1c1a17', '#56514a', '#8c8579', '#e1dbcf', '#2a6bc4', '#ece8df', '#d3e3d8', '#c9c2b4', '#a8a194', 'rgba(244,241,234,0.78)'];
+}
 const SHORT: Record<string, string> = { large: '2000', medium: '500', small: '250', focused: 'LC', moab: 'MOAB', instant: 'imp', delay: 'dly', airburst: 'air' };
 
 export class JevTheater {
@@ -156,7 +166,7 @@ export class JevTheater {
       const y = this.laneY(i);
       const booting = now < l.bootAt + 260;
       if (now < l.bootAt) return;
-      g.fillStyle = booting ? `rgba(42,107,196,${0.12 + 0.25 * Math.random()})` : '#ece8df';
+      g.fillStyle = booting ? `rgba(42,107,196,${0.12 + 0.25 * Math.random()})` : SUNK;
       g.fillRect(L, y, R - L, lh);
       g.fillStyle = INK3;
       g.fillText(`W${i + 1}`, L - 26, y + lh / 2);
@@ -190,7 +200,7 @@ export class JevTheater {
         g.globalAlpha = a;
         for (let k = 0; k < n; k++) {
           const v = l.grid[k];
-          g.fillStyle = v === 0 ? '#d3e3d8' : HARM[Math.min(HARM.length - 1, Math.floor((v / l.gridMax) * (HARM.length - 1) + 0.5))];
+          g.fillStyle = v === 0 ? SAFE : HARM[Math.min(HARM.length - 1, Math.floor((v / l.gridMax) * (HARM.length - 1) + 0.5))];
           g.fillRect(gx + Math.floor(k / rows) * cw, y + 2 + (k % rows) * chh, cw - 0.6, chh - 0.6);
         }
         g.globalAlpha = 1;
@@ -223,7 +233,7 @@ export class JevTheater {
     g.textAlign = 'left';
     for (const d of this.dots) {
       const p = this.dotXY(d, maxX);
-      g.fillStyle = d.pk >= this.minPk ? BLUE : '#c9c2b4';
+      g.fillStyle = d.pk >= this.minPk ? BLUE : OFF;
       g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
     }
     if (this.best) {
@@ -251,7 +261,7 @@ export class JevTheater {
       const e = t * t * (3 - 2 * t);
       const x = pt.x0 + (to.x - pt.x0) * e;
       const y = pt.y0 + (to.y - pt.y0) * e - Math.sin(Math.PI * e) * 18;
-      g.fillStyle = pt.s.pk >= this.minPk ? BLUE : '#a8a194';
+      g.fillStyle = pt.s.pk >= this.minPk ? BLUE : OFF2;
       g.beginPath();
       g.arc(x, y, 2.5, 0, Math.PI * 2);
       g.fill();
@@ -265,7 +275,7 @@ export class JevTheater {
       g.fillRect(0, 0, this.w * st, this.h);
     }
     if (this.paused && this.lanes.length) {
-      g.fillStyle = 'rgba(244,241,234,0.78)';
+      g.fillStyle = VEIL;
       g.fillRect(L, 20, R - L, this.h - 30);
       g.fillStyle = INK;
       g.textAlign = 'center';

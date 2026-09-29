@@ -51,7 +51,7 @@ import type { JobOut } from '../jev/worker';
 import { MapView, type Layers, type MapFrame, type Outcome } from '../view/map';
 import { nightness } from '../view/paper';
 import type { Frame3D, Model3D } from '../view/model3d';
-import { JevTheater } from '../view/theater';
+import { JevTheater, setTheaterDark } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
 import { personIn, personInCar, personLine, personOut } from './people';
@@ -182,6 +182,23 @@ export default function App() {
     setMissionState(s);
   };
   const [talk, setTalk] = useState<Talk | null>(null);
+  // Dark mode: a switch at the foot of the page, remembered in this browser.
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem('cd-theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    setTheaterDark(dark);
+    try {
+      localStorage.setItem('cd-theme', dark ? 'dark' : 'light');
+    } catch {
+      /* no storage */
+    }
+  }, [dark]);
   const [missionEnd, setMissionEnd] = useState<{ result: 'clean' | 'hurt' | 'miss'; others: number; names: string[] } | null>(null);
   const [countMode, setCountMode] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
@@ -403,6 +420,11 @@ export default function App() {
   const timers = useRef<number[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const focusRef = useRef<{ cx: number; cy: number; zoom: number; dur?: number } | null>(null);
+  // The guide's card opens over the whole city: pull out to it, slowly, so the tour can glide back in.
+  useEffect(() => {
+    if (!intro) return;
+    focusRef.current = { cx: world.city.w / 2, cy: world.city.h / 2, zoom: 1, dur: 1.8 };
+  }, [intro]); // eslint-disable-line react-hooks/exhaustive-deps
   const canvas3dRef = useRef<HTMLCanvasElement>(null);
   const down3d = useRef<{ x: number; y: number } | null>(null);
   const labels3dRef = useRef<HTMLDivElement>(null);
@@ -1525,7 +1547,7 @@ export default function App() {
     const was = guide != null ? GUIDE[guide].cues : undefined;
     if (was) setLayers((l) => Object.assign({ ...l }, ...was.map((x) => x.layers)));
     if (g.layers) setLayers((l) => ({ ...l, ...g.layers }));
-    if (g.focus) focusRef.current = g.focus;
+    if (g.focus && !g.tour) focusRef.current = g.focus; // the tour flies its own way in
     if (g.open) setOpen((o) => new Set([...o, g.open!]));
     if (g.tab) {
       setTab(g.tab);
@@ -1570,7 +1592,23 @@ export default function App() {
     const mid = (bs: { cx: number; cy: number }[]) => ({ x: bs.reduce((a, b) => a + b.cx, 0) / bs.length, y: bs.reduce((a, b) => a + b.cy, 0) / bs.length });
     const whB = wh.buildingId != null ? world.buildings[wh.buildingId] : null;
     const stops: [number, () => void][] = [];
-    if (whB) stops.push([800, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
+    // The opening: pull right out over the whole city for a sense of scale, then glide slowly in to the district
+    // around Warehouse 14, the school and the depot, with the canal off to the east.
+    const m0 = mapRef.current;
+    const base = m0 ? m0.cam().s / m0.view.zoom : 1;
+    const cw = canvasRef.current?.clientWidth ?? 1000;
+    const ch = canvasRef.current?.clientHeight ?? 700;
+    const near = Math.max(1, Math.min(cw / 980, ch / 600) / base);
+    focusRef.current = { cx: world.city.w / 2, cy: world.city.h / 2, zoom: 1, dur: 1.1 };
+    if (view === 'model') modelRef.current?.flyTo(world.city.w / 2, world.city.h / 2, 1100, 1.1);
+    if (whB) stops.push([1200, () => setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' })]);
+    stops.push([
+      1200,
+      () => {
+        focusRef.current = { cx: 454, cy: 528, zoom: near, dur: 4.2 };
+        if (view === 'model') modelRef.current?.flyTo(454, 528, 560, 4.2);
+      },
+    ]);
     // First look at the school: in close, the building and its playground filling the view, for a few seconds.
     const yard = world.spaces.find((sp) => sp.name === 'School yard');
     const schoolBox = school && [...school.rects, ...(yard ? [yard.rect] : [])].reduce((u, q) => ({ x0: Math.min(u.x0, q.x), y0: Math.min(u.y0, q.y), x1: Math.max(u.x1, q.x + q.w), y1: Math.max(u.y1, q.y + q.h) }), { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 });
@@ -1777,6 +1815,9 @@ export default function App() {
         title="A secret mission: find the courier"
       >
         <span aria-hidden>✦</span> {mission.on ? 'Put the secret file away' : mission.step >= 1 && mission.step < 6 ? 'Back to the secret file' : 'Secret file'}
+      </button>
+      <button className="theme-btn" onClick={() => setDark(!dark)} aria-pressed={dark} title="Switch between light and dark">
+        {dark ? '☀ Light mode' : '☾ Dark mode'}
       </button>
     </div>
   );
@@ -2235,7 +2276,7 @@ export default function App() {
   );
 
   return (
-    <div className={`app m-${mobileTab} ${nightness(shownPlan.hour) > 0.5 ? 'night' : ''} ${mapFull ? 'mapfull' : ''} ${guide != null ? 'guiding' : ''}`}>
+    <div className={`app m-${mobileTab} ${mapFull ? 'mapfull' : ''} ${guide != null ? 'guiding' : ''}`}>
       <header className="top">
         <div className="brand">
           <b>Collateral Damage</b>
