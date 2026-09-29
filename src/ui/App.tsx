@@ -1067,8 +1067,13 @@ export default function App() {
   const pickPreset = (id: TargetId) => {
     chooseTarget(id);
     const c = targetCentre(targetOf(world, id));
-    flyTo(c.x, c.y, 3.6);
-    if (guide != null || !(id in TARGET_STORIES)) return;
+    const telling = guide == null && id in TARGET_STORIES;
+    // With a story showing (bottom-left), sit the target up and to the right so both can be seen.
+    const m = mapRef.current;
+    const px = m ? 1 / m.cam().s : 0.4;
+    const zk = 3.2 / (m?.view.zoom || 3.2);
+    flyTo(telling ? c.x - 200 * px * zk : c.x, telling ? c.y + 90 * px * zk : c.y, telling ? 3.2 : 3.6);
+    if (!telling) return;
     const k = id as keyof typeof TARGET_STORIES;
     setStory(k);
     window.clearTimeout(storyTimer.current);
@@ -2017,7 +2022,7 @@ export default function App() {
               <div className="storycard" key={story} role="status">
                 <div className="pop-head">
                   <div>
-                    <span className="kind">The people around it</span>
+                    <span className="kind">Why it’s a target, and who is around it</span>
                     <b>{TARGET_STORIES[story].title}</b>
                   </div>
                   <button className="x" onClick={closeStory} aria-label="Close">
