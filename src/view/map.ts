@@ -560,6 +560,7 @@ export class MapView {
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
     if (fx) this.drawFx(g, fx, px);
     this.drawSmoke(g, night);
+    this.drawChimneys(g, f.plan.hour, damaged, night);
     if (night < 0.5) this.drawBirds(g, px, 1 - night * 2);
 
     // Vignette.
@@ -836,6 +837,30 @@ export class MapView {
       g.beginPath();
       g.arc(x, y, rad, 0, Math.PI * 2);
       g.fill();
+    }
+  }
+
+  /** Thin smoke from the kiln chimneys while the kilns are being fired, drifting off with the wind. */
+  private chimneys: Building[] | null = null;
+  private drawChimneys(g: CanvasRenderingContext2D, hour: number, damaged: Set<number>, night: number) {
+    this.chimneys ??= this.world.buildings.filter((b) => b.kind === 'chimney');
+    const firing = hour >= 3.5 && hour < 20 ? 1 : 0.45; // banked low overnight, never out
+    for (const b of this.chimneys) {
+      if (damaged.has(b.id)) continue;
+      const x0 = b.cx;
+      const y0 = b.cy - 2;
+      for (let k = 0; k < 10; k++) {
+        const u = (this.time * 0.05 + k / 10 + b.id * 0.13) % 1;
+        const x = x0 + u * 34 + Math.sin(u * 6 + k + b.id) * 1.6;
+        const y = y0 - u * 14 + Math.cos(u * 5 + k) * 1.2;
+        const rad = 1.4 + u * 7;
+        const a = Math.pow(1 - u, 1.2) * 0.42 * firing * (1 - night * 0.4);
+        const c = Math.round(95 + u * 80);
+        g.fillStyle = `rgba(${c},${c - 4},${c - 8},${a})`;
+        g.beginPath();
+        g.arc(x, y, rad, 0, Math.PI * 2);
+        g.fill();
+      }
     }
   }
 

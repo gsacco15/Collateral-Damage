@@ -40,7 +40,7 @@ Typed, seeded and pure: no DOM. The page, the map, the 3D model and every worker
 
 | File | What it does |
 | --- | --- |
-| `city.ts` | The city: 8 districts, named streets, a canal with 3 bridges, ~900 buildings, open spaces, compound walls, trees, 4 targets, places to discover, and a 2 m occupancy grid |
+| `city.ts` | The city: 8 districts inside the ring and 3 on the outskirts, named streets, a canal with 3 bridges and a footbridge, a railway, ~1,200 buildings, open spaces, compound walls, trees, 11 briefed targets, places to discover, and a 2 m occupancy grid |
 | `life.ts` | Pattern of life: hour-by-hour schedules for every kind of building and open space, weekday and Friday; overhead / phone / census sources |
 | `effects.ts` | Weapons, fuzes, detonation height, blast and fragment harm in 3D, fragments blocked by buildings and walls, collapse by material |
 | `estimate.ts` | The Monte Carlo estimate; the crude circle (protected sites, hazards, open ground); who signs off |
@@ -68,6 +68,17 @@ Typed, seeded and pure: no DOM. The page, the map, the 3D model and every worker
 | Tower 7, top floor | A reported command post above eight floors of families. |
 | Vehicle yard | Trucks in an open yard: easy at night, crowded by day. |
 | Boulevard bridge | A supply route, and the road from Tin Hill to the hospital. Only big weapons drop it. |
+| A house on Tin Hill | A commander at home with his family, among tin houses. |
+| Fuel depot | Fuel for weapons trucks, and for the ambulances and bakeries. |
+| District Office mast | A relay mast above the office everyone queues at. |
+| Bus station | One minibus among forty. |
+| Flour Mill | A workshop said to be hidden inside a mill that runs day and night: no empty hour. |
+| Pump House | A launcher said to hide by the pump the whole grove depends on. |
+| A tent in Amal Camp | One man among hundreds of families, behind canvas. |
+
+### The outskirts
+
+South of South Road the grid stops. **The Kilnworks**: three brick kilns with smoking chimneys, green bricks drying in rows, a scrapyard, the kiln families' huts, a flour mill with four silos, the workers' hostel, and a freight line with wagons in the sidings. **The Groves**: plastic greenhouses, a farmhouse with beehives, a diesel pump and irrigation channels running through a date grove. **Amal Camp**, beyond Tin Hill and fenced, reached by a footbridge: rows of tents with tarps and washing lines, a tent school, a clinic, a distribution point with its queue lines, the taps and water tanks, and a dirt pitch. Each has its own pattern of life (the mill never stops; the kilns are worked before the heat; the camp is full nearly all day) and its own sounds.
 
 ## The app (`src/ui/`, `src/view/`)
 
@@ -93,7 +104,7 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 - **The ruins stay**: after a strike, *Next target* keeps the rubble. Nobody is inside a ruin any more, in the estimate and in Jev's search. *Roll again* replaces the last strike; *Rebuild the city* clears everything.
 
 - **Drag the aim** on the target, and **drag the paper plane** circling the aim to choose the direction of attack. `,` and `.` turn it too; `[` and `]` step the hour.
-- **The four targets' stories**: pick Warehouse, Tower 7, Vehicle yard or Bridge from the top bar and the map flies there while a short story of the people around it is shown and, with sound on, narrated.
+- **The targets' stories**: pick any of the briefed targets from the top bar and the map flies there while a short story of the people around it is shown and, with sound on, narrated.
 - **Places**: hover over a named place (a park, a square, the souk) for a line about it and the people there; from high up, click a district or a street for its story.
 - **Point anywhere**: the readout says who is inside a building, or how likely someone standing in the open there is to be killed or badly hurt.
 - **Explore**: landmarks and streets are named as you find them; the Explored menu flies you back to anything you've found.
@@ -103,7 +114,7 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 ### Sound (`src/ui/sound.ts`, `public/audio/`)
 
 Off until you turn it on: the *Sound* button in the top bar (on every screen size), `M`, or *Listen* on the opening card. On iPhone it plays even with the silent switch on. The ▾ beside it opens the mixer: everything, the city, effects and voices, remembered on this device.
-- **The city:** day or night beds follow the hour; the operations room hums quietly underneath. Up close, the one place nearest the middle of the map comes in (the park, the canal, the football pitch, the school at break, the souk, traffic on the boulevard), placed left or right by where it is on screen. High above, the city is muffled and far away with a little wind; coming down, it gets clearer. A fast zoom makes a soft rush of air. Now and then, one small sound that fits the place and the hour: a dog at night, frogs by the canal, a generator on Tin Hill; a rooster and a shop shutter at dawn; kettles and plates in homes at breakfast and dinner; hammering and welding in the Workshops; sellers calling in the souk; a bus pulling out of the station; wind chimes in Garden Side; a radio through a window; pigeons, a moped; rarely, a far-off siren near the hospital. The call to prayer plays at dawn and before Friday noon, and softer and farther at the other prayers.
+- **The city:** day or night beds follow the hour; the operations room hums quietly underneath. Up close, the one place nearest the middle of the map comes in (the park, the canal, the football pitch, the school at break, the souk, traffic on the boulevard, the Kilnworks' machinery, the camp, the groves), placed left or right by where it is on screen. High above, the city is muffled and far away with a little wind; coming down, it gets clearer. A fast zoom makes a soft rush of air. Now and then, one small sound that fits the place and the hour: a dog at night, frogs by the canal, a generator on Tin Hill; a rooster and a shop shutter at dawn; kettles and plates in homes at breakfast and dinner; hammering and welding in the Workshops; sellers calling in the souk; a bus pulling out of the station; wind chimes in Garden Side; a radio through a window; pigeons, a moped; rarely, a far-off siren near the hospital. On the outskirts: a freight train, bricks being stacked, the pump starting at dawn, jerrycans at the camp taps, canvas snapping in the wind. The call to prayer plays at dawn and before Friday noon, and softer and farther at the other prayers.
 - **The interface:** soft paper clicks on buttons (the map itself stays silent when you click it), a fold when you pick a weapon, a chime when you find a place, and Jev's spin-up, ticks and finish.
 - **After the impact:** what you hear depends on how many people were hurt (from settling dust and a car alarm, through a few shouts, to screaming and sirens), and it's quieter at night.
 - **The radio:** Cell and Overwatch, through a band-pass "radio" filter with squelch: Jev starting and finishing, the estimate going up, cleared, weapon away, splash, the result, and "abort" if you let go of the release early, or when the strike is called off.

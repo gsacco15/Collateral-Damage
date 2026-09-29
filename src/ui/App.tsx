@@ -319,6 +319,13 @@ export default function App() {
       market: souk ? [{ x: souk.x - 30, y: souk.y - 30, w: 60, h: 60 }] : [],
       bus: rects((x) => x.kind === 'busstation', world.spaces),
       hospital: rects((x) => x.kind === 'hospital', world.buildings),
+      industry: world.blocks.filter((q) => q.district === 'kilns'),
+      camp: world.blocks.filter((q) => q.district === 'camp'),
+      groves: world.blocks.filter((q) => q.district === 'groves'),
+      rail: [{ x: world.extras.rail.x0, y: world.extras.rail.y - 3, w: world.extras.rail.x1 - world.extras.rail.x0, h: 6 }],
+      taps: world.spaces.filter((q) => q.kind === 'plaza' && q.district === 'camp').map((q) => q.rect),
+      bricks: rects((x) => x.kind === 'brickyard', world.spaces),
+      pump: world.buildings.filter((b) => b.name === 'Pump House').flatMap((b) => b.rects),
     };
   }, [world]);
   const districtHere = (x: number, y: number) => {
@@ -368,6 +375,9 @@ export default function App() {
         ['amb-school', near(zones.school), school ? 0.5 : 0],
         ['amb-traffic', near(zones.traffic), busy * 0.35],
         ['amb-water', [Math.max(0, Math.abs(v.cx - rx) - world.river.width / 2), rx], 0.5],
+        ['amb-industry', near(zones.industry), (0.5 + 0.5 * busy) * 0.4],
+        ['amb-camp', near(zones.camp), (0.45 + 0.55 * day) * 0.45],
+        ['amb-groves', near(zones.groves), (0.3 + 0.7 * day) * 0.4],
       ];
       let pick: [Bed, number, number] | null = null;
       if (close > 0.3)
@@ -396,13 +406,19 @@ export default function App() {
         const night = day < 0.3;
         const dawn = h >= 5 && h < 7.5;
         const nearTo = (qs: Rect[], m: number) => near(qs)[0] < m;
+        const out = at === 'kilns' || at === 'camp' || at === 'groves';
         const pool: [CityCue, number][] = night
-          ? [['cue-dog', 1], ...(at === 'tinhill' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : [])]
+          ? [['cue-dog', 1], ...(at === 'tinhill' || at === 'camp' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : []), ['cue-train', nearTo(zones.rail, 200) ? 0.6 : 0]]
           : dawn
-            ? [['cue-rooster', at === 'tinhill' || at === 'oldtown' ? 2 : 1], ['cue-shutter', at === 'market' || at === 'oldtown' ? 2 : 0.5], ['cue-pigeons', 0.3]]
+            ? [['cue-rooster', at === 'tinhill' || at === 'oldtown' || out ? 2 : 1], ['cue-shutter', at === 'market' || at === 'oldtown' ? 2 : 0.5], ['cue-pigeons', 0.3], ['cue-pump', at === 'groves' ? 3 : 0], ['cue-jerrycan', nearTo(zones.taps, 60) ? 3 : 0], ['cue-bricks', at === 'kilns' ? 2 : 0]]
             : [
+                ['cue-train', nearTo(zones.rail, 200) ? 0.8 : 0],
+                ['cue-pump', at === 'groves' && (h < 10 || h >= 16) ? 2 : 0],
+                ['cue-canvas', at === 'camp' ? 2 : 0],
+                ['cue-jerrycan', nearTo(zones.taps, 60) && (h < 10 || h >= 17) ? 2.5 : 0],
+                ['cue-bricks', nearTo(zones.bricks, 70) && (h < 11 || h >= 15) ? 2.5 : 0],
                 ['cue-pigeons', 0.3],
-                ['cue-moped', 0.8],
+                ['cue-moped', out ? 0.3 : 0.8],
                 ['cue-workshop', at === 'workshops' && weekday && h >= 8 && h < 17 ? 3 : 0],
                 ['cue-sellers', at === 'market' && h >= 9 && h < 14 ? 3 : 0],
                 ['cue-bus', nearTo(zones.bus, 90) && h >= 6 && h < 21 ? 3 : 0],
@@ -1091,7 +1107,7 @@ export default function App() {
     setGuide(i);
     stopDemo();
     stopTour();
-    if (i != null && GUIDE[i].tour) startTour(GUIDE[i].focus);
+    if (i != null && GUIDE[i].tour) startTour();
     if (i != null && GUIDE[i].demo) void startDemo();
     else if (phaseRef.current !== 'idle' && (i == null || (guide != null && GUIDE[guide].demo))) {
       // Leaving the demo: clear it, so nothing recorded is mistaken for a live search.
@@ -1142,20 +1158,21 @@ export default function App() {
     tourTimers.current = [];
     setSpotlight(null);
   }
-  function startTour(home?: { cx: number; cy: number; zoom: number }) {
+  function startTour() {
     const wh = targetOf(world, 'warehouse');
     const school = world.buildings.find((b) => b.name === 'Cotton Street School');
     const depot = world.buildings.filter((b) => b.name === 'Fuel Depot');
     const mid = (bs: { cx: number; cy: number }[]) => ({ x: bs.reduce((a, b) => a + b.cx, 0) / bs.length, y: bs.reduce((a, b) => a + b.cy, 0) / bs.length });
     const whB = wh.buildingId != null ? world.buildings[wh.buildingId] : null;
     const stops: [number, () => void][] = [];
-    if (whB) stops.push([2800, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
-    if (school) stops.push([9200, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
+    if (whB) stops.push([800, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
+    if (school) stops.push([7000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
     if (depot.length) {
       const c = mid(depot);
-      stops.push([15600, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
+      stops.push([11000, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
     }
-    stops.push([22000, () => (setSpotlight(null), home && flyTo(home.cx, home.cy, home.zoom))]);
+    if (school) stops.push([15000, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
+    stops.push([21000, () => setSpotlight(null)]);
     tourTimers.current = stops.map(([t, f]) => window.setTimeout(f, t));
   }
   // On the map, pan and zoom; in 3D, glide the camera there too.

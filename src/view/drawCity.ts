@@ -28,8 +28,8 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
   g.fillStyle = C.street;
   g.fillRect(-60, -60, w.w + 120, w.h + 120);
   g.fillStyle = laid(g, 'ground', 2);
-  for (let bx = -1; bx < 11; bx++)
-    for (let by = -1; by < 8; by++) {
+  for (let bx = -1; bx < Math.ceil(w.w / 110) + 1; bx++)
+    for (let by = -1; by < Math.ceil(w.h / 110) + 1; by++) {
       const x = bx * 110 - 50;
       const y = by * 110 - 50;
       if (x > -120 && x < w.w + 10 && y > -120 && y < w.h + 10) continue;
@@ -45,7 +45,7 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
     g.fillRect(bl.x, bl.y, bl.w, bl.h);
     g.fillStyle = 'rgba(40,30,20,0.12)';
     g.fillRect(bl.x + 2.6, bl.y + 3.2, bl.w - 5.2, bl.h - 5.2);
-    g.fillStyle = laid(g, bl.district === 'tinhill' || bl.district === 'oldtown' ? 'sand' : 'ground', bl.x + bl.y * 7);
+    g.fillStyle = laid(g, bl.district === 'tinhill' || bl.district === 'oldtown' || bl.district === 'camp' || bl.district === 'kilns' ? 'sand' : 'ground', bl.x + bl.y * 7);
     g.fill(tornPath({ x: bl.x + 2.6, y: bl.y + 2.6, w: bl.w - 5.2, h: bl.h - 5.2 }, rng(bl.x * 5 + bl.y), 0.5));
   }
   // The canal's quays.
@@ -109,6 +109,7 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
 
   // Open spaces.
   for (const s of w.spaces) if (visible(v, s.rect)) drawSpace(g, s, o.scale);
+  drawOutskirts(g, w, v, sh);
 
   if (o.crater) {
     const grd = g.createRadialGradient(o.crater.x, o.crater.y, 0, o.crater.x, o.crater.y, o.crater.r * 2.4);
@@ -194,19 +195,30 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
       if (!n) continue;
       const q = b.rects[0];
       const lr = rng(b.id * 31 + 7);
-      const lights = b.kind === 'shack' ? (lr() < 0.6 ? 1 : 0) : Math.min(b.kind === 'apartment' ? 7 : 4, Math.ceil(n / 3));
+      const small = b.kind === 'shack' || b.kind === 'tent';
+      const lights = small ? (lr() < 0.6 ? 1 : 0) : Math.min(b.kind === 'apartment' ? 7 : 4, Math.ceil(n / 3));
       for (let i = 0; i < lights; i++) {
         const side = Math.floor(lr() * 4);
         const u = 0.12 + lr() * 0.76;
         const x = side === 0 ? q.x + q.w * u : side === 1 ? q.x + q.w + 0.4 : side === 2 ? q.x + q.w * u : q.x - 0.4;
         const y = side === 0 ? q.y - 0.4 : side === 1 ? q.y + q.h * u : side === 2 ? q.y + q.h + 0.4 : q.y + q.h * u;
-        const rad = b.kind === 'shack' ? 2 + lr() : 3 + lr() * 2 + (b.kind === 'apartment' ? 1.5 : 0);
+        const rad = small ? 2 + lr() : 3 + lr() * 2 + (b.kind === 'apartment' ? 1.5 : 0);
         const grd = g.createRadialGradient(x, y, 0, x, y, rad);
         grd.addColorStop(0, `rgba(255,190,110,${0.5 * night})`);
         grd.addColorStop(1, 'rgba(255,190,110,0)');
         g.fillStyle = grd;
         g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
       }
+    }
+    // The kilns are fired through the night: a low orange glow from the vents.
+    for (const b of w.buildings) {
+      if (b.kind !== 'kiln' || o.damaged.has(b.id) || !visible(v, b.rects[0], 10)) continue;
+      const q = b.rects[0];
+      const grd = g.createRadialGradient(q.x + q.w / 2, q.y + q.h / 2, 0, q.x + q.w / 2, q.y + q.h / 2, q.w * 0.7);
+      grd.addColorStop(0, `rgba(255,140,60,${0.45 * night})`);
+      grd.addColorStop(1, 'rgba(255,140,60,0)');
+      g.fillStyle = grd;
+      g.fillRect(q.x - q.w * 0.2, q.y - q.w * 0.4, q.w * 1.4, q.h + q.w * 0.8);
     }
     // Street lamps on the boulevard, the quays and the bridges.
     const lamp = (x: number, y: number, r: number, a: number) => {
@@ -287,6 +299,18 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
       break;
     }
     case 'pitch': {
+      if (s.district === 'camp') {
+        // Bare earth, goals made of tent poles.
+        g.fillStyle = laid(g, 'sand', s.id);
+        g.fillRect(q.x, q.y, q.w, q.h);
+        g.strokeStyle = 'rgba(255,255,255,0.35)';
+        g.lineWidth = 0.3;
+        g.strokeRect(q.x + 3, q.y + 3, q.w - 6, q.h - 6);
+        g.fillStyle = '#6b655c';
+        g.fillRect(q.x + q.w / 2 - 3, q.y + 2.4, 6, 0.4);
+        g.fillRect(q.x + q.w / 2 - 3, q.y + q.h - 2.8, 6, 0.4);
+        break;
+      }
       g.fillStyle = laid(g, 'grass', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
       g.fillStyle = 'rgba(90,120,40,0.18)';
@@ -359,6 +383,35 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
       }
       break;
     }
+    case 'field': {
+      // Irrigated ground under the palms, darker where the water has soaked in.
+      g.fillStyle = laid(g, 'grass', s.id);
+      g.fillRect(q.x, q.y, q.w, q.h);
+      g.fillStyle = 'rgba(110,90,50,0.22)';
+      g.fillRect(q.x, q.y, q.w, q.h);
+      break;
+    }
+    case 'brickyard':
+    case 'scrapyard': {
+      g.fillStyle = laid(g, s.kind === 'brickyard' ? 'sand' : 'ground', s.id);
+      g.fillRect(q.x, q.y, q.w, q.h);
+      g.fillStyle = s.kind === 'brickyard' ? 'rgba(170,100,60,0.1)' : 'rgba(60,50,40,0.1)';
+      g.fillRect(q.x, q.y, q.w, q.h);
+      break;
+    }
+    case 'distribution': {
+      g.fillStyle = laid(g, 'ground', s.id);
+      g.fillRect(q.x, q.y, q.w, q.h);
+      // Rope lines for the queue, and a stack of sacks at the front.
+      g.strokeStyle = 'rgba(90,75,55,0.5)';
+      g.lineWidth = 0.15;
+      g.beginPath();
+      for (let y = q.y + 4; y < q.y + q.h - 2; y += 3.5) (g.moveTo(q.x + 3, y), g.lineTo(q.x + q.w - 10, y));
+      g.stroke();
+      g.fillStyle = '#e8dcc0';
+      for (let i = 0; i < 6; i++) g.fillRect(q.x + q.w - 8 + (i % 3) * 2.2, q.y + 4 + Math.floor(i / 3) * 3, 2, 2.6);
+      break;
+    }
     case 'playground': {
       g.fillStyle = laid(g, 'sand', s.id);
       g.fillRect(q.x, q.y, q.w, q.h);
@@ -392,6 +445,112 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
         g.fillRect(q.x + q.w / 2 - 2, q.y + q.h / 2 - 2, 4, 4);
       }
       break;
+    }
+  }
+}
+
+/** The railway, wagons, the camp fence, bricks drying, scrap, irrigation, washing lines, beehives. */
+function drawOutskirts(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) {
+  const e = w.extras;
+  if (v.y + v.h < 700) return;
+  // The railway: a ballast bed, sleepers, two rails.
+  const rl = e.rail;
+  const x0 = Math.max(rl.x0, v.x - 10);
+  const x1 = Math.min(rl.x1, v.x + v.w + 10);
+  if (x1 > x0) {
+    g.fillStyle = '#a79d8f';
+    g.fillRect(x0, rl.y - 3.2, x1 - x0, 6.4);
+    g.fillStyle = '#6e5a48';
+    for (let x = Math.floor(x0 / 1.6) * 1.6; x < x1; x += 1.6) g.fillRect(x, rl.y - 2.2, 0.55, 4.4);
+    g.fillStyle = '#4d4a46';
+    g.fillRect(x0, rl.y - 1.35, x1 - x0, 0.28);
+    g.fillRect(x0, rl.y + 1.07, x1 - x0, 0.28);
+    // A buffer stop at the end of the line.
+    if (rl.x1 < v.x + v.w + 10) {
+      g.fillStyle = '#9a3b2e';
+      g.fillRect(rl.x1 - 1, rl.y - 2, 1, 4);
+    }
+  }
+  // Wagons: box vans in rust and grey, each with a roof seam.
+  const r = rng(911);
+  for (const q of e.wagons) {
+    const c = r() < 0.5 ? '#8a5a3e' : r() < 0.5 ? '#7c7a73' : '#5f6f6a';
+    if (!visible(v, q)) continue;
+    g.fillStyle = 'rgba(40,30,20,0.28)';
+    g.fillRect(q.x + sh.dx * 2.2, q.y + sh.dy * 2.2, q.w, q.h);
+    g.fillStyle = c;
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    g.fillRect(q.x, q.y, q.w, q.h * 0.4);
+    g.fillStyle = 'rgba(0,0,0,0.25)';
+    g.fillRect(q.x + q.w / 2 - 0.1, q.y, 0.2, q.h);
+  }
+  // Bricks drying in rows, the newest still dark with water.
+  for (const q of e.stacks) {
+    if (!visible(v, q)) continue;
+    g.fillStyle = 'rgba(40,30,20,0.2)';
+    g.fillRect(q.x + sh.dx * 0.8, q.y + sh.dy * 0.8, q.w, q.h);
+    g.fillStyle = (q.x * 7 + q.y) % 5 < 1.5 ? '#8f5a3c' : '#b8764c';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = 'rgba(255,230,200,0.25)';
+    for (let x = q.x + 0.8; x < q.x + q.w; x += 1.1) g.fillRect(x, q.y, 0.18, q.h);
+  }
+  // Scrap: heaps of rusted, painted and grey bits.
+  const sr = rng(733);
+  for (const p of e.scrap) {
+    const cols = ['#7a4a32', '#6d6a64', '#9b8f7c', '#4f5d68', '#a7412f'];
+    g.fillStyle = 'rgba(40,30,20,0.18)';
+    g.beginPath();
+    g.arc(p.x + sh.dx * 1.2, p.y + sh.dy * 1.2, p.r * 0.9, 0, Math.PI * 2);
+    g.fill();
+    for (let i = 0; i < 22; i++) {
+      const a = sr() * Math.PI * 2;
+      const d = Math.sqrt(sr()) * p.r;
+      g.fillStyle = cols[Math.floor(sr() * cols.length)];
+      g.save();
+      g.translate(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d);
+      g.rotate(sr() * Math.PI);
+      g.fillRect(-0.9, -0.5, 1.8 + sr() * 1.6, 1 + sr() * 0.6);
+      g.restore();
+    }
+  }
+  // Irrigation channels.
+  g.fillStyle = 'rgba(110,150,165,0.8)';
+  for (const q of e.channels) if (visible(v, q)) g.fillRect(q.x, q.y, q.w, q.h);
+  // Beehives: small white boxes.
+  for (const h of e.hives) {
+    g.fillStyle = 'rgba(40,30,20,0.25)';
+    g.fillRect(h.x + sh.dx * 0.5, h.y + sh.dy * 0.5, 1.6, 1.3);
+    g.fillStyle = '#f2ede2';
+    g.fillRect(h.x, h.y, 1.6, 1.3);
+  }
+  // The camp's wire fence: thin posts and wire, easy to see through.
+  g.strokeStyle = 'rgba(80,80,80,0.55)';
+  g.lineWidth = 0.12;
+  for (const q of e.fences) {
+    g.beginPath();
+    g.moveTo(q.x, q.y);
+    g.lineTo(q.x + q.w, q.y + q.h);
+    g.stroke();
+    g.fillStyle = 'rgba(70,70,70,0.7)';
+    const n = Math.max(q.w, q.h) / 3;
+    for (let i = 0; i <= n; i++) g.fillRect(q.x + (q.w * i) / n - 0.2, q.y + (q.h * i) / n - 0.2, 0.4, 0.4);
+  }
+  // Washing lines between tents.
+  const wr = rng(419);
+  const cloth = ['#b8574a', '#e9e4d8', '#4f7291', '#c9a44c', '#6f8f6a', '#8a5a8a'];
+  for (const [ax, ay, bx, by] of e.washing) {
+    g.strokeStyle = 'rgba(70,60,50,0.5)';
+    g.lineWidth = 0.06;
+    g.beginPath();
+    g.moveTo(ax, ay);
+    g.lineTo(bx, by);
+    g.stroke();
+    const k = 2 + Math.floor(wr() * 3);
+    for (let i = 0; i < k; i++) {
+      const t = (i + 0.5) / k;
+      g.fillStyle = cloth[Math.floor(wr() * cloth.length)];
+      g.fillRect(ax + (bx - ax) * t - 0.3, ay + (by - ay) * t, 0.6, 0.7);
     }
   }
 }
@@ -505,14 +664,14 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
     return;
   }
   if (b.round) {
-    // Fuel tanks: white drums with a lit rim.
+    // Fuel tanks: white drums with a lit rim. Silos in grey card; water tanks a faded blue.
     const q = b.rects[0];
     const cx = q.x + q.w / 2;
     const cy = q.y + q.h / 2;
     const rad = q.w / 2;
     const grd = g.createRadialGradient(cx - lx * rad * 0.3, cy - ly * rad * 0.3, rad * 0.1, cx, cy, rad);
-    grd.addColorStop(0, '#fbfaf6');
-    grd.addColorStop(1, '#d7d2c8');
+    grd.addColorStop(0, b.kind === 'silo' ? '#e4e0d8' : b.kind === 'watertank' ? '#c9d6db' : '#fbfaf6');
+    grd.addColorStop(1, b.kind === 'silo' ? '#b3ada3' : b.kind === 'watertank' ? '#8fa5ad' : '#d7d2c8');
     g.fillStyle = grd;
     g.beginPath();
     g.arc(cx, cy, rad, 0, Math.PI * 2);
@@ -619,6 +778,57 @@ export function drawBuilding(g: CanvasRenderingContext2D, b: Building, sh: Sun, 
         g.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
         g.stroke();
       }
+    } else if (b.kind === 'tent' || (b.material === 'canvas' && b.kind !== 'greenhouse')) {
+      // Canvas over a ridge pole: one side in the sun, one in shade, a tarp patch here and there.
+      const alongX = q.w >= q.h;
+      const litFirst = alongX ? ly > 0 : lx > 0;
+      g.fillStyle = 'rgba(90,80,60,0.16)';
+      if (alongX) g.fillRect(q.x, litFirst ? q.y + q.h / 2 : q.y, q.w, q.h / 2);
+      else g.fillRect(litFirst ? q.x + q.w / 2 : q.x, q.y, q.w / 2, q.h);
+      g.strokeStyle = 'rgba(110,100,80,0.45)';
+      g.lineWidth = 0.14;
+      g.beginPath();
+      if (alongX) (g.moveTo(q.x, q.y + q.h / 2), g.lineTo(q.x + q.w, q.y + q.h / 2));
+      else (g.moveTo(q.x + q.w / 2, q.y), g.lineTo(q.x + q.w / 2, q.y + q.h));
+      g.stroke();
+      if (r() < 0.22) {
+        g.fillStyle = r() < 0.6 ? 'rgba(70,110,150,0.55)' : 'rgba(170,120,70,0.45)';
+        g.fillRect(q.x + r() * q.w * 0.5, q.y + r() * q.h * 0.4, q.w * 0.45, q.h * 0.5);
+      }
+      if (b.kind === 'clinic') {
+        const cx = q.x + q.w / 2;
+        const cy = q.y + q.h / 2;
+        const k = Math.min(q.w, q.h) * 0.3;
+        g.fillStyle = '#c0392b';
+        g.fillRect(cx - k * 0.28, cy - k * 0.9, k * 0.56, k * 1.8);
+        g.fillRect(cx - k * 0.9, cy - k * 0.28, k * 1.8, k * 0.56);
+      }
+    } else if (b.kind === 'greenhouse') {
+      // Plastic sheet over hoops: pale, see-through, green showing under it.
+      g.fillStyle = 'rgba(120,150,90,0.28)';
+      g.fillRect(q.x, q.y, q.w, q.h);
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      g.fillRect(q.x + q.w * 0.2, q.y, q.w * 0.25, q.h);
+      g.strokeStyle = 'rgba(120,120,110,0.35)';
+      g.lineWidth = 0.1;
+      g.beginPath();
+      for (let y = q.y + 2; y < q.y + q.h; y += 2.2) (g.moveTo(q.x, y), g.lineTo(q.x + q.w, y));
+      g.stroke();
+    } else if (b.kind === 'kiln') {
+      // Rows of fire holes along the top of the kiln, sooted round the edges.
+      g.fillStyle = 'rgba(60,40,25,0.18)';
+      g.fillRect(q.x + 2, q.y + 2, q.w - 4, q.h - 4);
+      g.fillStyle = 'rgba(40,28,20,0.7)';
+      for (let y = q.y + 4; y < q.y + q.h - 3; y += 3.2) for (let x = q.x + 4; x < q.x + q.w - 3; x += 3.2) {
+        g.beginPath();
+        g.arc(x, y, 0.45, 0, Math.PI * 2);
+        g.fill();
+      }
+    } else if (b.kind === 'chimney') {
+      g.fillStyle = '#b07a52';
+      g.fillRect(q.x + 0.5, q.y + 0.5, q.w - 1, q.h - 1);
+      g.fillStyle = '#2d2520';
+      g.fillRect(q.x + 1.6, q.y + 1.6, q.w - 3.2, q.h - 3.2);
     } else if (b.kind === 'minaret') {
       g.fillStyle = '#e8d5ae';
       g.beginPath();

@@ -140,13 +140,14 @@ export function occlusion(w: World, ax: number, ay: number, bx: number, by: numb
 
 // ---------------------------------------------------------------- buildings coming down
 
-const COLLAPSE: Record<Material, number> = { concrete: 0.5, brick: 0.6, mud: 0.75, tin: 0.4, steel: 0.45 };
+const COLLAPSE: Record<Material, number> = { concrete: 0.5, brick: 0.6, mud: 0.75, tin: 0.4, steel: 0.45, canvas: 0.25 };
 
 /** Blast needed to bring a building down: tall concrete takes a lot more than mud brick or tin. */
 export function collapseNeeds(b: Building) {
   if (b.material === 'concrete' && b.floors >= 4) return 17;
   if (b.material === 'concrete' || b.material === 'steel') return 10;
   if (b.material === 'brick') return 8;
+  if (b.material === 'canvas') return 3;
   return 6;
 }
 

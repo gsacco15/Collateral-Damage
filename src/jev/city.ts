@@ -22,12 +22,19 @@ export type Kind =
   | 'workshop'
   | 'fueltank'
   | 'stand'
-  | 'shelter';
+  | 'shelter'
+  | 'factory'
+  | 'kiln'
+  | 'chimney'
+  | 'silo'
+  | 'tent'
+  | 'greenhouse'
+  | 'watertank';
 
-export type Material = 'concrete' | 'brick' | 'mud' | 'tin' | 'steel';
+export type Material = 'concrete' | 'brick' | 'mud' | 'tin' | 'steel' | 'canvas';
 export type Paper = 'white' | 'grey' | 'kraft' | 'tin' | 'terracotta';
-export type DistrictId = 'terraces' | 'civic' | 'oldtown' | 'workshops' | 'quarter' | 'market' | 'garden' | 'tinhill' | 'canal';
-export type SpaceKind = 'plaza' | 'market' | 'park' | 'pitch' | 'yard' | 'playground' | 'cemetery' | 'courtyard' | 'busstation';
+export type DistrictId = 'terraces' | 'civic' | 'oldtown' | 'workshops' | 'quarter' | 'market' | 'garden' | 'tinhill' | 'canal' | 'kilns' | 'groves' | 'camp';
+export type SpaceKind = 'plaza' | 'market' | 'park' | 'pitch' | 'yard' | 'playground' | 'cemetery' | 'courtyard' | 'busstation' | 'field' | 'brickyard' | 'scrapyard' | 'distribution';
 
 export interface Rect {
   x: number;
@@ -96,7 +103,7 @@ export interface District {
 }
 
 /** The four briefed targets, or any building by id (`b:123`). */
-export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | `b:${number}` | `g:${number}_${number}`;
+export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | 'mill' | 'pump' | 'camp' | `b:${number}` | `g:${number}_${number}`;
 /** In the list of ruins, the boulevard bridge (which isn't a building) once it has been dropped. */
 export const BRIDGE_RUIN = -1;
 export interface Target {
@@ -128,6 +135,18 @@ export interface Tree {
   kind: 'round' | 'cypress' | 'palm';
 }
 
+/** Things on the outskirts that are only drawn: they hold no one and stop no fragments. */
+export interface Extras {
+  rail: { x0: number; x1: number; y: number }; // the freight line along the Kilnworks
+  wagons: Rect[];
+  fences: Rect[]; // the camp's wire fence
+  stacks: Rect[]; // green bricks drying in rows
+  scrap: { x: number; y: number; r: number }[];
+  channels: Rect[]; // irrigation in the groves
+  washing: [number, number, number, number][]; // lines strung between tents
+  hives: { x: number; y: number }[];
+}
+
 export interface World {
   w: number;
   h: number;
@@ -141,6 +160,7 @@ export interface World {
   spaces: Space[];
   walls: Rect[];
   trees: Tree[];
+  extras: Extras;
   targets: Target[];
   places: Place[];
   streetPts: Float32Array; // x,y: pavements and lanes, where people walk
@@ -154,10 +174,13 @@ export interface World {
 // ---------------------------------------------------------------- geometry
 
 export const CITY_W = 1000;
-export const CITY_H = 700;
+export const CITY_H = 900;
 export const CELL = 2;
 const V = [0, 120, 240, 360, 470, 580, 690, 800, 900, 1000];
-const H = [0, 115, 230, 350, 465, 580, 700];
+const H = [0, 115, 230, 350, 465, 580, 700, 900];
+/** South of South Road: the outskirts, laid out by hand rather than on the grid. */
+const OUT = 700;
+const RAIL_Y = 812;
 const BLVD = 350;
 const RIVER_PTS: [number, number][] = [
   [748, -60],
@@ -168,11 +191,13 @@ const RIVER_PTS: [number, number][] = [
   [760, 500],
   [748, 610],
   [752, 760],
+  [744, 880],
+  [750, 1040],
 ];
 const RIVER_W = 36;
 
 const V_NAMES: Record<number, string> = { 0: 'West Road', 120: 'Loom Street', 240: 'School Road', 360: 'Fountain Street', 470: 'Old Wall Road', 580: 'Tanners Lane', 690: 'West Quay', 800: 'East Quay', 900: 'Garden Street', 1000: 'East Road' };
-const H_NAMES: Record<number, string> = { 0: 'North Road', 115: 'Mill Street', 230: 'Well Lane', 350: 'Long Boulevard', 465: 'Cotton Street', 580: 'Pump Road', 700: 'South Road' };
+const H_NAMES: Record<number, string> = { 0: 'North Road', 115: 'Mill Street', 230: 'Well Lane', 350: 'Long Boulevard', 465: 'Cotton Street', 580: 'Pump Road', 700: 'South Road', 900: 'Ring Road' };
 
 export const overlaps = (a: Rect, b: Rect, pad = 0) => a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
 export const inRect = (r: Rect, x: number, y: number, pad = 0) => x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad;
@@ -241,9 +266,16 @@ const M2_PER_PERSON: Record<Kind, number> = {
   fueltank: 0,
   stand: 1.6,
   shelter: 4,
+  factory: 30,
+  kiln: 60,
+  chimney: 0,
+  silo: 0,
+  tent: 5,
+  greenhouse: 40,
+  watertank: 0,
 };
 const STACKED: Partial<Record<Kind, true>> = { home: true, apartment: true, villa: true, office: true, hospital: true };
-export const SHIELD: Record<Material, number> = { concrete: 0.42, brick: 0.55, mud: 0.66, tin: 0.9, steel: 0.5 };
+export const SHIELD: Record<Material, number> = { concrete: 0.42, brick: 0.55, mud: 0.66, tin: 0.9, steel: 0.5, canvas: 0.97 };
 
 interface Spec {
   kind: Kind;
@@ -323,7 +355,7 @@ function make(r: Rng, id: number, s: Spec): Building {
 }
 
 function makeSpace(r: Rng, id: number, kind: SpaceKind, rect: Rect, district: DistrictId, name?: string, extra: Partial<Space> = {}): Space {
-  const per: Record<SpaceKind, number> = { plaza: 3, market: 1.6, park: 12, pitch: 1.2, yard: 25, playground: 2, cemetery: 40, courtyard: 1.1, busstation: 3 };
+  const per: Record<SpaceKind, number> = { plaza: 3, market: 1.6, park: 12, pitch: 1.2, yard: 25, playground: 2, cemetery: 40, courtyard: 1.1, busstation: 3, field: 60, brickyard: 30, scrapyard: 45, distribution: 1.4 };
   const capacity = Math.max(2, Math.round((rect.w * rect.h) / per[kind]));
   const n = Math.min(600, capacity);
   const pts: number[] = [];
@@ -431,6 +463,42 @@ const STYLES: Record<Exclude<DistrictId, 'canal'>, Style> = {
     fill: 300,
     lanes: 0,
   },
+  kilns: {
+    kind: (r) => (r() < 0.5 ? 'factory' : 'workshop'),
+    w: [20, 40],
+    d: [14, 24],
+    floors: () => 1,
+    material: (r) => (r() < 0.6 ? 'steel' : 'brick'),
+    paper: (r, m) => (m === 'steel' ? (r() < 0.6 ? 'tin' : 'grey') : 'kraft'),
+    gap: [5, 10],
+    rows: false,
+    fill: 160,
+    lanes: 0,
+  },
+  groves: {
+    kind: () => 'home',
+    w: [9, 13],
+    d: [8, 11],
+    floors: () => 1,
+    material: () => 'mud',
+    paper: () => 'kraft',
+    gap: [8, 14],
+    rows: false,
+    fill: 0,
+    lanes: 0,
+  },
+  camp: {
+    kind: () => 'tent',
+    w: [5, 6],
+    d: [4, 4.5],
+    floors: () => 1,
+    material: () => 'canvas',
+    paper: () => 'white',
+    gap: [2, 3],
+    rows: false,
+    fill: 0,
+    lanes: 0,
+  },
   tinhill: {
     kind: () => 'shack',
     w: [4.5, 8],
@@ -465,6 +533,7 @@ export function buildCity(seed = 7): World {
     };
     if (y === 115 || y === 230) cut(476, 684);
     if (y === 580) cut(806, CITY_W + 120);
+    if (y === 900) cut(696, 794);
     if (!bridges.has(y)) cut(696, 794);
     for (const [a, b] of spans) {
       const land = (s: number, e: number) => roads.push({ rect: { x: s, y: y - hw(y), w: e - s, h: hw(y) * 2 }, name: H_NAMES[y], kind: y === BLVD ? 'boulevard' : 'street', horizontal: true });
@@ -479,8 +548,13 @@ export function buildCity(seed = 7): World {
     let spans: [number, number][] = [[-120, CITY_H + 120]];
     if (x === 580) spans = [[BLVD - 12, CITY_H + 120]];
     if (x === 900) spans = [[-120, 471]];
+    // The grid stops at South Road; beyond it only the edge roads, the quays and Tanners Lane go on.
+    if (x === 120 || x === 240 || x === 360 || x === 470) spans = [[-120, OUT + 6]];
     for (const [a, b] of spans) roads.push({ rect: { x: x - 6, y: a, w: 12, h: b - a }, name: V_NAMES[x], kind: 'street', horizontal: false });
   }
+
+  // A footbridge over the canal, the camp's way into town.
+  roads.push({ rect: { x: 696, y: 798, w: 98, h: 4 }, name: 'Camp footbridge', kind: 'bridge', horizontal: true });
 
   // Blocks, with the old town and Tin Hill merged into single blocks threaded by lanes.
   const districtOf = (x: number, y: number): DistrictId => {
@@ -498,24 +572,31 @@ export function buildCity(seed = 7): World {
       const y1 = H[j + 1] - hw(H[j + 1]);
       const d = districtOf((x0 + x1) / 2, (y0 + y1) / 2);
       if (d === 'canal') continue;
-      if (d === 'oldtown' || (d === 'tinhill' && j >= 4)) continue;
+      if (d === 'oldtown' || (d === 'tinhill' && j >= 4) || H[j] >= OUT) continue;
       blocks.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, district: d });
     }
   blocks.push({ x: 476, y: 6, w: 208, h: 332, district: 'oldtown' });
   blocks.push({ x: 806, y: 471, w: 188, h: 223, district: 'tinhill' });
+  // The outskirts: the Kilnworks either side of the railway, the groves by the canal, the camp beyond Tin Hill.
+  blocks.push({ x: 6, y: OUT + 6, w: 568, h: RAIL_Y - 6 - (OUT + 6), district: 'kilns' });
+  blocks.push({ x: 6, y: RAIL_Y + 6, w: 568, h: 894 - (RAIL_Y + 6), district: 'kilns' });
+  blocks.push({ x: 586, y: OUT + 6, w: 104, h: 188, district: 'groves' });
+  blocks.push({ x: 806, y: OUT + 6, w: 188, h: 188, district: 'camp' });
 
   const buildings: Building[] = [];
   const spaces: Space[] = [];
   const walls: Rect[] = [];
   const trees: Tree[] = [];
   const reserved: Rect[] = [];
+  const ro = rng(seed * 7919 + 101);
+  let cur: Rng = r; // the stream buildings and spaces are drawn from
   const add = (s: Spec) => {
-    const b = make(r, buildings.length, s);
+    const b = make(cur, buildings.length, s);
     buildings.push(b);
     return b;
   };
   const space = (kind: SpaceKind, rect: Rect, district: DistrictId, name?: string, extra: Partial<Space> = {}) => {
-    const s = makeSpace(r, spaces.length, kind, rect, district, name, extra);
+    const s = makeSpace(cur, spaces.length, kind, rect, district, name, extra);
     spaces.push(s);
     reserved.push({ x: rect.x - 1, y: rect.y - 1, w: rect.w + 2, h: rect.h + 2 });
     return s;
@@ -570,8 +651,9 @@ export function buildCity(seed = 7): World {
   space('plaza', { x: 880, y: 560, w: 26, h: 22 }, 'tinhill', 'Water Point', { landmark: true });
 
   // ---- Everything else, block by block, in each district's style.
-  for (const bl of blocks) {
-    if (bl.district === 'canal') continue;
+  const outside = (d: DistrictId) => d === 'kilns' || d === 'groves' || d === 'camp';
+  const fillBlock = (bl: (typeof blocks)[number], r: Rng) => {
+    if (bl.district === 'canal') return;
     const st = STYLES[bl.district];
     const mine: Rect[] = [];
     const lanes: Rect[] = [];
@@ -633,7 +715,7 @@ export function buildCity(seed = 7): World {
       if (free(q, st.gap[0] + r() * (st.gap[1] - st.gap[0]))) put(q, 'inner');
     }
     // Courtyard trees.
-    const want = bl.district === 'tinhill' ? 4 : bl.district === 'oldtown' ? 18 : bl.district === 'garden' ? 10 : 6;
+    const want = bl.district === 'tinhill' ? 4 : bl.district === 'oldtown' ? 18 : bl.district === 'garden' ? 10 : bl.district === 'camp' || bl.district === 'groves' ? 0 : bl.district === 'kilns' ? 3 : 6;
     for (let i = 0, got = 0; i < 200 && got < want; i++) {
       const x = bl.x + 4 + r() * (bl.w - 8);
       const y = bl.y + 4 + r() * (bl.h - 8);
@@ -642,7 +724,8 @@ export function buildCity(seed = 7): World {
       trees.push({ x, y, r: rad, kind: bl.district === 'oldtown' && r() < 0.3 ? 'palm' : 'round' });
       got++;
     }
-  }
+  };
+  for (const bl of blocks) if (!outside(bl.district)) fillBlock(bl, r);
 
   // ---- Trees: the boulevard's median, the quays, the park, the cemetery's cypresses.
   for (let x = 8; x < CITY_W; x += 13) {
@@ -650,7 +733,7 @@ export function buildCity(seed = 7): World {
     if (Math.abs(x - 360) < 26) continue;
     trees.push({ x, y: BLVD, r: 2.2, kind: 'palm' });
   }
-  for (let y = 4; y < CITY_H; y += 11) {
+  for (let y = 4; y < OUT; y += 11) {
     const rx = riverX(y);
     for (const side of [-1, 1]) {
       const x = rx + side * (RIVER_W / 2 + 7 + r() * 3);
@@ -661,17 +744,97 @@ export function buildCity(seed = 7): World {
   for (let i = 0; i < 70; i++) trees.push({ x: 376 + r() * 78, y: 246 + r() * 82, r: 2 + r() * 1.8, kind: 'round' });
   for (let i = 0; i < 24; i++) trees.push({ x: 816 + r() * 68, y: 372 + r() * 78, r: 1.1, kind: 'cypress' });
 
+  // ---- The outskirts, placed by hand, from their own random stream so the city inside South Road stays as it was.
+  cur = ro;
+  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [] };
+  reserved.push({ x: -120, y: RAIL_Y - 6, w: 700, h: 12 });
+  // The Kilnworks, north of the line: the flour mill and its silos, the workers' hostel.
+  special({ kind: 'factory', material: 'steel', paper: 'grey', rects: [{ x: 404, y: 716, w: 74, h: 34 }], floors: 2, h: 14, district: 'kilns', name: 'Flour Mill', landmark: true });
+  for (let i = 0; i < 4; i++) special({ kind: 'silo', material: 'concrete', paper: 'grey', rects: [{ x: 488 + i * 19, y: 718, w: 16, h: 16 }], floors: 1, h: 26, district: 'kilns', name: 'Grain Silos', landmark: i === 0, round: true });
+  special({ kind: 'apartment', material: 'brick', paper: 'kraft', rects: [{ x: 290, y: 716, w: 64, h: 14 }], floors: 3, district: 'kilns', name: "Workers' Hostel", landmark: true });
+  space('yard', { x: 404, y: 758, w: 74, h: 40 }, 'kilns', 'Mill yard');
+  // Freight wagons waiting in the sidings by the mill.
+  for (let x = 372, i = 0; x < 556; x += 15, i++) if (i % 5 !== 3) ex.wagons.push({ x, y: RAIL_Y - 2, w: 13, h: 4 });
+  // South of the line: three brick kilns with their chimneys, the drying yard, the scrapyard, the kiln families' huts.
+  for (let i = 0; i < 3; i++) {
+    const x = 24 + i * 92;
+    special({ kind: 'kiln', material: 'brick', paper: 'kraft', rects: [{ x, y: 830, w: 52, h: 24 }], floors: 1, h: 5, district: 'kilns', name: 'Brick Kilns', landmark: i === 0 });
+    special({ kind: 'chimney', material: 'brick', paper: 'kraft', rects: [{ x: x + 58, y: 838, w: 6, h: 6 }], floors: 1, h: 30, district: 'kilns', name: 'Kiln chimney' });
+  }
+  for (let i = 0; i < 12; i++) special({ kind: 'home', material: 'mud', paper: 'kraft', rects: [{ x: 22 + i * 22, y: 868 + (i % 2) * 3, w: 9, h: 8 }], floors: 1, h: 3, district: 'kilns' });
+  const bricks = space('brickyard', { x: 300, y: 826, w: 118, h: 60 }, 'kilns', 'Brick yard', { landmark: true });
+  for (let y = bricks.rect.y + 4; y < bricks.rect.y + bricks.rect.h - 4; y += 6) for (let x = bricks.rect.x + 4; x < bricks.rect.x + bricks.rect.w - 8; x += 9) if (ro() < 0.8) ex.stacks.push({ x, y, w: 6.5, h: 2.2 });
+  const scrap = space('scrapyard', { x: 432, y: 826, w: 124, h: 60 }, 'kilns', 'Scrapyard', { landmark: true });
+  for (let i = 0; i < 14; i++) ex.scrap.push({ x: scrap.rect.x + 8 + ro() * (scrap.rect.w - 16), y: scrap.rect.y + 8 + ro() * (scrap.rect.h - 16), r: 3 + ro() * 4 });
+  // The groves, by the canal: plastic tunnels, a pump house, a farmhouse, beehives, and the date palms.
+  for (let i = 0; i < 6; i++) special({ kind: 'greenhouse', material: 'canvas', paper: 'white', rects: [{ x: 592 + i * 9, y: 714, w: 6.5, h: 34 }], floors: 1, h: 3, district: 'groves', name: 'Greenhouses', landmark: i === 0 });
+  special({ kind: 'home', material: 'mud', paper: 'kraft', rects: [{ x: 654, y: 714, w: 18, h: 12 }], floors: 1, district: 'groves', name: 'Farmhouse' });
+  special({ kind: 'workshop', material: 'brick', paper: 'white', rects: [{ x: 672, y: 772, w: 10, h: 9 }], floors: 1, h: 4, district: 'groves', name: 'Pump House', landmark: true });
+  for (let i = 0; i < 6; i++) ex.hives.push({ x: 656 + (i % 3) * 5, y: 736 + Math.floor(i / 3) * 5 });
+  const grove = space('field', { x: 592, y: 790, w: 92, h: 100 }, 'groves', 'Date grove', { landmark: true });
+  ex.channels.push({ x: 586, y: 784, w: 110, h: 1.4 });
+  for (let x = grove.rect.x + 4; x < grove.rect.x + grove.rect.w; x += 11) {
+    ex.channels.push({ x: x + 5, y: grove.rect.y, w: 0.9, h: grove.rect.h });
+    for (let y = grove.rect.y + 5; y < grove.rect.y + grove.rect.h - 2; y += 10) trees.push({ x: x + (ro() - 0.5), y: y + (ro() - 0.5), r: 2.4 + ro() * 0.6, kind: 'palm' });
+  }
+  // The camp: a fence with two gates, the tent school, the clinic, the distribution point, the taps, a dirt pitch, and tents in rows.
+  const cx0 = 806;
+  const cy0 = OUT + 6;
+  const fence = (x: number, y: number, w: number, h: number) => ex.fences.push({ x, y, w, h });
+  fence(cx0 + 2, cy0 + 2, 88, 0.4), fence(cx0 + 102, cy0 + 2, 84, 0.4); // north side, gate on South Road
+  fence(cx0 + 2, cy0 + 186, 184, 0.4);
+  fence(cx0 + 2, cy0 + 2, 0.4, 84), fence(cx0 + 2, cy0 + 100, 0.4, 86); // west side, gate at the footbridge
+  fence(cx0 + 186, cy0 + 2, 0.4, 184);
+  special({ kind: 'school', material: 'canvas', paper: 'white', rects: [{ x: 816, y: 716, w: 36, h: 14 }], floors: 1, h: 3.6, district: 'camp', name: 'Tent School', landmark: true, protected: true });
+  special({ kind: 'clinic', material: 'canvas', paper: 'white', rects: [{ x: 956, y: 716, w: 26, h: 12 }], floors: 1, h: 3.4, district: 'camp', name: 'Camp Clinic', landmark: true, protected: true });
+  space('distribution', { x: 896, y: 712, w: 40, h: 22 }, 'camp', 'Distribution Point', { landmark: true });
+  for (const [x, y] of [
+    [888, 792],
+    [900, 792],
+  ])
+    special({ kind: 'watertank', material: 'steel', paper: 'white', rects: [{ x, y, w: 9, h: 9 }], floors: 1, h: 4, district: 'camp', round: true, name: 'Water tanks' });
+  space('plaza', { x: 882, y: 804, w: 32, h: 12 }, 'camp', 'Camp Taps', { landmark: true });
+  space('pitch', { x: 940, y: 832, w: 44, h: 56 }, 'camp', 'Dirt Pitch', { landmark: true });
+  const tents: Rect[] = [];
+  for (let row = 0, y = 740; y < 888; y += 7.5, row++) {
+    if (row % 6 === 5) continue; // a wider lane every few rows
+    for (let col = 0, x = 812; x < 986; x += 7.6, col++) {
+      if (col % 7 === 6) continue;
+      const q = { x: x + (ro() - 0.5) * 0.6, y: y + (ro() - 0.5) * 0.4, w: 5.6, h: 4.2 };
+      if (reserved.some((z) => overlaps(q, z, 1.5))) continue;
+      if (ro() < 0.06) continue; // a gap where a family moved on
+      add({ kind: 'tent', material: 'canvas', paper: 'white', rects: [q], floors: 1, h: 2.4, district: 'camp' });
+      tents.push(q);
+    }
+  }
+  for (let i = 0; i < 40; i++) {
+    const a = tents[Math.floor(ro() * tents.length)];
+    const b = tents.find((t) => Math.abs(t.y - a.y) < 1 && t.x > a.x && t.x - a.x < 9);
+    if (b) ex.washing.push([a.x + a.w, a.y + a.h + 0.6, b.x, b.y + b.h + 0.6]);
+  }
+
+  for (const bl of blocks) if (outside(bl.district)) fillBlock(bl, ro);
+  // The quays go on south, past the groves and the camp.
+  for (let y = OUT + 4; y < CITY_H; y += 11) {
+    const rx = riverX(y);
+    for (const side of [-1, 1]) {
+      const x = rx + side * (RIVER_W / 2 + 7 + ro() * 3);
+      if (roads.some((q) => inRect(q.rect, x, y, 2))) continue;
+      trees.push({ x, y: y + ro() * 4, r: 2 + ro() * 1.2, kind: 'round' });
+    }
+  }
+
   // ---- Pavements: where people walk.
   const inAny = (x: number, y: number) => buildings.some((b) => Math.abs(b.cx - x) < 40 && Math.abs(b.cy - y) < 40 && inBuilding(b, x, y, 0.3));
   const street: number[] = [];
   for (const bl of blocks) {
     const e = 1.4;
-    const step = bl.district === 'tinhill' || bl.district === 'oldtown' ? 5 : 6;
+    const step = bl.district === 'tinhill' || bl.district === 'oldtown' || bl.district === 'camp' ? 5 : 6;
     for (let x = bl.x + e; x < bl.x + bl.w - e; x += step) street.push(x, bl.y + e, x, bl.y + bl.h - e);
     for (let y = bl.y + e + step; y < bl.y + bl.h - e - step; y += step) street.push(bl.x + e, y, bl.x + bl.w - e, y);
     // Lanes and alleys inside dense blocks: sample open points.
-    if (bl.district === 'oldtown' || bl.district === 'tinhill') {
-      for (let i = 0; i < 700; i++) {
+    if (bl.district === 'oldtown' || bl.district === 'tinhill' || bl.district === 'camp' || bl.district === 'kilns') {
+      for (let i = 0; i < (bl.district === 'kilns' ? 160 : 700); i++) {
         const x = bl.x + 3 + r() * (bl.w - 6);
         const y = bl.y + 3 + r() * (bl.h - 6);
         if (!inAny(x, y) && !spaces.some((s) => inRect(s.rect, x, y))) street.push(x, y);
@@ -685,6 +848,7 @@ export function buildCity(seed = 7): World {
   // Traffic lanes.
   const traffic: number[] = [];
   for (const rd of roads) {
+    if (rd.name === 'Camp footbridge') continue;
     const q = rd.rect;
     const busy = rd.kind === 'boulevard' || (rd.kind === 'bridge' && Math.abs(q.y + q.h / 2 - BLVD) < 1) ? 1 : 0;
     if (rd.horizontal) {
@@ -714,6 +878,10 @@ export function buildCity(seed = 7): World {
   const depot = buildings.find((b) => b.name === 'Fuel Depot' && b.landmark) ?? buildings.find((b) => b.name === 'Fuel Depot')!;
   const office = buildings.find((b) => b.name === 'District Office')!;
   const station = spaces.find((s) => s.kind === 'busstation')!;
+  // And one on each part of the outskirts: a mill that never stops, a pump the groves live on, one tent among hundreds.
+  const mill = buildings.find((b) => b.name === 'Flour Mill')!;
+  const pump = buildings.find((b) => b.name === 'Pump House')!;
+  const tent = buildings.filter((b) => b.kind === 'tent').sort((a, b) => Math.hypot(a.cx - 872, a.cy - 846) - Math.hypot(b.cx - 872, b.cy - 846))[0];
   const targets: Target[] = [
     {
       id: 'warehouse',
@@ -803,6 +971,39 @@ export function buildCity(seed = 7): World {
       stored: false,
       aimHeight: 0,
     },
+    {
+      id: 'mill',
+      name: 'Flour Mill',
+      short: 'Flour mill',
+      note: 'A storeroom at the back is said to hide a weapons workshop. The mill runs day and night: there is no empty hour.',
+      rect: mill.rects[0],
+      buildingId: mill.id,
+      hardness: 10,
+      stored: false,
+      aimHeight: mill.h,
+    },
+    {
+      id: 'pump',
+      name: 'Pump House in the groves',
+      short: 'Pump house',
+      note: 'A rocket team is said to hide its launcher by the pump house. The pump waters every palm in the groves.',
+      rect: pump.rects[0],
+      buildingId: pump.id,
+      hardness: 6,
+      stored: false,
+      aimHeight: pump.h,
+    },
+    {
+      id: 'camp',
+      name: 'A tent in Amal Camp',
+      short: 'Camp tent',
+      note: 'A recruiter for the fighters is said to live in this tent. Around it, hundreds of tents, and canvas stops nothing.',
+      rect: tent.rects[0],
+      buildingId: tent.id,
+      hardness: 2,
+      stored: false,
+      aimHeight: tent.h,
+    },
   ];
 
   // ---- Places to discover.
@@ -816,6 +1017,9 @@ export function buildCity(seed = 7): World {
     { id: 'market', name: 'Market Quarter', x: 580, y: 660, blurb: 'The souk, the covered market, the bus station.' },
     { id: 'tinhill', name: 'Tin Hill', x: 900, y: 660, blurb: 'Tin-roofed homes built close together. Walls that stop little.' },
     { id: 'canal', name: 'The Canal', x: 745, y: 250, blurb: 'Open water and tree-lined quays.' },
+    { id: 'kilns', name: 'The Kilnworks', x: 200, y: 790, blurb: 'Brick kilns, a flour mill, the railway sidings.' },
+    { id: 'groves', name: 'The Groves', x: 638, y: 760, blurb: 'Date palms, greenhouses and irrigation by the canal.' },
+    { id: 'camp', name: 'Amal Camp', x: 900, y: 760, blurb: 'Tents for families who fled the villages. Canvas stops nothing.' },
   ];
   const places: Place[] = [];
   for (const d of districts) places.push({ id: `d:${d.id}`, name: d.name, x: d.x, y: d.y, kind: 'district', note: d.blurb });
@@ -845,6 +1049,7 @@ export function buildCity(seed = 7): World {
     spaces,
     walls,
     trees,
+    extras: ex,
     targets,
     places,
     streetPts: new Float32Array(street),
@@ -882,7 +1087,7 @@ function groundTarget(id: TargetId): Target {
   return t;
 }
 
-const HARDNESS: Record<Material, number> = { concrete: 9, steel: 10, brick: 7, mud: 5, tin: 3 };
+const HARDNESS: Record<Material, number> = { concrete: 9, steel: 10, brick: 7, mud: 5, tin: 3, canvas: 1 };
 const built = new WeakMap<World, Map<number, Target>>();
 
 /** Any building as a target. No briefing and no quirks: how much blast it takes comes from its material and size. */
@@ -937,9 +1142,17 @@ export function placeName(b: Building): string {
       return 'Stadium stand';
     case 'shelter':
       return 'Bus shelter';
+    case 'factory':
+      return 'A factory';
+    case 'kiln':
+      return 'A brick kiln';
+    case 'tent':
+      return 'A family’s tent';
+    case 'greenhouse':
+      return 'A greenhouse';
     default:
       return b.kind;
   }
 }
 
-export const MATERIAL_NAME: Record<Material, string> = { concrete: 'Concrete', brick: 'Brick', mud: 'Mud brick', tin: 'Tin sheet', steel: 'Steel frame' };
+export const MATERIAL_NAME: Record<Material, string> = { concrete: 'Concrete', brick: 'Brick', mud: 'Mud brick', tin: 'Tin sheet', steel: 'Steel frame', canvas: 'Canvas' };

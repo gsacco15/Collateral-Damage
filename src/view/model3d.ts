@@ -172,6 +172,35 @@ function hipGeo(q: Rect, y: number, rise: number) {
   return g.toNonIndexed();
 }
 
+/** A tent: canvas over a ridge pole along its long side, with low walls under the eaves. */
+function tentGeo(q: Rect, h: number) {
+  const alongX = q.w >= q.h;
+  const e = h * 0.35;
+  // Work in (u along the ridge, v across it), then map to x/z.
+  const u0 = alongX ? q.x : q.y;
+  const u1 = alongX ? q.x + q.w : q.y + q.h;
+  const v0 = alongX ? q.y : q.x;
+  const v1 = alongX ? q.y + q.h : q.x + q.w;
+  const vm = (v0 + v1) / 2;
+  const P = (u: number, y: number, v: number) => (alongX ? [u, y, v] : [v, y, u]);
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => [...a, ...b, ...c, ...a, ...c, ...d];
+  const pos = [
+    ...quad(P(u0, e, v0), P(u1, e, v0), P(u1, h, vm), P(u0, h, vm)),
+    ...quad(P(u0, e, v1), P(u0, h, vm), P(u1, h, vm), P(u1, e, v1)),
+    ...quad(P(u0, 0, v0), P(u1, 0, v0), P(u1, e, v0), P(u0, e, v0)),
+    ...quad(P(u0, 0, v1), P(u0, e, v1), P(u1, e, v1), P(u1, 0, v1)),
+    ...quad(P(u0, 0, v0), P(u0, e, v0), P(u0, e, v1), P(u0, 0, v1)),
+    ...quad(P(u1, 0, v0), P(u1, 0, v1), P(u1, e, v1), P(u1, e, v0)),
+    ...P(u0, e, v0), ...P(u0, h, vm), ...P(u0, e, v1),
+    ...P(u1, e, v0), ...P(u1, e, v1), ...P(u1, h, vm),
+  ];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((pos.length / 3) * 2).fill(0), 2));
+  return g;
+}
+
 /** The warehouse roof: white paper folded like an accordion. */
 function foldedGeo(q: Rect, h: number) {
   const strip = 2.4;
@@ -523,6 +552,16 @@ export class Model3D {
       door3: new THREE.MeshStandardMaterial({ color: '#9a3b2e', roughness: 0.9 }),
       door4: new THREE.MeshStandardMaterial({ color: '#6b4a33', roughness: 0.9 }),
       door5: new THREE.MeshStandardMaterial({ color: '#c49a3a', roughness: 0.9 }),
+      canvas: new THREE.MeshStandardMaterial({ color: '#efe9dc', roughness: 1, flatShading: true, side: THREE.DoubleSide }),
+      tarp: new THREE.MeshStandardMaterial({ color: '#5b86a8', roughness: 1, flatShading: true, side: THREE.DoubleSide }),
+      film: new THREE.MeshStandardMaterial({ color: '#f4f6ef', roughness: 0.3, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
+      silo: new THREE.MeshStandardMaterial({ color: '#cfc9bf', roughness: 1 }),
+      water: new THREE.MeshStandardMaterial({ color: '#9eb4bb', roughness: 0.7, metalness: 0.1 }),
+      brick: new THREE.MeshStandardMaterial({ color: '#b07a52', roughness: 1 }),
+      soot: new THREE.MeshStandardMaterial({ color: '#2d2520', roughness: 1 }),
+      rust: new THREE.MeshStandardMaterial({ color: '#8a5a3e', roughness: 0.9 }),
+      steelGrey: new THREE.MeshStandardMaterial({ color: '#7c7a73', roughness: 0.8, metalness: 0.2 }),
+      green: new THREE.MeshStandardMaterial({ color: '#5f6f6a', roughness: 0.9 }),
     };
     this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall] as THREE.MeshStandardMaterial[];
     this.buildBuildings(new Set());
@@ -550,6 +589,46 @@ export class Model3D {
       const lm = new THREE.Mesh(mergeGeometries(lamps.map((g) => (g.index ? g.toNonIndexed() : g)))!, this.mats.lamp);
       lm.castShadow = true;
       s.add(lm);
+    }
+
+    // The outskirts: wagons in the sidings, the camp fence, bricks drying, scrap, beehives, washing between tents.
+    {
+      const ex = w.extras;
+      const r = rng(4242);
+      const bins = new Map<THREE.Material, THREE.BufferGeometry[]>();
+      const put = (m: THREE.Material, g: THREE.BufferGeometry) => bins.set(m, [...(bins.get(m) ?? []), g.index ? g.toNonIndexed() : g]);
+      const M = this.mats;
+      const wagonMats = [M.rust, M.steelGrey, M.green];
+      for (const q of ex.wagons) {
+        const m = wagonMats[Math.floor(r() * 3)];
+        put(m, boxGeo(q.x + q.w / 2, 2.4, q.y + q.h / 2, q.w, 2.8, q.h));
+        put(M.lamp, boxGeo(q.x + q.w / 2, 0.6, q.y + q.h / 2, q.w - 1, 0.8, q.h * 0.8));
+      }
+      for (const q of ex.fences) {
+        const len = Math.max(q.w, q.h);
+        const alongX = q.w > q.h;
+        for (let u = 0; u <= len; u += 3) put(M.lamp, boxGeo(q.x + (alongX ? u : 0), 1, q.y + (alongX ? 0 : u), 0.08, 2, 0.08));
+        for (const y of [0.7, 1.4, 1.95]) put(M.lamp, boxGeo(q.x + q.w / 2, y, q.y + q.h / 2, alongX ? len : 0.02, 0.02, alongX ? 0.02 : len));
+      }
+      for (const q of ex.stacks) put(M.brick, boxGeo(q.x + q.w / 2, 0.45, q.y + q.h / 2, q.w, 0.9, q.h));
+      const scrapMats = [M.rust, M.steelGrey, M.green, M.wood];
+      for (const p of ex.scrap)
+        for (let i = 0; i < 9; i++) {
+          const a = r() * Math.PI * 2;
+          const d = Math.sqrt(r()) * p.r;
+          put(scrapMats[Math.floor(r() * 4)], boxGeo(0, 0, 0, 1 + r() * 2.2, 0.5 + r() * 1.2, 0.8 + r() * 1.4).rotateY(r() * 3).rotateX((r() - 0.5) * 0.6).translate(p.x + Math.cos(a) * d, 0.4 + (1 - d / p.r) * 0.8, p.y + Math.sin(a) * d));
+        }
+      for (const h of ex.hives) put(M.plastic, boxGeo(h.x + 0.8, 0.45, h.y + 0.65, 1.3, 0.9, 1.1));
+      const cloths = [M.clothA, M.clothB, M.clothC];
+      for (const [ax, az, bx, bz] of ex.washing) {
+        put(M.line, boxGeo((ax + bx) / 2, 1.7, (az + bz) / 2, Math.max(0.03, Math.abs(bx - ax)), 0.03, 0.03));
+        for (let x = ax + 0.5; x < bx - 0.4; x += 0.9 + r() * 0.4) put(cloths[Math.floor(r() * 3)], boxGeo(x, 1.3, az, 0.6, 0.75, 0.02));
+      }
+      for (const [m, geos] of bins) {
+        const mesh = new THREE.Mesh(mergeGeometries(geos)!, m);
+        mesh.castShadow = mesh.receiveShadow = true;
+        s.add(mesh);
+      }
     }
 
     // Trees: crumpled paper balls, palms, cypresses.
@@ -663,7 +742,36 @@ export class Model3D {
       const p = b.paper as MatKey;
       if (b.round) {
         const q = b.rects[0];
-        put(M.fuel, new THREE.CylinderGeometry(q.w / 2, q.w / 2, b.h, 24).translate(q.x + q.w / 2, b.h / 2, q.y + q.h / 2));
+        const cx = q.x + q.w / 2;
+        const cz = q.y + q.h / 2;
+        put(b.kind === 'silo' ? M.silo : b.kind === 'watertank' ? M.water : M.fuel, new THREE.CylinderGeometry(q.w / 2, q.w / 2, b.h, 24).translate(cx, b.h / 2, cz));
+        if (b.kind === 'silo') put(M.silo, new THREE.ConeGeometry(q.w / 2 + 0.2, 3, 24).translate(cx, b.h + 1.5, cz));
+        continue;
+      }
+      if (b.kind === 'chimney') {
+        const q = b.rects[0];
+        const cx = q.x + q.w / 2;
+        const cz = q.y + q.h / 2;
+        put(M.brick, new THREE.CylinderGeometry(q.w * 0.32, q.w * 0.5, b.h, 10).translate(cx, b.h / 2, cz));
+        put(M.soot, new THREE.CylinderGeometry(q.w * 0.36, q.w * 0.36, 1.2, 10).translate(cx, b.h - 0.4, cz));
+        continue;
+      }
+      if (b.kind === 'tent' || (b.material === 'canvas' && b.kind !== 'greenhouse')) {
+        // Canvas over a ridge pole, low walls, now and then a blue tarp thrown over the top.
+        for (const q of b.rects) {
+          put(M.canvas, tentGeo(q, b.h));
+          if (r() < 0.2) put(M.tarp, tentGeo({ x: q.x + q.w * 0.3, y: q.y - 0.05, w: q.w * 0.4, h: q.h + 0.1 }, b.h + 0.03));
+        }
+        continue;
+      }
+      if (b.kind === 'greenhouse') {
+        const q = b.rects[0];
+        const rad = Math.min(q.w, q.h) / 2;
+        const len = Math.max(q.w, q.h);
+        const g = new THREE.CylinderGeometry(rad, rad, len, 12, 1, true, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2);
+        g.scale(1, b.h / rad, 1);
+        if (q.w > q.h) g.rotateY(Math.PI / 2);
+        put(M.film, g.translate(q.x + q.w / 2, 0, q.y + q.h / 2));
         continue;
       }
       if (b.kind === 'minaret') {
@@ -682,7 +790,7 @@ export class Model3D {
         else if (p === 'terracotta') put(M.terracottaRoof, hipGeo(q, b.h, Math.min(q.w, q.h) * 0.35));
         else put(b.kind === 'stand' ? M.stand : roofOf[p], roofGeo(q, b.h, 12));
         // Crenellated parapets on some kraft roofs; plain parapets on some white ones.
-        if ((p === 'kraft' || p === 'white') && b.kind !== 'warehouse' && q.w > 8 && q.h > 8 && r() < 0.35) {
+        if ((p === 'kraft' || p === 'white') && b.kind !== 'warehouse' && b.kind !== 'factory' && b.kind !== 'kiln' && b.district !== 'kilns' && q.w > 8 && q.h > 8 && r() < 0.35) {
           const crenel = p === 'kraft';
           const pm = wallOf[p];
           for (const [x0, z0, x1, z1] of [

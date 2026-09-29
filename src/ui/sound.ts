@@ -2,8 +2,8 @@
 // Ambience follows the hour and where you're looking; radio lines go through a band-pass "radio" filter;
 // the guide has a narrator. Files live in public/audio/.
 
-export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school';
-const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school'];
+export type Bed = 'amb-city-day' | 'amb-city-night' | 'amb-cell-room' | 'amb-market' | 'amb-park' | 'amb-water' | 'amb-pitch' | 'amb-traffic' | 'amb-wind' | 'amb-school' | 'amb-industry' | 'amb-camp' | 'amb-groves';
+const BEDS: Bed[] = ['amb-city-day', 'amb-city-night', 'amb-cell-room', 'amb-market', 'amb-park', 'amb-water', 'amb-pitch', 'amb-traffic', 'amb-wind', 'amb-school', 'amb-industry', 'amb-camp', 'amb-groves'];
 const KEY = 'cd.sound';
 const MIX_KEY = 'cd.mix.v2'; // v2: everyone starts again from the quieter default
 const HEADROOM = 0.85; // the loudest the page ever gets, at 100% on every slider
@@ -59,7 +59,12 @@ export type CityCue =
   | 'cue-chimes'
   | 'cue-radio-music'
   | 'cue-sellers'
-  | 'cue-siren';
+  | 'cue-siren'
+  | 'cue-train'
+  | 'cue-pump'
+  | 'cue-canvas'
+  | 'cue-jerrycan'
+  | 'cue-bricks';
 
 export type RadioLine = 'radio-01-pol' | 'radio-02-estimate' | 'radio-03-cleared' | 'radio-04-away' | 'radio-05-splash' | 'radio-06-destroyed' | 'radio-07-intact' | 'radio-08-bda' | 'radio-09-jev-run' | 'radio-10-jev-done' | 'radio-11-abort' | 'radio-12-calloff';
 
@@ -99,6 +104,7 @@ class SoundEngine {
   private distance: BiquadFilterNode | null = null; // the city muffled from high up
   private lastWhoosh = 0;
   private voiceNode: AudioBufferSourceNode | null = null;
+  private voiceSeq = 0; // the latest narration asked for; an older one that finishes loading later is dropped
   private charge: AudioBufferSourceNode | null = null;
   private lastTick = 0;
   private radioFree = 0; // when the radio is next free
@@ -305,19 +311,25 @@ class SoundEngine {
   }
   /** Play one narration (a file under voice/), stopping any other. Resolves with its length in seconds, or 0. */
   async narrate(name: string): Promise<number> {
+    this.stopVoice();
     if (!this.enabled) return 0;
-    try {
-      this.voiceNode?.stop();
-    } catch {
-      /* already stopped */
-    }
-    this.voiceNode = null;
+    const seq = this.voiceSeq;
     const r = await this.start(name, 1);
     if (!r) return 0;
+    if (seq !== this.voiceSeq) {
+      // Something else was asked for while this one loaded.
+      try {
+        r.src.stop();
+      } catch {
+        /* fine */
+      }
+      return 0;
+    }
     this.voiceNode = r.src;
     return r.src.buffer?.duration ?? 0;
   }
   stopVoice() {
+    this.voiceSeq++;
     try {
       this.voiceNode?.stop();
     } catch {

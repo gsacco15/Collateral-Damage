@@ -19,6 +19,9 @@ const DISTRICTS: Record<string, Omit<PlaceStory, 'title' | 'kind'>> = {
   quarter: { line: 'The Weavers’ Quarter: small workshops downstairs, families upstairs. You can hear the looms from the street.', when: 'Always someone at home.' },
   market: { line: 'The souk and the bus station. Everything is for sale here, from phone cards to live chickens.', when: 'Packed from ten until two.' },
   tinhill: { line: 'Tin-roofed houses built by people who came here with nothing, one room at a time. Tin stops nothing.', when: 'Full at night.' },
+  kilns: { line: 'The Kilnworks: brick kilns, a flour mill that never stops, and the freight line out of town. The chimneys smoke from before dawn; whole families work the brick yard together.', when: 'Early mornings at the kilns; the mill all night.' },
+  groves: { line: 'Date palms, plastic greenhouses and a web of little channels fed by the canal. The same three families have farmed here for generations.', when: 'Dawn and dusk, out of the heat.' },
+  camp: { line: 'Amal Camp: families who fled the fighting in the villages, in rows of white tents. Some arrived last week, some six years ago. Canvas stops nothing.', when: 'Full at night, and most of the day: there is nowhere else to be.' },
   canal: { line: 'Open water and tree-lined quays. Boys fish off the bridges; old men play backgammon in the shade.', when: 'Evenings, when it cools down.' },
 };
 
@@ -42,10 +45,28 @@ const PLACES: Record<string, Omit<PlaceStory, 'title' | 'kind'>> = {
   'Office forecourt': { line: 'Where people queue for the District Office, holding folders of papers they have been asked for twice already.', when: 'Weekday mornings.' },
   'Vehicle Yard': { line: 'Trucks, a fuel bowser, a mechanic’s hut. Drivers wait here for loads, drinking tea from glasses.', when: 'By day.' },
   'Water Point': { line: 'Tin Hill’s only tap. Children fill yellow jerrycans and carry them home two at a time.', when: 'Early morning and evening.' },
+  'Flour Mill': { line: 'It grinds the flour for half the city’s bread. Three shifts, day and night; the night shift sings to stay awake.', when: 'Never empty.' },
+  'Grain Silos': { line: 'Four concrete silos, the tallest things south of the boulevard. Pigeons live in the gaps under the roofs.', when: 'Nobody inside.' },
+  "Workers' Hostel": { line: 'Bunk rooms for the kiln and mill workers, men who send almost everything they earn home to the villages.', when: 'Full at night; by day, whoever is off shift.' },
+  'Mill yard': { line: 'Flour trucks wait here to be loaded. The drivers play cards on upturned crates.', when: 'Mornings.' },
+  'Brick Kilns': { line: 'Three kilns, fired for days at a time. Whole families work them, children stacking the green bricks beside their parents.', when: 'Dawn until the heat, then late afternoon.' },
+  'Kiln chimney': { line: 'You can see the smoke from anywhere in the city. When it stops, people ask why.', when: '' },
+  'Brick yard': { line: 'Rows of wet clay bricks drying in the sun, turned by hand one at a time. Forty thousand a day, a woman here says.', when: 'Early morning.' },
+  Scrapyard: { line: 'Cars, fridges, tangles of rebar. Boys sort copper wire for a few coins a kilo.', when: 'By day.' },
+  Greenhouses: { line: 'Tunnels of plastic sheet over tomatoes and cucumbers. Inside it is ten degrees hotter; work stops at nine.', when: 'Dawn.' },
+  Farmhouse: { line: 'Mud walls, a vine over the door, a grandmother who remembers when the canal was dug.', when: 'Always someone home.' },
+  'Pump House': { line: 'An old diesel pump lifts water from the canal into the channels. When it breaks, the whole grove waits.', when: 'Dawn and dusk.' },
+  'Date grove': { line: 'Three hundred palms in rows, each one tended by hand. The harvest is in autumn; the children climb for the first dates.', when: 'Dawn and dusk.' },
+  'Tent School': { line: 'Two hundred children in a tent built for sixty. Lessons in two shifts; the blackboard is a painted sheet of plywood.', when: 'Weekdays, eight until one.' },
+  'Camp Clinic': { line: 'One doctor, two nurses and a queue from before dawn: coughs, dehydration, babies born in tents.', when: 'Mornings.' },
+  'Distribution Point': { line: 'Flour, oil, lentils, once a week per family. The queue starts at six; nobody wants to be at the back.', when: 'Weekday mornings: hundreds in the open.' },
+  'Water tanks': { line: 'Filled by truck every morning. When the truck is late, everyone knows.', when: '' },
+  'Camp Taps': { line: 'Six taps for the whole camp. Girls carry the water home in yellow jerrycans, talking the whole way.', when: 'Early morning and evening.' },
+  'Dirt Pitch': { line: 'Goals made from tent poles. The camp league has eleven teams, all named after villages that are not there any more.', when: 'Late afternoon.' },
   'Fountain Circus': { line: 'The roundabout at the heart of the city. The fountain has not worked in years, but people still meet "at the fountain".', when: 'Rush hours.' },
 };
 
-const KIND_NAME: Partial<Record<Space['kind'], string>> = { park: 'Park', pitch: 'Sports', market: 'Market', cemetery: 'Cemetery', busstation: 'Transport', plaza: 'Square', playground: 'Playground', yard: 'Yard', courtyard: 'Courtyard' };
+const KIND_NAME: Partial<Record<Space['kind'], string>> = { park: 'Park', pitch: 'Sports', market: 'Market', cemetery: 'Cemetery', busstation: 'Transport', plaza: 'Square', playground: 'Playground', yard: 'Yard', courtyard: 'Courtyard', field: 'Farmland', brickyard: 'Work', scrapyard: 'Work', distribution: 'Aid' };
 
 const inRect = (q: Rect, x: number, y: number, pad = 0) => x >= q.x - pad && x <= q.x + q.w + pad && y >= q.y - pad && y <= q.y + q.h + pad;
 
@@ -54,11 +75,13 @@ export function placeAt(w: World, x: number, y: number): PlaceStory {
   const sp = w.spaces.find((s) => inRect(s.rect, x, y) && s.name);
   if (sp?.name) return { title: sp.name, kind: KIND_NAME[sp.kind] ?? 'Open ground', named: true, ...(PLACES[sp.name] ?? { line: 'Open ground. Nothing here stops a fragment.' }) };
   if (Math.hypot(x - w.roundabout.x, y - w.roundabout.y) < w.roundabout.r + 6) return { title: 'Fountain Circus', kind: 'Landmark', named: true, ...PLACES['Fountain Circus'] };
-  if (Math.abs(x - riverX(y)) < w.river.width / 2 + 4) return { title: 'The Canal', kind: 'Water', ...DISTRICTS.canal };
+  if (Math.abs(x - riverX(y)) < w.river.width / 2 + 4 && !(Math.abs(y - 800) < 4 && y > 700)) return { title: 'The Canal', kind: 'Water', ...DISTRICTS.canal };
+  const rail = w.extras.rail;
+  if (Math.abs(y - rail.y) < 5 && x < rail.x1) return { title: 'The Railway', kind: 'Railway', line: 'The freight line out to the villages and the border. Two trains a day, if they come; children put coins on the rail to be flattened.', when: 'Morning and evening.' };
   const rd = w.roads.find((r) => inRect(r.rect, x, y, 1));
   const d = districtAt(w, x, y);
   const dist = w.districts.find((q) => q.id === d);
-  if (rd) return { title: rd.name, kind: rd.kind === 'boulevard' ? 'Boulevard' : rd.kind === 'bridge' ? 'Bridge' : 'Street', line: `${rd.kind === 'boulevard' ? 'Four lanes, a median of palms, and most of the city’s traffic.' : rd.kind === 'bridge' ? 'One of three ways across the canal.' : 'A street in'} ${rd.kind === 'street' && dist ? `${dist.name}. ${DISTRICTS[d]?.line.split('. ')[0] ?? ''}.` : ''}`.trim(), when: rd.kind === 'boulevard' ? 'Rush hours, and every Friday evening.' : undefined };
+  if (rd) return { title: rd.name, kind: rd.kind === 'boulevard' ? 'Boulevard' : rd.kind === 'bridge' ? 'Bridge' : 'Street', line: `${rd.kind === 'boulevard' ? 'Four lanes, a median of palms, and most of the city’s traffic.' : rd.kind === 'bridge' ? (rd.name === 'Camp footbridge' ? 'A narrow footbridge: the way from Amal Camp to work in the Kilnworks and the groves. At dawn it is shoulder to shoulder.' : 'One of three ways across the canal.') : 'A street in'} ${rd.kind === 'street' && dist ? `${dist.name}. ${DISTRICTS[d]?.line.split('. ')[0] ?? ''}.` : ''}`.trim(), when: rd.kind === 'boulevard' ? 'Rush hours, and every Friday evening.' : undefined };
   return { title: dist?.name ?? 'The city', kind: 'District', ...(DISTRICTS[d] ?? { line: '' }) };
 }
 
@@ -73,8 +96,8 @@ function districtAt(w: World, x: number, y: number): string {
   return best.id;
 }
 
-/** The four briefed targets, told as the people around them. Narrated when you pick one from the top bar. */
-export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station', { title: string; text: string }> = {
+/** The briefed targets, told as the people around them. Narrated when you pick one from the top bar. */
+export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | 'mill' | 'pump' | 'camp', { title: string; text: string }> = {
   warehouse: {
     title: 'Warehouse 14',
     text: "Intelligence says rockets are stored inside, moved in over three nights last month, and that they could be fired from here within days. Across the street, Mrs Haddad's class of seven-year-olds is learning to count to a hundred. Round the corner, Karim is filling the fuel tanker he drives out to the villages every morning. Whatever is decided here, they are the ones who will live with it.",
@@ -102,6 +125,18 @@ export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 
   station: {
     title: 'The bus station',
     text: "A minibus is reported to be carrying weapons, one of the forty that leave from here every day. Students going home for the weekend. A grandmother with a crate of chickens. Drivers calling out the names of their towns. Which minibus? Nobody knows for sure. And nothing here stops a fragment.",
+  },
+  mill: {
+    title: 'The Flour Mill',
+    text: "A storeroom at the back is said to hide a workshop that builds rocket parts. The mill grinds the flour for half the city's bread, and it never stops: forty men on the night shift, forty more by day. Omar runs the rollers at night so he can walk his daughter to school in the morning. There is no empty hour to wait for. And if the mill stops, by the end of the week the bakeries do too.",
+  },
+  pump: {
+    title: 'The Pump House',
+    text: "A rocket team is said to fire from the groves at night, and to hide its launcher by the pump house. The pump is older than anyone who works it. Every dawn, Abu Salim starts it by hand and the water runs down the channels to three hundred palms. His granddaughter keeps bees beside the farmhouse. At night the groves are nearly empty. But without the pump, by summer, nothing here will be alive.",
+  },
+  camp: {
+    title: 'A tent in Amal Camp',
+    text: "A man who arrived last month is said to be recruiting for the fighters, from a tent in the middle of the camp. Around him: two hundred and sixty tents, and families who already fled once. Next row over, Maryam teaches the alphabet to children who have never seen a real classroom. The walls here are canvas. Nothing, not one thing, stops a fragment. And there is nowhere else for anyone to go.",
   },
   bridge: {
     title: 'The Boulevard Bridge',

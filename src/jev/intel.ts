@@ -35,7 +35,7 @@ export interface IntelKey {
 export const intelKey = (target: TargetId, hour: number, day: Day, watched: number): IntelKey => ({ target, hour: ((Math.floor(hour) % 24) + 24) % 24, day, watched: watchBucket(watched) });
 export const intelId = (k: IntelKey) => `${k.target}|${k.hour}|${k.day}|${k.watched}`;
 
-const TARGETS: TargetId[] = ['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station'];
+const TARGETS: TargetId[] = ['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station', 'mill', 'pump', 'camp'];
 export function parseKey(q: URLSearchParams): IntelKey | null {
   const target = q.get('target') as TargetId;
   const hour = Number(q.get('hour'));

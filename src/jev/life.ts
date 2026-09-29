@@ -24,6 +24,11 @@ const HALL: Curve = [0, 0, 0, 0, 0, 0.02, 0.15, 0.4, 0.7, 0.8, 0.85, 0.85, 0.7, 
 const NONE: Curve = new Array(24).fill(0);
 const STAND: Curve = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.02, 0.05, 0.05, 0.02, 0, 0, 0, 0];
 const STAND_FRI: Curve = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.02, 0.2, 0.75, 0.9, 0.85, 0.3, 0.02, 0, 0, 0];
+// The mill never stops: three shifts, a dip at each change. The kilns are worked before the heat. The camp has nowhere else to be.
+const MILL: Curve = [0.5, 0.5, 0.5, 0.5, 0.5, 0.45, 0.35, 0.6, 0.65, 0.65, 0.65, 0.65, 0.6, 0.6, 0.4, 0.6, 0.6, 0.6, 0.6, 0.55, 0.55, 0.5, 0.35, 0.5];
+const KILN: Curve = [0.1, 0.1, 0.1, 0.15, 0.3, 0.6, 0.8, 0.85, 0.85, 0.8, 0.7, 0.5, 0.3, 0.3, 0.35, 0.5, 0.6, 0.55, 0.3, 0.15, 0.1, 0.1, 0.1, 0.1];
+const TENT: Curve = [0.97, 0.97, 0.97, 0.97, 0.97, 0.93, 0.85, 0.72, 0.62, 0.58, 0.55, 0.58, 0.65, 0.66, 0.6, 0.58, 0.6, 0.68, 0.78, 0.86, 0.9, 0.93, 0.95, 0.96];
+const FARM: Curve = [0, 0, 0, 0, 0.05, 0.4, 0.8, 0.8, 0.7, 0.5, 0.3, 0.1, 0.05, 0.05, 0.05, 0.1, 0.4, 0.6, 0.4, 0.1, 0, 0, 0, 0];
 const SHELTER: Curve = [0.01, 0, 0, 0, 0.02, 0.1, 0.35, 0.7, 0.6, 0.35, 0.25, 0.25, 0.35, 0.35, 0.3, 0.4, 0.6, 0.75, 0.55, 0.3, 0.15, 0.08, 0.03, 0.01];
 
 const BUILDING: Record<Kind, [Curve, Curve]> = {
@@ -44,6 +49,13 @@ const BUILDING: Record<Kind, [Curve, Curve]> = {
   fueltank: [NONE, NONE],
   stand: [STAND, STAND_FRI],
   shelter: [SHELTER, SHELTER.map((v) => v * 0.6)],
+  factory: [MILL, MILL.map((v) => v * 0.7)],
+  kiln: [KILN, KILN.map((v) => v * 0.3)],
+  chimney: [NONE, NONE],
+  silo: [NONE, NONE],
+  tent: [TENT, TENT.map((v, i) => (i >= 11 && i <= 13 ? v * 0.8 : v))],
+  greenhouse: [FARM, FARM.map((v) => v * 0.5)],
+  watertank: [NONE, NONE],
 };
 
 //                         0     1     2     3     4     5     6     7     8     9     10    11    12    13    14    15    16    17    18    19    20    21    22    23
@@ -59,6 +71,7 @@ const COURT_FRI: Curve = [0, 0, 0, 0, 0, 0.06, 0.02, 0, 0, 0.02, 0.1, 0.5, 1, 0.
 const PITCH: Curve = [0, 0, 0, 0, 0, 0, 0.01, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0.06, 0.1, 0.12, 0.1, 0.05, 0.02, 0, 0, 0];
 const PITCH_FRI: Curve = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.02, 0.08, 0.15, 0.15, 0.15, 0.06, 0.01, 0, 0, 0];
 
+const DIST: Curve = [0, 0, 0, 0, 0, 0, 0.05, 0.35, 0.9, 1, 0.8, 0.4, 0.1, 0.05, 0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const SPACE: Record<SpaceKind, [Curve, Curve]> = {
   plaza: [PLAZA, PLAZA.map((v, i) => (i >= 11 && i <= 13 ? v * 0.3 : v * 1.15))],
   market: [MARKET, SHOP_FRI],
@@ -69,6 +82,10 @@ const SPACE: Record<SpaceKind, [Curve, Curve]> = {
   cemetery: [CEMETERY, CEMETERY.map((v, i) => (i >= 13 && i <= 16 ? v * 3 : v))],
   courtyard: [COURT, COURT_FRI],
   busstation: [BUS, BUS.map((v) => v * 0.6)],
+  field: [FARM, FARM.map((v) => v * 0.5)],
+  brickyard: [KILN.map((v) => v * 0.7), KILN.map((v) => v * 0.2)],
+  scrapyard: [YARD.map((v) => v * 0.6), YARD.map((v) => v * 0.1)],
+  distribution: [DIST, NONE],
 };
 
 // People on foot and in cars.
