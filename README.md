@@ -102,7 +102,7 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 
 Off until you turn it on: the *Sound* button in the top bar (on every screen size), `M`, or *Listen* on the opening card. On iPhone it plays even with the silent switch on. The ▾ beside it opens the mixer: everything, the city, effects and voices, remembered on this device.
 - **The city:** day or night beds follow the hour; the operations room hums quietly underneath. Up close, the one place nearest the middle of the map comes in (the park, the canal, the football pitch, the school at break, the souk, traffic on the boulevard), placed left or right by where it is on screen. High above, the city is muffled and far away with a little wind; coming down, it gets clearer. A fast zoom makes a soft rush of air. Now and then, one small sound that fits the hour: a dog at night, a rooster and a shop shutter at dawn, pigeons, a child, a moped by day. The call to prayer plays at dawn and before Friday noon.
-- **The interface:** soft paper clicks, a knock when you open a building, a fold when you pick a weapon, a chime when you find a place, and Jev's spin-up, ticks and finish.
+- **The interface:** soft paper clicks on buttons (the map itself stays silent when you click it), a fold when you pick a weapon, a chime when you find a place, and Jev's spin-up, ticks and finish.
 - **The radio:** Cell and Overwatch, through a band-pass "radio" filter with squelch: Jev starting and finishing, the estimate going up, cleared, weapon away, splash, the result, and "abort" if you let go of the release early, or when the strike is called off.
 - **The guide:** narrated as a story, not read word for word.
 

@@ -846,11 +846,9 @@ export default function App() {
       const high = (mapRef.current?.view.zoom ?? 1) <= 2;
       const st = placeAt(world, wx, wy);
       if (!high && !st.named) return;
-      sound.play('ui-toggle', 0, 0.18);
       return setPlace({ story: st, x: px, y: py });
     }
     setPlace(null);
-    sound.play('ui-building');
     setPop({ bid: b.id, x: px, y: py, n: obs[b.id] ?? shownCount(popNow, b) });
   };
   // Can this building be made the target? Not a ruin, not the current target, and someone must use it.
