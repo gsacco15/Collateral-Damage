@@ -95,6 +95,7 @@ interface GuideStep {
   title: string;
   text: string;
   plan?: Partial<Plan>;
+  from?: Partial<Plan>; // set straight away when the card opens (every time, Back included), before `plan` changes it
   planDelay?: number; // seconds to wait after the card appears before changing the plan, so the change can be watched
   swing?: boolean; // turn the heading round gradually to the step's heading, so you see the plane swing
   layers?: Partial<Layers>;
@@ -116,8 +117,8 @@ const GUIDE: GuideStep[] = [
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
   { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4, dur: 2.8 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
   { title: 'Where it would hurt', text: "No bomb lands exactly where it's aimed: each replay comes down a little short or wide. The blast is deadly close in and fades within a few dozen metres. Fragments go much further, in straight lines down open streets, until they hit a wall, so one side of a street can be spared and the other not. Put together, over hundreds of replays: the chance someone standing here is killed or badly hurt.", layers: { danger: false, pattern: false, impacts: false }, cues: [{ at: 0.07, layers: { impacts: true } }, { at: 0.43, layers: { pattern: true } }, { at: 0.76, layers: { danger: true } }], focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
-  { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', plan: { weapon: 'small', fuze: 'delay' }, planDelay: 2.5, tab: 'estimate' },
-  { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, planDelay: 2, swing: true, open: 'approach' },
+  { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', from: { weapon: 'large', fuze: 'instant' }, plan: { weapon: 'small', fuze: 'delay' }, planDelay: 2.5, tab: 'estimate' },
+  { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', from: { heading: 90 }, plan: { heading: 270 }, planDelay: 2, swing: true, open: 'approach' },
   { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true },
   { title: 'Who signs off', text: 'Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.', open: 'rules' },
   { title: 'Let Jev search', text: 'Jev is there to keep collateral damage as low as it can be. It tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel, so it sees the whole range of possible outcomes. It keeps the plan that still destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev', demo: true },
@@ -1601,6 +1602,7 @@ export default function App() {
       // Build the picture up as the narrator gets to each part; without narration, one after another.
       g.cues.forEach((c, k) => mobileTimers.current.push(window.setTimeout(() => setLayers((l) => ({ ...l, ...c.layers })), secs ? c.at * secs * 1000 : 1500 + k * 2500)));
     });
+    if (g.from) setPlan(g.from);
     if (g.plan) {
       const tgt = g.plan.target ?? plan.target;
       const t = targetOf(world, tgt);
@@ -1609,7 +1611,7 @@ export default function App() {
         const to = g.plan!.heading;
         if (!g.swing || to == null) return setPlan(g.plan!.target ? { ...g.plan!, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored } : g.plan!);
         // Swing the plane round, a little at a time, the short way (or through north when it's a U-turn).
-        const from = plan.heading;
+        const from = g.from?.heading ?? plan.heading;
         let d = ((to - from + 540) % 360) - 180;
         if (Math.abs(d) >= 179) d = from >= 90 && from < 270 ? -180 : 180;
         const steps = 24;
