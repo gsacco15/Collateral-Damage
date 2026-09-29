@@ -115,6 +115,8 @@ export interface Population {
   spaceQ: Float32Array; // share of each open space's capacity present
   streetQ: number; // chance a pavement point has someone on it
   trafficQ: [number, number]; // chance a lane point has a car: quiet streets, the boulevard
+  living?: boolean; // made by the Living model
+  streetD?: Float32Array; // Living: how busy each district's pavements are, as a multiple of streetQ (by world.districts index)
 }
 
 export type Observations = Record<number, number>;
@@ -142,7 +144,33 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
   const spaceQ = new Float32Array(world.spaces.length);
   for (const s of world.spaces) spaceQ[s.id] = L ? Math.min(1, curve(SPACE[s.kind][fri], hour - L.sshift[s.id]) * L.sk[s.id]) : curve(SPACE[s.kind][fri], hour);
   const t = curve(TRAFFIC, hour) * (fri ? 0.6 : 1);
+  // Living: pavements are busiest where people are out and about right now: in districts full of shops, work and
+  // open spaces by day, around home in the evening.
+  let streetD: Float32Array | undefined;
+  if (L) {
+    const idx = districtIdx(world);
+    const act = new Float64Array(world.districts.length);
+    for (const b of world.buildings) {
+      const i = idx.get(b.district);
+      if (i == null) continue;
+      const home = b.kind === 'home' || b.kind === 'apartment' || b.kind === 'villa' || b.kind === 'shack' || b.kind === 'tent';
+      act[i] += expected[b.id] * (home ? 0.25 : 1);
+    }
+    for (const sp of world.spaces) {
+      const i = idx.get(sp.district);
+      if (i != null) act[i] += spaceQ[sp.id] * sp.capacity;
+    }
+    const pts = streetCounts(world);
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < act.length; i++) (num += act[i]), (den += pts[i]);
+    const mean = num / Math.max(1, den);
+    streetD = new Float32Array(act.length);
+    for (let i = 0; i < act.length; i++) streetD[i] = pts[i] ? Math.min(2.2, Math.max(0.35, Math.sqrt(act[i] / pts[i] / Math.max(1e-6, mean)))) : 1;
+  }
   return {
+    living: !!L,
+    streetD,
     hour,
     day,
     expected,
@@ -153,6 +181,89 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     streetQ: curve(fri ? STREET_FRI : STREET, hour),
     trafficQ: [t * 0.35, t],
   };
+}
+
+// ---------------------------------------------------------------- districts and pavements (Living)
+
+const idxCache = new WeakMap<World, Map<string, number>>();
+export function districtIdx(w: World) {
+  let m = idxCache.get(w);
+  if (!m) idxCache.set(w, (m = new Map(w.districts.map((d, i) => [d.id, i]))));
+  return m;
+}
+const ptCache = new WeakMap<World, Int16Array>();
+/** The district each pavement point is in (by world.districts index; -1 outside any block's reach). */
+export function streetDistricts(w: World) {
+  let out = ptCache.get(w);
+  if (out) return out;
+  const idx = districtIdx(w);
+  const s = w.streetPts;
+  out = new Int16Array(s.length / 2).fill(-1);
+  for (let k = 0; k < out.length; k++) {
+    const x = s[k * 2];
+    const y = s[k * 2 + 1];
+    let best = -1;
+    let bd = 14;
+    for (const bl of w.blocks) {
+      const dx = Math.max(bl.x - x, 0, x - bl.x - bl.w);
+      const dy = Math.max(bl.y - y, 0, y - bl.y - bl.h);
+      const d = Math.hypot(dx, dy);
+      if (d < bd) {
+        bd = d;
+        best = idx.get(bl.district) ?? -1;
+      }
+    }
+    out[k] = best;
+  }
+  ptCache.set(w, out);
+  return out;
+}
+const cntCache = new WeakMap<World, Int32Array>();
+function streetCounts(w: World) {
+  let c = cntCache.get(w);
+  if (c) return c;
+  c = new Int32Array(w.districts.length);
+  for (const d of streetDistricts(w)) if (d >= 0) c[d]++;
+  cntCache.set(w, c);
+  return c;
+}
+
+/**
+ * Living: the trips people are making around this hour, from the places emptying to the places filling nearby
+ * (home to school at half seven, to the workshops, the souk, the mosque on a Friday, home in the evening).
+ * A short list of representative trips, strongest first: [from building, to building, weight].
+ */
+const tripCache = new Map<string, [number, number, number][]>();
+export function trips(world: World, hour: number, day: Day): [number, number, number][] {
+  const key = `${world.seed}|${Math.round(hour * 4) / 4}|${day}`;
+  const hit = tripCache.get(key);
+  if (hit) return hit;
+  const a = population(world, hour - 0.5, day, 6, {}, {}, [], true).expected;
+  const b = population(world, hour + 0.5, day, 6, {}, {}, [], true).expected;
+  const gains: number[] = [];
+  const losses: number[] = [];
+  for (const x of world.buildings) {
+    const d = b[x.id] - a[x.id];
+    if (d > 0.6) gains.push(x.id);
+    else if (d < -0.6) losses.push(x.id);
+  }
+  gains.sort((i, j) => b[j] - a[j] - (b[i] - a[i]));
+  const out: [number, number, number][] = [];
+  const B = world.buildings;
+  for (const g of gains.slice(0, 70)) {
+    const gb = B[g];
+    // The nearest few places people are leaving, weighted by how many leave.
+    const near = losses
+      .map((l) => ({ l, d: Math.hypot(B[l].cx - gb.cx, B[l].cy - gb.cy) }))
+      .filter((q) => q.d > 8 && q.d < 420)
+      .sort((p, q) => p.d / (a[p.l] - b[p.l]) - q.d / (a[q.l] - b[q.l]))
+      .slice(0, 4);
+    for (const q of near) out.push([q.l, g, Math.min(b[g] - a[g], a[q.l] - b[q.l])]);
+  }
+  out.sort((p, q) => q[2] - p[2]);
+  if (tripCache.size > 200) tripCache.clear();
+  tripCache.set(key, out);
+  return out;
 }
 
 /** How many people to draw in a building: the central guess, or what was logged. */

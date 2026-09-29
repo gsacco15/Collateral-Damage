@@ -1,5 +1,5 @@
 // People on foot and cars on the road: the living layer of the map, also read by the 3D model.
-import { rng, shownCount, type Building, type Population, type Rect, type World } from '../jev';
+import { rng, shownCount, streetDistricts, trips, type Building, type Population, type Rect, type World } from '../jev';
 import { CLOTH, SKIN } from './paper';
 
 // What people wear, seen from above, very simply. Head: bare, a white prayer cap, a red-checked keffiyeh, a plain
@@ -46,6 +46,7 @@ export interface Walker {
   flee: number;
   hurt: boolean;
   gone: boolean;
+  d?: number; // Living: the district a pavement walker belongs to
 }
 
 export interface Car {
@@ -76,6 +77,10 @@ export class Crowd {
   private lines = new Map<string, number[]>();
   private hLines: { y: number; x0: number; x1: number }[] = [];
   private vLines: { x: number; y0: number; y1: number }[] = [];
+  // Living: this hour's trips (from, to, weight), walked as a steady trickle rather than a burst on the hour.
+  private trips: [number, number, number][] | null = null;
+  private tripSum = 0;
+  private tripAcc = 0;
 
   constructor(private world: World) {
     const s = world.streetPts;
@@ -126,15 +131,52 @@ export class Crowd {
     const w = this.world;
     const s = w.streetPts;
     const nStreet = s.length / 2;
-    // Pavements.
-    const want = Math.min(500, Math.round(pop.streetQ * nStreet * 0.55));
-    const street = this.walkers.filter((x) => x.kind === 'street' && !x.gone && !x.hurt);
-    if (street.length > want) for (const x of street.slice(want)) x.gone = true;
-    else
-      for (let i = street.length; i < want; i++) {
-        const k = Math.floor(r() * nStreet);
-        this.walkers.push(this.spawn('street', s[k * 2] + (r() - 0.5), s[k * 2 + 1] + (r() - 0.5)));
+    // Pavements. Living: each district's own busyness, so the souk streets are full and the villa lanes quiet.
+    if (pop.streetD) {
+      const dOf = streetDistricts(w);
+      const byD = new Map<number, number[]>();
+      for (let k = 0; k < dOf.length; k++) {
+        const list = byD.get(dOf[k]) ?? [];
+        list.push(k);
+        byD.set(dOf[k], list);
       }
+      const wants = new Map<number, number>();
+      let total = 0;
+      for (const [d, pts] of byD) {
+        const n = pop.streetQ * pts.length * 0.55 * (d >= 0 ? pop.streetD[d] : 0.5);
+        wants.set(d, n);
+        total += n;
+      }
+      const scale = total > 500 ? 500 / total : 1;
+      const street = this.walkers.filter((x) => x.kind === 'street' && !x.gone && !x.hurt);
+      for (const [d, pts] of byD) {
+        const want = Math.round((wants.get(d) ?? 0) * scale);
+        const mine = street.filter((x) => (x.d ?? -2) === d);
+        if (mine.length > want) for (const x of mine.slice(want)) x.gone = true;
+        else
+          for (let i = mine.length; i < want; i++) {
+            const k = pts[Math.floor(r() * pts.length)];
+            const wk = this.spawn('street', s[k * 2] + (r() - 0.5), s[k * 2 + 1] + (r() - 0.5));
+            wk.d = d;
+            this.walkers.push(wk);
+          }
+      }
+      // Walkers from before the switch (no district): let them go.
+      for (const x of street) if (x.d == null) x.gone = true;
+    } else {
+      const want = Math.min(500, Math.round(pop.streetQ * nStreet * 0.55));
+      const street = this.walkers.filter((x) => x.kind === 'street' && !x.gone && !x.hurt);
+      for (const x of street) if (x.d != null) x.gone = true;
+      const plain = street.filter((x) => x.d == null);
+      if (plain.length > want) for (const x of plain.slice(want)) x.gone = true;
+      else
+        for (let i = plain.length; i < want; i++) {
+          const k = Math.floor(r() * nStreet);
+          this.walkers.push(this.spawn('street', s[k * 2] + (r() - 0.5), s[k * 2 + 1] + (r() - 0.5)));
+        }
+    }
+    this.trips = pop.living ? trips(w, pop.hour, pop.day) : null;
+    this.tripSum = this.trips ? this.trips.reduce((t, q) => t + q[2], 0) : 0;
     // Open spaces: the souk, the square, the stadium, the school yard.
     for (const sp of w.spaces) {
       const n = Math.min(MAX_SPACE_WALKERS, Math.round(pop.spaceQ[sp.id] * sp.capacity * 0.6));
@@ -148,7 +190,7 @@ export class Crowd {
     const racing = now - this.lastHourChange < 1500;
     if (prev && prev.hour !== pop.hour) this.lastHourChange = now;
     const moving = this.walkers.filter((x) => x.kind === 'transit' && !x.gone).length;
-    if (prev && prev.hour !== pop.hour && !racing && moving < 60) {
+    if (!pop.living && prev && prev.hour !== pop.hour && !racing && moving < 60) {
       const from: Building[] = [];
       const to: Building[] = [];
       for (const b of w.buildings) {
@@ -315,6 +357,32 @@ export class Crowd {
       }
     }
     this.walkers = this.walkers.filter((w) => !(w.kind === 'transit' && w.gone));
+    // Living: people setting off on this hour's trips, a few a second, never more than about eighty at once.
+    if (this.trips?.length && !(blast && blast.t < 40)) {
+      this.tripAcc += dt * Math.min(4, this.tripSum * 0.006);
+      let moving = -1;
+      while (this.tripAcc >= 1) {
+        this.tripAcc -= 1;
+        if (moving < 0) moving = this.walkers.filter((x) => x.kind === 'transit').length;
+        if (moving >= 80) {
+          this.tripAcc = 0;
+          break;
+        }
+        let u = r() * this.tripSum;
+        let trip = this.trips[0];
+        for (const q of this.trips) if ((u -= q[2]) <= 0) {
+          trip = q;
+          break;
+        }
+        const a = this.world.buildings[trip[0]];
+        const b = this.world.buildings[trip[1]];
+        const t = this.spawn('transit', a.cx, a.cy);
+        t.path = this.route(a, b);
+        t.speed = 2.2 + r() * 0.8; // a brisk walk: somewhere to be
+        this.walkers.push(t);
+        moving++;
+      }
+    }
     for (const c of this.cars) {
       if (c.hurt) continue;
       let boost = 1;
