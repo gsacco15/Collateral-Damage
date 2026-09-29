@@ -141,7 +141,7 @@ export class MapView {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.cw = Math.max(1, rect.width);
     this.ch = Math.max(1, rect.height);
-    LABEL_K = this.cw < 600 ? 0.8 : 1; // labels a little smaller on a phone
+    LABEL_K = this.cw < 600 || this.ch < 420 ? 0.8 : 1; // labels a little smaller on a phone, either way up
     this.canvas.width = Math.round(this.cw * this.dpr);
     this.canvas.height = Math.round(this.ch * this.dpr);
     this.viewKey = '';
@@ -150,7 +150,7 @@ export class MapView {
 
   /** CSS pixels per metre and offset. zoom 1 fits the whole city. */
   cam() {
-    const base = Math.min(this.cw / this.world.w, this.ch / this.world.h);
+    const base = Math.min(this.cw / this.world.city.w, this.ch / this.world.city.h); // zoom 1 fits the city; the desert is off to the east
     const s = base * this.view.zoom;
     return { s, ox: this.cw / 2 - this.view.cx * s, oy: this.ch / 2 - this.view.cy * s };
   }
@@ -164,7 +164,7 @@ export class MapView {
   }
   clampView() {
     const v = this.view;
-    v.zoom = Math.max(1, Math.min(14, v.zoom));
+    v.zoom = Math.max(0.7, Math.min(14, v.zoom));
     const { s } = this.cam();
     const hw = this.cw / 2 / s;
     const hh = this.ch / 2 / s;

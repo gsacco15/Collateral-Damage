@@ -693,7 +693,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .strike-dock.open { background: rgba(251, 250, 246, 0.68); }
 
 /* Phones: small, see-through cards; the narrator tells the stories and the guide. */
-@media (max-width: 760px) {
+@media (max-width: 760px), (max-height: 520px) {
   .guide.compact { bottom: 10px; width: calc(100% - 20px); padding: 7px 8px 7px 12px; gap: 8px; align-items: center; border-radius: 12px; background: rgba(251, 250, 246, 0.78); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   .guide.compact .n { padding-top: 0; font-size: 11px; }
   .guide.compact h4 { font-size: 13.5px; margin: 0; }
@@ -720,3 +720,61 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .maptip { max-width: 190px; }
   .hud-hint { top: 80px; font-size: 11px; }
 }
+
+/* At night the desk dims with the city: the same paper in evening light. Text stays dark, so every chart reads the same. */
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #e8e3d8; }
+@property --panel { syntax: '<color>'; inherits: true; initial-value: #eeeae1; }
+@property --panel-2 { syntax: '<color>'; inherits: true; initial-value: #f6f3ec; }
+@property --sunk { syntax: '<color>'; inherits: true; initial-value: #ece8df; }
+@property --line { syntax: '<color>'; inherits: true; initial-value: #e1dbcf; }
+@property --line-2 { syntax: '<color>'; inherits: true; initial-value: #cec6b6; }
+@property --text-2 { syntax: '<color>'; inherits: true; initial-value: #56514a; }
+@property --text-3 { syntax: '<color>'; inherits: true; initial-value: #8c8579; }
+.app { background: var(--bg); transition: --bg 1.6s ease, --panel 1.6s ease, --panel-2 1.6s ease, --sunk 1.6s ease, --line 1.6s ease, --line-2 1.6s ease, --text-2 1.6s ease, --text-3 1.6s ease; }
+.app.night { --bg: #bdb6a8; --panel: #c7c0b2; --panel-2: #d0cabd; --sunk: #c2bbad; --line: #b3ab9b; --line-2: #a0988a; --text-2: #48433c; --text-3: #6c665b; }
+@media (prefers-reduced-motion: reduce) { .app { transition: none; } }
+
+/* The strike dock: when it opens, Authorise strike breathes once or twice so it's clear what the choice is. */
+.act.strike.pulse { animation: strikepulse 1.6s ease-in-out 3; }
+@keyframes strikepulse {
+  0%, 100% { box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), 0 0 0 0 rgba(200, 40, 30, 0); }
+  50% { box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), 0 0 0 7px rgba(200, 40, 30, 0.2); }
+}
+@media (prefers-reduced-motion: reduce) { .act.strike.pulse { animation: none; } }
+
+/* Phones: the strike dock and the final decision, smaller and see-through so the city stays visible. */
+@media (max-width: 760px), (max-height: 520px) {
+  .strike-dock.open { right: auto; gap: 4px; padding: 4px; background: rgba(251, 250, 246, 0.5); }
+  .strike-dock.open .act { flex: 0 0 auto; padding: 7px 12px; font-size: 12px; }
+  .act.strike.tab { padding: 7px 12px; font-size: 12.5px; }
+  .sheet { background: rgba(40, 30, 22, 0.25); backdrop-filter: none; align-items: end; padding-bottom: 12px; }
+  .sheet-card { width: calc(100% - 20px); padding: 12px 14px; gap: 8px; border-radius: 14px; background: rgba(246, 243, 236, 0.84); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .sheet-card h2 { font-size: 17px; }
+  .sheet-card p { font-size: 12px; line-height: 1.4; margin: 0; }
+  .sheet-nums b { font-size: 19px; }
+  .sheet-nums div { padding: 6px 8px; }
+  .sheet-nums span { font-size: 9.5px; }
+  .sheet-actions { gap: 10px; }
+  .sheet-actions .hold { width: 84px; height: 84px; }
+}
+
+/* A phone on its side: one thin row on top, and the map fills the rest of the screen. The panels are a scroll away below. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .top { flex-wrap: nowrap; padding: 4px 10px; gap: 8px; min-height: 0; }
+  .brand span, button.explored { display: none; }
+  .brand b { font-size: 13px; }
+  .targets { order: 0; width: auto; margin: 0; }
+  .targets .stories-btn { padding: 4px 10px; font-size: 12px; }
+  .top-right { gap: 6px; }
+  .top-right button { font-size: 12px; }
+  .map { height: calc(100vh - 44px); height: calc(100dvh - 44px); min-height: 0; }
+  .guide.compact { width: min(560px, calc(100% - 20px)); }
+  .storycard.chip { bottom: 12px; left: auto; right: 12px; }
+  .sheet-card { width: min(540px, calc(100% - 20px)); max-height: calc(100% - 16px); overflow-y: auto; }
+  .hud-zoom { bottom: 8px; }
+}
+
+/* The map on its own, filling the screen. */
+.app.mapfull .map { position: fixed !important; inset: 0; z-index: 50; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; }
+.app.mapfull .top, .app.mapfull .mobile-tabs, .app.mapfull .mobile-panel { visibility: hidden; }
+.hud-zoom .full-btn { font-size: 14px; line-height: 1; }

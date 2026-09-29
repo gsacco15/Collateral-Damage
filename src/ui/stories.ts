@@ -19,6 +19,7 @@ const DISTRICTS: Record<string, Omit<PlaceStory, 'title' | 'kind'>> = {
   quarter: { line: 'The Weavers’ Quarter: small workshops downstairs, families upstairs. You can hear the looms from the street.', when: 'Always someone at home.' },
   market: { line: 'The souk and the bus station. Everything is for sale here, from phone cards to live chickens.', when: 'Packed from ten until two.' },
   tinhill: { line: 'Tin-roofed houses built by people who came here with nothing, one room at a time. Tin stops nothing.', when: 'Full at night.' },
+  desert: { line: 'An hour east on a dirt track: sand to the horizon, an old camp half buried by the wind, and a herding family who winter there with their goats. At night you can see every star.', when: 'The family is home at night; out with the flock by day.' },
   kilns: { line: 'The Kilnworks: brick kilns, a flour mill that never stops, and the freight line out of town. The chimneys smoke from before dawn; whole families work the brick yard together.', when: 'Early mornings at the kilns; the mill all night.' },
   groves: { line: 'Date palms, plastic greenhouses and a web of little channels fed by the canal. The same three families have farmed here for generations.', when: 'Dawn and dusk, out of the heat.' },
   camp: { line: 'Amal Camp: families who fled the fighting in the villages, in rows of white tents. Some arrived last week, some six years ago. Canvas stops nothing.', when: 'Full at night, and most of the day: there is nowhere else to be.' },
@@ -63,6 +64,11 @@ const PLACES: Record<string, Omit<PlaceStory, 'title' | 'kind'>> = {
   'Water tanks': { line: 'Filled by truck every morning. When the truck is late, everyone knows.', when: '' },
   'Camp Taps': { line: 'Six taps for the whole camp. Girls carry the water home in yellow jerrycans, talking the whole way.', when: 'Early morning and evening.' },
   'Dirt Pitch': { line: 'Goals made from tent poles. The camp league has eleven teams, all named after villages that are not there any more.', when: 'Late afternoon.' },
+  'Old barracks': { line: 'Built for training, years ago, and left. One room now has carpets on the floor and a gas stove: Salem’s family winters here.', when: 'Full at night.' },
+  Guardhouse: { line: 'Empty. Someone has painted a goat on the door.', when: '' },
+  'Old radio mast': { line: 'Rusting, and no longer connected to anything. It is the tallest thing for twenty kilometres; the herders steer by it.', when: '' },
+  'Water tower': { line: 'Filled by a tanker once a month. The goats know the sound of the truck.', when: '' },
+  'Herders’ tents': { line: 'Black goat-hair tents, the way Salem’s grandfather made them. Tea is always on.', when: 'Evenings, when the flock comes in.' },
   'Fountain Circus': { line: 'The roundabout at the heart of the city. The fountain has not worked in years, but people still meet "at the fountain".', when: 'Rush hours.' },
 };
 
@@ -97,7 +103,7 @@ function districtAt(w: World, x: number, y: number): string {
 }
 
 /** The briefed targets, told as the people around them. Narrated when you pick one from the top bar. */
-export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | 'mill' | 'pump' | 'camp', { title: string; text: string }> = {
+export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | 'mill' | 'pump' | 'camp' | 'mosque' | 'outpost', { title: string; text: string }> = {
   warehouse: {
     title: 'Warehouse 14',
     text: "Intelligence says rockets are stored inside, moved in over three nights last month, and that they could be fired from here within days. Across the street, Mrs Haddad's class of seven-year-olds is learning to count to a hundred. Round the corner, Karim is filling the fuel tanker he drives out to the villages every morning. Whatever is decided here, they are the ones who will live with it.",
@@ -125,6 +131,14 @@ export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 
   station: {
     title: 'The bus station',
     text: "A minibus is reported to be carrying weapons, one of the forty that leave from here every day. Students going home for the weekend. A grandmother with a crate of chickens. Drivers calling out the names of their towns. Which minibus? Nobody knows for sure. And nothing here stops a fragment.",
+  },
+  mosque: {
+    title: 'The Great Mosque, Friday noon',
+    text: "The most senior commander in the region, a man planners have hunted for years, is said to come here for Friday prayers. This is the only hour anyone can say where he will be. It is also the hour when the mosque, the courtyard and the lanes around it hold more people than anywhere else in the city: shopkeepers, grandfathers, boys in their best clothes, holding their fathers' hands. The mosque is on the no-strike list. Whether any target could justify this is not a question Jev can answer. Someone very senior would have to sign.",
+  },
+  outpost: {
+    title: 'The old camp in the desert',
+    text: "An hour east on a dirt track: sand banks, an obstacle course, a radio mast. Satellite images show a training camp. The images are two years old. The men left long ago. Salem's family winters here now: his wife, his mother, four children and two hundred goats. The tallest thing for twenty kilometres is the mast, and the children climb it to look for the tanker bringing water. From above, a tent looks like a tent. Nothing in the picture says who is inside.",
   },
   mill: {
     title: 'The Flour Mill',

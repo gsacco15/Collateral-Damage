@@ -14,6 +14,96 @@ export interface CityOpts {
 }
 
 const visible = (v: Rect, q: Rect, pad = 30) => q.x < v.x + v.w + pad && q.x + q.w > v.x - pad && q.y < v.y + v.h + pad && q.y + q.h > v.y - pad;
+/** The old camp in the desert, kept clear of dunes. */
+const POST_CLEAR: Rect = { x: 1160, y: 166, w: 200, h: 172 };
+
+/** Out in the desert: the dirt track, the old camp's sand banks and tyres, a burnt-out truck, the goat pen, the well, tyre tracks. */
+function drawDesert(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) {
+  if (v.x + v.w < w.city.w) return;
+  const e = w.extras;
+  // The track: packed, paler sand with two ruts.
+  for (const rd of w.roads) {
+    if (rd.name !== 'Desert track' || !visible(v, rd.rect)) continue;
+    const q = rd.rect;
+    g.fillStyle = 'rgba(214,196,160,0.9)';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = 'rgba(150,120,80,0.28)';
+    g.fillRect(q.x, q.y + 1.3, q.w, 0.6);
+    g.fillRect(q.x, q.y + q.h - 1.9, q.w, 0.6);
+  }
+  // Tyre tracks wandering across the sand.
+  g.strokeStyle = 'rgba(140,110,75,0.25)';
+  g.lineWidth = 0.35;
+  for (const t of e.tracks) {
+    for (const off of [-0.9, 0.9]) {
+      g.beginPath();
+      t.forEach(([x, y], i) => (i ? g.lineTo(x, y + off) : g.moveTo(x, y + off)));
+      g.stroke();
+    }
+  }
+  // The old firing range: banks of sand, lit on one side.
+  for (const q of e.berms) {
+    if (!visible(v, q)) continue;
+    g.fillStyle = 'rgba(150,112,70,0.28)';
+    g.fillRect(q.x + sh.dx * 1.5, q.y + sh.dy * 1.5, q.w, q.h);
+    g.fillStyle = '#d9c197';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = 'rgba(255,246,226,0.4)';
+    g.fillRect(q.x, q.y, q.w, q.h * 0.4);
+  }
+  // Half-buried tyres, the old obstacle course.
+  for (const t of e.tyres) {
+    g.strokeStyle = '#2f2b27';
+    g.lineWidth = 0.55;
+    g.beginPath();
+    g.arc(t.x, t.y, 1, 0, Math.PI * 2);
+    g.stroke();
+  }
+  // A burnt-out truck.
+  for (const q of e.wrecks) {
+    g.fillStyle = 'rgba(40,30,20,0.3)';
+    g.fillRect(q.x + sh.dx * 1.4, q.y + sh.dy * 1.4, q.w, q.h);
+    g.fillStyle = '#4a3a30';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.fillStyle = '#7a4a32';
+    g.fillRect(q.x + 0.4, q.y + 0.6, q.w - 0.8, q.h * 0.35);
+  }
+  // The goat pen: a ring of thorn branches, the goats inside.
+  for (const p of e.pens) {
+    g.strokeStyle = 'rgba(110,85,55,0.8)';
+    g.lineWidth = 0.7;
+    g.setLineDash([0.8, 0.5]);
+    g.beginPath();
+    g.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    g.stroke();
+    g.setLineDash([]);
+  }
+  for (const [i, gt] of e.goats.entries()) {
+    g.fillStyle = i % 5 === 0 ? '#f0ebe0' : i % 3 === 0 ? '#6b5642' : '#2f2925';
+    g.beginPath();
+    g.ellipse(gt.x, gt.y, 0.6, 0.35, i, 0, Math.PI * 2);
+    g.fill();
+  }
+  // The well: a ring of stones.
+  for (const wl of e.wells) {
+    g.fillStyle = '#a3978a';
+    g.beginPath();
+    g.arc(wl.x, wl.y, 1.5, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#2d2a28';
+    g.beginPath();
+    g.arc(wl.x, wl.y, 0.8, 0, Math.PI * 2);
+    g.fill();
+  }
+  // A small solar panel, for the phone and one light.
+  for (const q of e.panels) {
+    g.fillStyle = '#2f4a6a';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.strokeStyle = 'rgba(255,255,255,0.3)';
+    g.lineWidth = 0.05;
+    g.strokeRect(q.x, q.y, q.w, q.h);
+  }
+}
 
 export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, shadowCtx: CanvasRenderingContext2D | null) {
   const sh = sun(o.hour);
@@ -25,18 +115,20 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
   // Beyond the city: one ring of outlying blocks, then open sand and dunes.
   g.fillStyle = laid(g, 'sand', 5);
   g.fillRect(v.x - 50, v.y - 50, v.w + 100, v.h + 100);
+  const c = w.city;
   g.fillStyle = C.street;
-  g.fillRect(-60, -60, w.w + 120, w.h + 120);
+  g.fillRect(-60, -60, c.w + 120, c.h + 120);
   g.fillStyle = laid(g, 'ground', 2);
-  for (let bx = -1; bx < Math.ceil(w.w / 110) + 1; bx++)
-    for (let by = -1; by < Math.ceil(w.h / 110) + 1; by++) {
+  for (let bx = -1; bx < Math.ceil(c.w / 110) + 1; bx++)
+    for (let by = -1; by < Math.ceil(c.h / 110) + 1; by++) {
       const x = bx * 110 - 50;
       const y = by * 110 - 50;
-      if (x > -120 && x < w.w + 10 && y > -120 && y < w.h + 10) continue;
-      if (x + 110 < -60 || y + 110 < -60 || x > w.w + 60 || y > w.h + 60) continue;
-      g.fillRect(Math.max(x + 6, -54), Math.max(y + 6, -54), Math.min(98, w.w + 54 - Math.max(x + 6, -54)), Math.min(98, w.h + 54 - Math.max(y + 6, -54)));
+      if (x > -120 && x < c.w + 10 && y > -120 && y < c.h + 10) continue;
+      if (x + 110 < -60 || y + 110 < -60 || x > c.w + 60 || y > c.h + 60) continue;
+      g.fillRect(Math.max(x + 6, -54), Math.max(y + 6, -54), Math.min(98, c.w + 54 - Math.max(x + 6, -54)), Math.min(98, c.h + 54 - Math.max(y + 6, -54)));
     }
   drawDunes(g, w, v);
+  drawDesert(g, w, v, sh);
   // Blocks.
   for (const bl of w.blocks) {
     if (!visible(v, bl)) continue;
@@ -449,9 +541,69 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
   }
 }
 
+/** Around Warehouse 14 and the school, where the story starts: a few small things that make it a real street. */
+function drawOpening(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) {
+  const e = w.extras;
+  if (v.x > 330 || v.x + v.w < 150 || v.y > 540 || v.y + v.h < 450) return;
+  // Zebra crossings.
+  g.fillStyle = 'rgba(250,248,242,0.85)';
+  for (const q of e.stripes) g.fillRect(q.x, q.y, q.w, q.h);
+  // Warehouse 14's loading doors, a truck backed up to one, crates by the wall.
+  g.fillStyle = '#4a4640';
+  for (const q of e.doors) g.fillRect(q.x, q.y, q.w, q.h);
+  for (const q of e.trucks) {
+    g.fillStyle = 'rgba(40,30,20,0.28)';
+    g.fillRect(q.x + sh.dx * 1.6, q.y + sh.dy * 1.6, q.w, q.h);
+    g.fillStyle = '#d9d2c2';
+    g.fillRect(q.x, q.y, q.w, q.h * 0.72);
+    g.fillStyle = '#5f6f6a';
+    g.fillRect(q.x + 0.2, q.y + q.h * 0.74, q.w - 0.4, q.h * 0.26);
+    g.fillStyle = 'rgba(40,50,60,0.55)';
+    g.fillRect(q.x + 0.5, q.y + q.h - 0.9, q.w - 1, 0.6);
+  }
+  for (const q of e.crates) {
+    g.fillStyle = 'rgba(40,30,20,0.25)';
+    g.fillRect(q.x + sh.dx * 0.7, q.y + sh.dy * 0.7, q.w, q.h);
+    g.fillStyle = '#b58a55';
+    g.fillRect(q.x, q.y, q.w, q.h);
+    g.strokeStyle = 'rgba(90,60,30,0.6)';
+    g.lineWidth = 0.1;
+    g.beginPath();
+    g.moveTo(q.x, q.y);
+    g.lineTo(q.x + q.w, q.y + q.h);
+    g.moveTo(q.x + q.w, q.y);
+    g.lineTo(q.x, q.y + q.h);
+    g.stroke();
+  }
+  // A kiosk on the corner: cigarettes, sweets, phone cards, under a striped awning.
+  for (const q of e.kiosks) {
+    g.fillStyle = 'rgba(40,30,20,0.25)';
+    g.fillRect(q.x + sh.dx * 1, q.y + sh.dy * 1, q.w, q.h);
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = i % 2 ? '#efe7d6' : '#2e6f73';
+      g.fillRect(q.x + (i * q.w) / 4, q.y, q.w / 4, q.h);
+    }
+  }
+  // The school yard: hopscotch in chalk, a game circle, a painted mural along the wall.
+  g.strokeStyle = 'rgba(255,255,255,0.85)';
+  g.lineWidth = 0.14;
+  for (const q of e.hopscotch) g.strokeRect(q.x, q.y, q.w, q.h);
+  for (const c of e.rings) {
+    g.beginPath();
+    g.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  const paint = ['#c9a44c', '#4f7291', '#b8574a', '#6f8f6a', '#8a5a8a', '#d98b4a'];
+  e.mural.forEach((q, i) => {
+    g.fillStyle = paint[i % paint.length];
+    g.fillRect(q.x, q.y, q.w, q.h);
+  });
+}
+
 /** The railway, wagons, the camp fence, bricks drying, scrap, irrigation, washing lines, beehives. */
 function drawOutskirts(g: CanvasRenderingContext2D, w: World, v: Rect, sh: Sun) {
   const e = w.extras;
+  drawOpening(g, w, v, sh);
   if (v.y + v.h < 700) return;
   // The railway: a ballast bed, sleepers, two rails.
   const rl = e.rail;
@@ -1149,7 +1301,10 @@ function drawDunes(g: CanvasRenderingContext2D, w: World, v: Rect) {
     const len = 40 + r() * 90;
     const depth = len * (0.22 + r() * 0.18);
     const rot = -0.5 + r() * 0.35; // the wind shapes them all the same way
-    if (x > -90 - len / 2 && x < w.w + 90 + len / 2 && y > -90 - depth && y < w.h + 90 + depth) continue;
+    if (x > -90 - len / 2 && x < w.city.w + 90 + len / 2 && y > -90 - depth && y < w.city.h + 90 + depth) continue;
+    // Keep the old camp and the track out to it clear.
+    if (x > POST_CLEAR.x - len / 2 && x < POST_CLEAR.x + POST_CLEAR.w + len / 2 && y > POST_CLEAR.y - depth && y < POST_CLEAR.y + POST_CLEAR.h + depth) continue;
+    if (y > 200 - depth && y < 260 + depth && x < POST_CLEAR.x) continue;
     if (!visible(v, { x: x - len, y: y - len, w: len * 2, h: len * 2 }, 0)) continue;
     g.save();
     g.translate(x, y);

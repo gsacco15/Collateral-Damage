@@ -545,6 +545,9 @@ export class Model3D {
       clothB: new THREE.MeshStandardMaterial({ color: '#e9e4d8', roughness: 1, side: THREE.DoubleSide }),
       clothC: new THREE.MeshStandardMaterial({ color: '#4f7291', roughness: 1, side: THREE.DoubleSide }),
       lamp: new THREE.MeshStandardMaterial({ color: '#4d4a46', roughness: 0.6, metalness: 0.3 }),
+      goathair: new THREE.MeshStandardMaterial({ color: '#3b322b', roughness: 1, flatShading: true, side: THREE.DoubleSide }),
+      sandbank: new THREE.MeshStandardMaterial({ color: '#d9c197', roughness: 1, flatShading: true }),
+      burnt: new THREE.MeshStandardMaterial({ color: '#3f322a', roughness: 1 }),
       plastic: new THREE.MeshStandardMaterial({ color: '#eeeae2', roughness: 0.7 }),
       wood: new THREE.MeshStandardMaterial({ color: '#8a6a4a', roughness: 1 }),
       rail: new THREE.MeshStandardMaterial({ color: '#4a4640', roughness: 0.8 }),
@@ -621,6 +624,37 @@ export class Model3D {
           put(scrapMats[Math.floor(r() * 4)], boxGeo(0, 0, 0, 1 + r() * 2.2, 0.5 + r() * 1.2, 0.8 + r() * 1.4).rotateY(r() * 3).rotateX((r() - 0.5) * 0.6).translate(p.x + Math.cos(a) * d, 0.4 + (1 - d / p.r) * 0.8, p.y + Math.sin(a) * d));
         }
       for (const h of ex.hives) put(M.plastic, boxGeo(h.x + 0.8, 0.45, h.y + 0.65, 1.3, 0.9, 1.1));
+      // By Warehouse 14: a truck backed up to the loading doors, crates by the wall, a kiosk on the corner.
+      for (const q of ex.trucks) {
+        put(M.plastic, boxGeo(q.x + q.w / 2, 1.9, q.y + q.h * 0.36, q.w, 2.4, q.h * 0.72));
+        put(M.green, boxGeo(q.x + q.w / 2, 1.3, q.y + q.h * 0.87, q.w - 0.2, 1.8, q.h * 0.26));
+        put(M.lamp, boxGeo(q.x + q.w / 2, 0.4, q.y + q.h / 2, q.w - 0.4, 0.8, q.h - 0.6));
+      }
+      for (const q of ex.crates) put(M.wood, boxGeo(q.x + q.w / 2, 0.8, q.y + q.h / 2, q.w, 1.6, q.h));
+      // Out in the desert: sand banks, half-buried tyres, the burnt-out truck, the goats in their thorn pen, the well.
+      for (const q of ex.berms) put(M.sandbank, new THREE.CylinderGeometry(q.h / 2, q.h / 2, q.w, 6, 1).rotateZ(Math.PI / 2).scale(1, 0.55, 1).translate(q.x + q.w / 2, 0.3, q.y + q.h / 2));
+      for (const t of ex.tyres) put(M.burnt, new THREE.TorusGeometry(0.75, 0.28, 5, 10).rotateX(Math.PI / 2 - 0.5).translate(t.x, 0.35, t.y));
+      for (const q of ex.wrecks) {
+        put(M.burnt, boxGeo(q.x + q.w / 2, 1.1, q.y + q.h * 0.4, q.w, 1.6, q.h * 0.8));
+        put(M.rust, boxGeo(q.x + q.w / 2, 1.4, q.y + q.h * 0.9, q.w - 0.3, 1.9, q.h * 0.22));
+      }
+      for (const p of ex.pens)
+        for (let i = 0; i < 40; i++) {
+          const a = (i / 40) * Math.PI * 2;
+          put(M.wood, boxGeo(0, 0.5, 0, 0.5, 1, 1.2).rotateY(-a).translate(p.x + Math.cos(a) * p.r, 0, p.y + Math.sin(a) * p.r));
+        }
+      const goatMats = [M.clothB, M.goathair, M.wood];
+      for (const [i, gt] of ex.goats.entries()) {
+        const m = goatMats[i % 5 === 0 ? 0 : i % 3 === 0 ? 2 : 1];
+        put(m, boxGeo(0, 0.55, 0, 0.9, 0.45, 0.35).rotateY(i).translate(gt.x, 0, gt.y));
+        put(m, boxGeo(0.5, 0.8, 0, 0.3, 0.3, 0.22).rotateY(i).translate(gt.x, 0, gt.y));
+      }
+      for (const wl of ex.wells) put(M.sandbank, new THREE.CylinderGeometry(1.5, 1.6, 0.8, 12, 1, true).translate(wl.x, 0.4, wl.y));
+      for (const q of ex.panels) put(M.tarp, boxGeo(0, 0, 0, q.w, 0.06, q.h).rotateX(-0.5).translate(q.x + q.w / 2, 0.7, q.y + q.h / 2));
+      for (const q of ex.kiosks) {
+        put(M.door0, boxGeo(q.x + q.w / 2, 1.1, q.y + q.h / 2, q.w, 2.2, q.h));
+        put(M.clothB, boxGeo(q.x + q.w / 2, 2.35, q.y + q.h / 2 + 0.3, q.w + 0.6, 0.1, q.h + 0.9));
+      }
       const cloths = [M.clothA, M.clothB, M.clothC];
       for (const [ax, az, bx, bz] of ex.washing) {
         put(M.line, boxGeo((ax + bx) / 2, 1.7, (az + bz) / 2, Math.max(0.03, Math.abs(bx - ax)), 0.03, 0.03));
@@ -758,11 +792,33 @@ export class Model3D {
         put(M.soot, new THREE.CylinderGeometry(q.w * 0.36, q.w * 0.36, 1.2, 10).translate(cx, b.h - 0.4, cz));
         continue;
       }
+      if (b.kind === 'mast') {
+        // A lattice radio mast: three legs, cross bracing, guy wires down to the sand.
+        const q = b.rects[0];
+        const cx = q.x + q.w / 2;
+        const cz = q.y + q.h / 2;
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2;
+          put(M.lamp, new THREE.CylinderGeometry(0.06, 0.09, b.h, 4).translate(cx + Math.cos(a) * 0.6, b.h / 2, cz + Math.sin(a) * 0.6));
+        }
+        for (let y = 2; y < b.h; y += 2.5) put(M.lamp, new THREE.TorusGeometry(0.6, 0.04, 3, 3).rotateX(Math.PI / 2).translate(cx, y, cz));
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2 + 0.5;
+          const gx = cx + Math.cos(a) * 12;
+          const gz = cz + Math.sin(a) * 12;
+          const len = Math.hypot(12, b.h * 0.8);
+          const wire = new THREE.CylinderGeometry(0.02, 0.02, len, 3);
+          wire.rotateZ(Math.atan2(12, b.h * 0.8));
+          wire.rotateY(-a);
+          put(M.line, wire.translate((cx + gx) / 2, b.h * 0.4, (cz + gz) / 2));
+        }
+        continue;
+      }
       if (b.kind === 'tent' || (b.material === 'canvas' && b.kind !== 'greenhouse')) {
-        // Canvas over a ridge pole, low walls, now and then a blue tarp thrown over the top.
+        // Canvas over a ridge pole, low walls, now and then a blue tarp thrown over the top. Herders' tents are black goat hair.
         for (const q of b.rects) {
-          put(M.canvas, tentGeo(q, b.h));
-          if (r() < 0.2) put(M.tarp, tentGeo({ x: q.x + q.w * 0.3, y: q.y - 0.05, w: q.w * 0.4, h: q.h + 0.1 }, b.h + 0.03));
+          put(p === 'kraft' ? M.goathair : M.canvas, tentGeo(q, b.h));
+          if (r() < 0.2 && p !== 'kraft') put(M.tarp, tentGeo({ x: q.x + q.w * 0.3, y: q.y - 0.05, w: q.w * 0.4, h: q.h + 0.1 }, b.h + 0.03));
         }
         continue;
       }
@@ -861,7 +917,8 @@ export class Model3D {
         if (b.kind === 'home' && p !== 'terracotta' && r() < 0.14) {
           const tx = q.x + 2 + r() * (q.w - 4);
           const tz = q.y + 2 + r() * (q.h - 4);
-          const mat = r() < 0.5 ? M.plastic : M.wood;
+          r(); // (kept so the rest of the roofs stay as they were)
+          const mat = M.plastic; // cheap white plastic, the same everywhere
           put(mat, boxGeo(tx, b.h + 0.72, tz, 1.1, 0.06, 1.1));
           put(mat, boxGeo(tx, b.h + 0.36, tz, 0.12, 0.72, 0.12));
           for (const [cx, cz] of [

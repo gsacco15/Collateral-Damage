@@ -29,11 +29,13 @@ export type Kind =
   | 'silo'
   | 'tent'
   | 'greenhouse'
-  | 'watertank';
+  | 'watertank'
+  | 'barracks'
+  | 'mast';
 
 export type Material = 'concrete' | 'brick' | 'mud' | 'tin' | 'steel' | 'canvas';
 export type Paper = 'white' | 'grey' | 'kraft' | 'tin' | 'terracotta';
-export type DistrictId = 'terraces' | 'civic' | 'oldtown' | 'workshops' | 'quarter' | 'market' | 'garden' | 'tinhill' | 'canal' | 'kilns' | 'groves' | 'camp';
+export type DistrictId = 'terraces' | 'civic' | 'oldtown' | 'workshops' | 'quarter' | 'market' | 'garden' | 'tinhill' | 'canal' | 'kilns' | 'groves' | 'camp' | 'desert';
 export type SpaceKind = 'plaza' | 'market' | 'park' | 'pitch' | 'yard' | 'playground' | 'cemetery' | 'courtyard' | 'busstation' | 'field' | 'brickyard' | 'scrapyard' | 'distribution';
 
 export interface Rect {
@@ -103,7 +105,7 @@ export interface District {
 }
 
 /** The four briefed targets, or any building by id (`b:123`). */
-export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | 'mill' | 'pump' | 'camp' | `b:${number}` | `g:${number}_${number}`;
+export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | 'mill' | 'pump' | 'camp' | 'mosque' | 'outpost' | `b:${number}` | `g:${number}_${number}`;
 /** In the list of ruins, the boulevard bridge (which isn't a building) once it has been dropped. */
 export const BRIDGE_RUIN = -1;
 export interface Target {
@@ -145,11 +147,30 @@ export interface Extras {
   channels: Rect[]; // irrigation in the groves
   washing: [number, number, number, number][]; // lines strung between tents
   hives: { x: number; y: number }[];
+  // Around Warehouse 14 and the school, where the story starts.
+  doors: Rect[]; // loading doors
+  trucks: Rect[];
+  crates: Rect[];
+  kiosks: Rect[];
+  stripes: Rect[]; // zebra crossings
+  hopscotch: Rect[];
+  rings: { x: number; y: number; r: number }[]; // a game circle painted on the yard
+  mural: Rect[];
+  // Out in the desert: the old camp.
+  berms: Rect[]; // sand banks of the old firing range
+  tyres: { x: number; y: number }[]; // the old obstacle course
+  wrecks: Rect[]; // a burnt-out truck
+  pens: { x: number; y: number; r: number }[]; // the goat pen
+  goats: { x: number; y: number }[];
+  wells: { x: number; y: number }[];
+  tracks: [number, number][][]; // tyre tracks in the sand
+  panels: Rect[]; // a small solar panel
 }
 
 export interface World {
   w: number;
   h: number;
+  city: Rect; // the city itself; the rest of the world east of it is desert
   seed: number;
   districts: District[];
   roads: Road[];
@@ -175,6 +196,10 @@ export interface World {
 
 export const CITY_W = 1000;
 export const CITY_H = 900;
+/** The world goes on east of the city, into the desert, as far as the old camp. */
+export const WORLD_W = 1420;
+/** The old camp in the desert, and the track out to it. */
+const POST: Rect = { x: 1180, y: 186, w: 160, h: 132 };
 export const CELL = 2;
 const V = [0, 120, 240, 360, 470, 580, 690, 800, 900, 1000];
 const H = [0, 115, 230, 350, 465, 580, 700, 900];
@@ -273,6 +298,8 @@ const M2_PER_PERSON: Record<Kind, number> = {
   tent: 5,
   greenhouse: 40,
   watertank: 0,
+  barracks: 45,
+  mast: 0,
 };
 const STACKED: Partial<Record<Kind, true>> = { home: true, apartment: true, villa: true, office: true, hospital: true };
 export const SHIELD: Record<Material, number> = { concrete: 0.42, brick: 0.55, mud: 0.66, tin: 0.9, steel: 0.5, canvas: 0.97 };
@@ -499,6 +526,18 @@ const STYLES: Record<Exclude<DistrictId, 'canal'>, Style> = {
     fill: 0,
     lanes: 0,
   },
+  desert: {
+    kind: () => 'barracks',
+    w: [20, 30],
+    d: [8, 10],
+    floors: () => 1,
+    material: () => 'concrete',
+    paper: () => 'grey',
+    gap: [10, 20],
+    rows: false,
+    fill: 0,
+    lanes: 0,
+  },
   tinhill: {
     kind: () => 'shack',
     w: [4.5, 8],
@@ -535,6 +574,7 @@ export function buildCity(seed = 7): World {
     if (y === 580) cut(806, CITY_W + 120);
     if (y === 900) cut(696, 794);
     if (!bridges.has(y)) cut(696, 794);
+    cut(1006, CITY_W + 120); // east of East Road there is only desert
     for (const [a, b] of spans) {
       const land = (s: number, e: number) => roads.push({ rect: { x: s, y: y - hw(y), w: e - s, h: hw(y) * 2 }, name: H_NAMES[y], kind: y === BLVD ? 'boulevard' : 'street', horizontal: true });
       if (a < 696 && b > 794) {
@@ -553,6 +593,8 @@ export function buildCity(seed = 7): World {
     for (const [a, b] of spans) roads.push({ rect: { x: x - 6, y: a, w: 12, h: b - a }, name: V_NAMES[x], kind: 'street', horizontal: false });
   }
 
+  // A dirt track out into the desert, to the old camp.
+  roads.push({ rect: { x: 1006, y: 227, w: POST.x - 1006, h: 6 }, name: 'Desert track', kind: 'street', horizontal: true });
   // A footbridge over the canal, the camp's way into town.
   roads.push({ rect: { x: 696, y: 798, w: 98, h: 4 }, name: 'Camp footbridge', kind: 'bridge', horizontal: true });
 
@@ -746,7 +788,39 @@ export function buildCity(seed = 7): World {
 
   // ---- The outskirts, placed by hand, from their own random stream so the city inside South Road stays as it was.
   cur = ro;
-  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [] };
+  const ex: Extras = { rail: { x0: -120, x1: 566, y: RAIL_Y }, wagons: [], fences: [], stacks: [], scrap: [], channels: [], washing: [], hives: [], doors: [], trucks: [], crates: [], kiosks: [], stripes: [], hopscotch: [], rings: [], mural: [], berms: [], tyres: [], wrecks: [], pens: [], goats: [], wells: [], tracks: [], panels: [] };
+  // The opening scene: Warehouse 14's loading doors, a truck at the bay and crates by the wall; a kiosk on the corner;
+  // zebra crossings where the children cross; hopscotch, a game circle and a mural in the school yard. Fixed, not random.
+  {
+    const q = warehouse.rects[0];
+    for (let i = 0; i < 3; i++) ex.doors.push({ x: q.x + 4 + i * 12, y: q.y + q.h - 0.4, w: 7, h: 0.9 });
+    ex.trucks.push({ x: q.x + 17.5, y: q.y + q.h + 0.8, w: 3.2, h: 6.4 });
+    for (const [dx, dy] of [
+      [-5.5, 4],
+      [-5.5, 6],
+      [-3.6, 4.6],
+      [-5.5, 11],
+      [-3.6, 11.5],
+    ])
+      ex.crates.push({ x: q.x + dx, y: q.y + dy, w: 1.6, h: 1.6 });
+    ex.kiosks.push({ x: 247, y: 472.2, w: 3, h: 2.6 });
+    for (let x = 234.8; x < 245.4; x += 1.7) ex.stripes.push({ x, y: 481, w: 0.85, h: 5 }); // across School Road
+    for (let y = 459.8; y < 470.4; y += 1.7) ex.stripes.push({ x: 268, y, w: 6, h: 0.85 }); // across Cotton Street, by the school gate
+    const yd = spaces.find((sp) => sp.name === 'School yard')!.rect;
+    for (const [i, two] of [
+      [0, false],
+      [1, false],
+      [2, true],
+      [3, false],
+      [4, true],
+      [5, false],
+    ] as [number, boolean][]) {
+      if (two) ex.hopscotch.push({ x: yd.x + yd.w - 9, y: yd.y + 3 + i * 1.8, w: 1.8, h: 1.8 }, { x: yd.x + yd.w - 7.2, y: yd.y + 3 + i * 1.8, w: 1.8, h: 1.8 });
+      else ex.hopscotch.push({ x: yd.x + yd.w - 8.1, y: yd.y + 3 + i * 1.8, w: 1.8, h: 1.8 });
+    }
+    ex.rings.push({ x: yd.x + yd.w * 0.45, y: yd.y + yd.h * 0.62, r: 4 });
+    for (let x = yd.x + 1, i = 0; x < yd.x + yd.w - 1; x += 3, i++) ex.mural.push({ x, y: yd.y + yd.h - 0.9, w: 3, h: 0.7 });
+  }
   reserved.push({ x: -120, y: RAIL_Y - 6, w: 700, h: 12 });
   // The Kilnworks, north of the line: the flour mill and its silos, the workers' hostel.
   special({ kind: 'factory', material: 'steel', paper: 'grey', rects: [{ x: 404, y: 716, w: 74, h: 34 }], floors: 2, h: 14, district: 'kilns', name: 'Flour Mill', landmark: true });
@@ -813,6 +887,46 @@ export function buildCity(seed = 7): World {
     if (b) ex.washing.push([a.x + a.w, a.y + a.h + 0.6, b.x, b.y + b.h + 0.6]);
   }
 
+  // ---- Out in the desert, an hour's drive east on a dirt track: a camp built for training, years ago.
+  // Its sand banks and obstacle course are half buried now. A herding family winters in the old barracks.
+  const P = POST;
+  special({ kind: 'barracks', material: 'concrete', paper: 'grey', rects: [{ x: P.x + 18, y: P.y + 16, w: 36, h: 10 }], floors: 1, h: 3.4, district: 'desert', name: 'Old barracks', landmark: true });
+  special({ kind: 'barracks', material: 'concrete', paper: 'grey', rects: [{ x: P.x + 18, y: P.y + 34, w: 36, h: 10 }], floors: 1, h: 3.4, district: 'desert' });
+  special({ kind: 'barracks', material: 'mud', paper: 'kraft', rects: [{ x: P.x + 62, y: P.y + 16, w: 14, h: 12 }], floors: 1, h: 3, district: 'desert', name: 'Guardhouse' });
+  special({ kind: 'mast', material: 'steel', paper: 'grey', rects: [{ x: P.x + 84, y: P.y + 20, w: 3, h: 3 }], floors: 1, h: 26, district: 'desert', name: 'Old radio mast', landmark: true });
+  special({ kind: 'watertank', material: 'steel', paper: 'white', rects: [{ x: P.x + 64, y: P.y + 38, w: 8, h: 8 }], floors: 1, h: 9, district: 'desert', round: true, name: 'Water tower' });
+  // The herders: three goat-hair tents, the pen, the well, a solar panel for the phone.
+  for (let i = 0; i < 3; i++) special({ kind: 'tent', material: 'canvas', paper: 'kraft', rects: [{ x: P.x + 30 + i * 13, y: P.y + 58, w: 9, h: 5.5 }], floors: 1, h: 2.2, district: 'desert', name: i === 0 ? 'Herders’ tents' : undefined, landmark: i === 0 });
+  ex.pens.push({ x: P.x + 88, y: P.y + 66, r: 11 });
+  for (let i = 0; i < 26; i++) {
+    const a = ro() * Math.PI * 2;
+    const d = Math.sqrt(ro()) * 9;
+    ex.goats.push({ x: P.x + 88 + Math.cos(a) * d, y: P.y + 66 + Math.sin(a) * d });
+  }
+  ex.wells.push({ x: P.x + 12, y: P.y + 64 });
+  ex.panels.push({ x: P.x + 32, y: P.y + 66, w: 2.4, h: 1.4 });
+  // The old training ground, south of the huts: sand banks, a line of half-buried tyres, a burnt-out truck.
+  for (let i = 0; i < 4; i++) ex.berms.push({ x: P.x + 16 + i * 34, y: P.y + 92, w: 26, h: 4 });
+  ex.berms.push({ x: P.x + 4, y: P.y + 120, w: 150, h: 5 });
+  for (let i = 0; i < 12; i++) ex.tyres.push({ x: P.x + 22 + i * 4.2, y: P.y + 106 + (i % 2) * 2.4 });
+  ex.wrecks.push({ x: P.x + 118, y: P.y + 34, w: 3.4, h: 8 });
+  // Tyre tracks: the old ones round the course, a fresh one to the tents.
+  ex.tracks.push([
+    [1006, 236],
+    [P.x - 40, 238],
+    [P.x + 8, P.y + 50],
+    [P.x + 40, P.y + 70],
+  ]);
+  ex.tracks.push([
+    [P.x + 10, P.y + 100],
+    [P.x + 70, P.y + 112],
+    [P.x + 140, P.y + 100],
+    [P.x + 150, P.y + 60],
+    [P.x + 100, P.y + 44],
+  ]);
+  // A low wall of piled sand around it all, open to the track.
+  walls.push({ x: P.x, y: P.y, w: P.w, h: 0.8 }, { x: P.x, y: P.y + P.h, w: P.w, h: 0.8 }, { x: P.x + P.w, y: P.y, w: 0.8, h: P.h }, { x: P.x, y: P.y, w: 0.8, h: 34 }, { x: P.x, y: P.y + 54, w: 0.8, h: P.h - 54 });
+
   for (const bl of blocks) if (outside(bl.district)) fillBlock(bl, ro);
   // The quays go on south, past the groves and the camp.
   for (let y = OUT + 4; y < CITY_H; y += 11) {
@@ -852,7 +966,7 @@ export function buildCity(seed = 7): World {
     const q = rd.rect;
     const busy = rd.kind === 'boulevard' || (rd.kind === 'bridge' && Math.abs(q.y + q.h / 2 - BLVD) < 1) ? 1 : 0;
     if (rd.horizontal) {
-      for (let x = Math.max(0, q.x); x < Math.min(CITY_W, q.x + q.w); x += 9) {
+      for (let x = Math.max(0, q.x); x < Math.min(WORLD_W, q.x + q.w); x += rd.name === 'Desert track' ? 40 : 9) {
         traffic.push(x, q.y + q.h * 0.3, busy, x + 4, q.y + q.h * 0.7, busy);
       }
     } else {
@@ -861,7 +975,7 @@ export function buildCity(seed = 7): World {
   }
 
   // ---- The occupancy grid, for fragments blocked by buildings and walls.
-  const gridW = Math.ceil(CITY_W / CELL);
+  const gridW = Math.ceil(WORLD_W / CELL);
   const gridH = Math.ceil(CITY_H / CELL);
   const grid = new Int16Array(gridW * gridH);
   const stamp = (q: Rect, v: number) => {
@@ -881,6 +995,8 @@ export function buildCity(seed = 7): World {
   // And one on each part of the outskirts: a mill that never stops, a pump the groves live on, one tent among hundreds.
   const mill = buildings.find((b) => b.name === 'Flour Mill')!;
   const pump = buildings.find((b) => b.name === 'Pump House')!;
+  const barracks = buildings.find((b) => b.name === 'Old barracks')!;
+  const mosque = buildings.find((b) => b.name === 'Great Mosque')!;
   const tent = buildings.filter((b) => b.kind === 'tent').sort((a, b) => Math.hypot(a.cx - 872, a.cy - 846) - Math.hypot(b.cx - 872, b.cy - 846))[0];
   const targets: Target[] = [
     {
@@ -1004,6 +1120,28 @@ export function buildCity(seed = 7): World {
       stored: false,
       aimHeight: tent.h,
     },
+    {
+      id: 'mosque',
+      name: 'Great Mosque, Friday noon',
+      short: 'Great Mosque',
+      note: 'The most senior commander in the region is said to come to Friday prayers here. A protected site, and at noon on a Friday the fullest place in the city.',
+      rect: mosque.rects[0],
+      buildingId: mosque.id,
+      hardness: 8,
+      stored: false,
+      aimHeight: mosque.h,
+    },
+    {
+      id: 'outpost',
+      name: 'The old camp in the desert',
+      short: 'Desert camp',
+      note: 'Satellite images show a training camp. The images are two years old. A herding family winters here now.',
+      rect: barracks.rects[0],
+      buildingId: barracks.id,
+      hardness: 8,
+      stored: false,
+      aimHeight: barracks.h,
+    },
   ];
 
   // ---- Places to discover.
@@ -1020,6 +1158,7 @@ export function buildCity(seed = 7): World {
     { id: 'kilns', name: 'The Kilnworks', x: 200, y: 790, blurb: 'Brick kilns, a flour mill, the railway sidings.' },
     { id: 'groves', name: 'The Groves', x: 638, y: 760, blurb: 'Date palms, greenhouses and irrigation by the canal.' },
     { id: 'camp', name: 'Amal Camp', x: 900, y: 760, blurb: 'Tents for families who fled the villages. Canvas stops nothing.' },
+    { id: 'desert', name: 'The Desert', x: POST.x + POST.w / 2, y: POST.y - 26, blurb: 'Sand, an old camp, a herding family and their goats.' },
   ];
   const places: Place[] = [];
   for (const d of districts) places.push({ id: `d:${d.id}`, name: d.name, x: d.x, y: d.y, kind: 'district', note: d.blurb });
@@ -1031,14 +1170,15 @@ export function buildCity(seed = 7): World {
     if (seen.has(rd.name)) continue;
     seen.add(rd.name);
     const q = rd.rect;
-    const x = rd.horizontal ? Math.min(Math.max(q.x + q.w / 2, 40), CITY_W - 40) : q.x + q.w / 2;
+    const x = rd.horizontal ? Math.min(Math.max(q.x + q.w / 2, 40), WORLD_W - 40) : q.x + q.w / 2;
     const y = rd.horizontal ? q.y + q.h / 2 : Math.min(Math.max(q.y + q.h / 2, 40), CITY_H - 40);
     places.push({ id: `r:${rd.name}`, name: rd.name, x, y, kind: 'street' });
   }
 
   const world: World = {
-    w: CITY_W,
+    w: WORLD_W,
     h: CITY_H,
+    city: { x: 0, y: 0, w: CITY_W, h: CITY_H },
     seed,
     districts,
     roads,
@@ -1142,6 +1282,10 @@ export function placeName(b: Building): string {
       return 'Stadium stand';
     case 'shelter':
       return 'Bus shelter';
+    case 'barracks':
+      return 'An old barracks hut';
+    case 'mast':
+      return 'A radio mast';
     case 'factory':
       return 'A factory';
     case 'kiln':

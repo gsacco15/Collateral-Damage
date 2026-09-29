@@ -50,7 +50,7 @@ describe('the city', () => {
   it('has its districts, landmarks, targets and hazards', () => {
     expect(city.districts.map((d) => d.id)).toEqual(expect.arrayContaining(['terraces', 'civic', 'oldtown', 'workshops', 'quarter', 'market', 'garden', 'tinhill']));
     for (const n of ['Cotton Street School', 'City Hospital', 'Great Mosque', 'Warehouse 14', 'Tower 7']) expect(named(n)).toBeTruthy();
-    expect(city.targets.map((t) => t.id)).toEqual(['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station', 'mill', 'pump', 'camp']);
+    expect(city.targets.map((t) => t.id)).toEqual(['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station', 'mill', 'pump', 'camp', 'mosque', 'outpost']);
     expect(city.buildings.filter((b) => b.hazard).length).toBe(4);
     expect(city.buildings.filter((b) => b.protected).length).toBeGreaterThanOrEqual(5);
   });
@@ -207,7 +207,7 @@ describe('sign-off and search', () => {
     expect(s.pk).toBe(e.pk);
   });
   it('covers every target', () => {
-    for (const id of ['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station', 'mill', 'pump', 'camp'] as TargetId[]) {
+    for (const id of ['warehouse', 'tower', 'yard', 'bridge', 'house', 'depot', 'office', 'station', 'mill', 'pump', 'camp', 'mosque', 'outpost'] as TargetId[]) {
       const e = run({ target: id, weapon: 'medium' }, 60);
       expect(e.pk).toBeGreaterThanOrEqual(0);
       expect(e.counts.length).toBe(60);

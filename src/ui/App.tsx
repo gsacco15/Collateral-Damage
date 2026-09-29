@@ -66,6 +66,9 @@ const SPEEDS = [0.5, 1, 2, 4, 8, 16, 32, 64, Infinity];
 const HEADING_NAMES: Record<number, string> = { 0: '↑ N', 45: '↗ NE', 90: '→ E', 135: '↘ SE', 180: '↓ S', 225: '↙ SW', 270: '← W', 315: '↖ NW' };
 const DISCOVERED_KEY = 'cd.discovered';
 const INTRO_KEY = 'cd.intro';
+const SESSION_START = performance.now();
+const PHONE = '(max-width: 760px), (max-height: 520px)';
+let lastTrain = 0;
 type StepId = 'target' | 'weapon' | 'approach' | 'intel' | 'rules' | 'decide';
 
 interface GuideStep {
@@ -133,17 +136,41 @@ export default function App() {
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
   const [guide, setGuide] = useState<number | null>(null);
   // Phones: no opening card and no big guide cards; the guide starts at once and the narrator does the telling.
-  const [phone, setPhone] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 760px)').matches);
+  // A phone in either orientation: narrow when upright, short when turned on its side.
+  const [phone, setPhone] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(PHONE).matches);
   useEffect(() => {
-    const mq = matchMedia('(max-width: 760px)');
+    const mq = matchMedia(PHONE);
     const on = () => setPhone(mq.matches);
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
   }, []);
   const mobileTimers = useRef<number[]>([]);
+  // The map on its own, filling the screen: real full screen where the browser allows it (not on iPhone), otherwise the whole window.
+  const [mapFull, setMapFull] = useState(false);
+  const toggleMapFull = () => {
+    const on = !mapFull;
+    setMapFull(on);
+    const d = document as Document & { webkitExitFullscreen?: () => void; webkitFullscreenElement?: Element };
+    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+    try {
+      if (on) {
+        if (el.requestFullscreen) void el.requestFullscreen().catch(() => {});
+        else el.webkitRequestFullscreen?.();
+      } else if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      else if (d.webkitFullscreenElement) d.webkitExitFullscreen?.();
+    } catch {
+      /* the window-filling map is enough */
+    }
+    window.setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+  };
+  useEffect(() => {
+    const off = () => !document.fullscreenElement && setMapFull((f) => (f ? false : f));
+    document.addEventListener('fullscreenchange', off);
+    return () => document.removeEventListener('fullscreenchange', off);
+  }, []);
   const [intro, setIntro] = useState(() => {
     try {
-      if (matchMedia('(max-width: 760px)').matches) return false;
+      if (matchMedia(PHONE).matches) return false;
       return !localStorage.getItem(INTRO_KEY) && !location.hash;
     } catch {
       return true;
@@ -353,6 +380,7 @@ export default function App() {
       camp: world.blocks.filter((q) => q.district === 'camp'),
       groves: world.blocks.filter((q) => q.district === 'groves'),
       rail: [{ x: world.extras.rail.x0, y: world.extras.rail.y - 3, w: world.extras.rail.x1 - world.extras.rail.x0, h: 6 }],
+      desert: [{ x: world.city.w + 40, y: -300, w: world.w - world.city.w + 300, h: world.h + 600 }],
       taps: world.spaces.filter((q) => q.kind === 'plaza' && q.district === 'camp').map((q) => q.rect),
       bricks: rects((x) => x.kind === 'brickyard', world.spaces),
       pump: world.buildings.filter((b) => b.name === 'Pump House').flatMap((b) => b.rects),
@@ -360,6 +388,7 @@ export default function App() {
   }, [world]);
   const districtHere = (x: number, y: number) => {
     if (Math.abs(x - riverX(y)) < world.river.width / 2 + 20) return 'canal';
+    if (x > world.city.w + 40) return 'desert';
     const bl = world.blocks.find((q) => x >= q.x - 8 && x <= q.x + q.w + 8 && y >= q.y - 8 && y <= q.y + q.h + 8);
     return bl?.district ?? '';
   };
@@ -417,12 +446,15 @@ export default function App() {
           if (!pick || lvl > pick[1]) pick = [bed, lvl, panOf(x)];
         }
       const local = pick?.[1] ?? 0;
-      const base = (1 - Math.min(0.6, local * 1.2)) * 0.7; // the city dips under the place you're at
+      // Out in the desert the city falls away behind you: wind over sand, a goat bell, nothing else.
+      const away = Math.max(0, Math.min(1, (v.cx - (world.city.w + 30)) / 140));
+      const base = (1 - Math.min(0.6, local * 1.2)) * 0.7 * (1 - away * 0.85); // the city dips under the place you're at
       const levels: Partial<Record<Bed, number>> = {
         'amb-city-day': day * base * hush,
         'amb-city-night': (1 - day) * base * hush,
         'amb-cell-room': 0.18,
-        'amb-wind': close < 0.15 ? (1 - close / 0.15) * 0.35 * hush : 0,
+        'amb-wind': close < 0.15 ? (1 - close / 0.15) * 0.35 * hush * (1 - away) : 0,
+        'amb-desert': away * 0.5 * hush,
       };
       const pans: Partial<Record<Bed, number>> = {};
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
@@ -437,12 +469,17 @@ export default function App() {
         const dawn = h >= 5 && h < 7.5;
         const nearTo = (qs: Rect[], m: number) => near(qs)[0] < m;
         const out = at === 'kilns' || at === 'camp' || at === 'groves';
-        const pool: [CityCue, number][] = night
-          ? [['cue-dog', 1], ...(at === 'tinhill' || at === 'camp' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : []), ['cue-train', nearTo(zones.rail, 200) ? 0.6 : 0]]
+        // The freight train: never in the first minute and a half, at most every four minutes. At night it carries across the whole city.
+        const nearRail = nearTo(zones.rail, 200);
+        const trainOk = performance.now() - SESSION_START > 90_000 && performance.now() - lastTrain > 240_000;
+        const pool: [CityCue, number][] = at === 'desert'
+          ? [['cue-goats', night ? 0.2 : 2], ['cue-dog', night ? 1 : 0.3], ['cue-canvas', 0.8]]
+          : night
+          ? [['cue-dog', 1], ...(at === 'tinhill' || at === 'camp' ? [['cue-generator', 2] as [CityCue, number]] : []), ...(at === 'canal' || Math.abs(v.cx - rx) < 60 ? [['cue-frogs', 2] as [CityCue, number]] : []), ['cue-train', trainOk ? (nearRail ? 0.8 : 0.35) : 0]]
           : dawn
             ? [['cue-rooster', at === 'tinhill' || at === 'oldtown' || out ? 2 : 1], ['cue-shutter', at === 'market' || at === 'oldtown' ? 2 : 0.5], ['cue-pigeons', 0.3], ['cue-pump', at === 'groves' ? 3 : 0], ['cue-jerrycan', nearTo(zones.taps, 60) ? 3 : 0], ['cue-bricks', at === 'kilns' ? 2 : 0]]
             : [
-                ['cue-train', nearTo(zones.rail, 200) ? 0.8 : 0],
+                ['cue-train', trainOk && nearRail ? 0.6 : 0],
                 ['cue-pump', at === 'groves' && (h < 10 || h >= 16) ? 2 : 0],
                 ['cue-canvas', at === 'camp' ? 2 : 0],
                 ['cue-jerrycan', nearTo(zones.taps, 60) && (h < 10 || h >= 17) ? 2.5 : 0],
@@ -460,7 +497,8 @@ export default function App() {
         const total = pool.reduce((n, [, w]) => n + w, 0);
         let r = Math.random() * total;
         const pick = pool.find(([, w]) => (r -= w) < 0)?.[0];
-        if (pick) sound.cue(pick, (Math.random() - 0.5) * 1.4, (pick === 'cue-siren' ? 0.1 : pick === 'cue-pigeons' ? 0.08 : 0.16) + 0.1 * close);
+        if (pick === 'cue-train') lastTrain = performance.now();
+        if (pick) sound.cue(pick, (Math.random() - 0.5) * 1.4, pick === 'cue-train' ? (nearRail ? 0.14 : 0.06) : (pick === 'cue-siren' ? 0.1 : pick === 'cue-pigeons' ? 0.08 : 0.16) + 0.1 * close);
       }
     };
     tick();
@@ -1292,28 +1330,6 @@ export default function App() {
     endStrike();
     setRuins([]);
   }
-  // Hold for the best hour: the day line (worked out for this plan at every hour, no search needed) says which
-  // hour hurts the fewest. The clock then runs forward to it over a second or two, so you see the day pass.
-  const holdTimer = useRef(0);
-  const holdForHour = () => {
-    if (!profile) return;
-    let h = 0;
-    profile.forEach((v, i) => {
-      if (v.p90 < profile[h].p90 || (v.p90 === profile[h].p90 && v.mean < profile[h].mean)) h = i;
-    });
-    setDayPlay(false);
-    window.clearInterval(holdTimer.current);
-    const goal = h + 0.5;
-    const steps = Math.round((((goal - plan.hour) % 24) + 24) % 24 * 2); // half-hours forward
-    let left = steps;
-    const dt = Math.max(40, Math.min(120, 2200 / Math.max(1, steps)));
-    holdTimer.current = window.setInterval(() => {
-      if (left-- <= 0) return window.clearInterval(holdTimer.current);
-      setPlanState((p) => ({ ...p, hour: left <= 0 ? goal : (Math.round(p.hour * 2) / 2 + 0.5) % 24 }));
-      setOutcome(null);
-    }, dt);
-    flash(`Holding until ${fmtHour(goal)}: for this plan, the hour that would hurt the fewest people (${profile[h].p90} at most, nine times in ten). Jev's search also tries other weapons and approaches.`);
-  };
   // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
   const callOff = () => {
     setConfirm(false);
@@ -1469,13 +1485,10 @@ export default function App() {
         </button>
       </Step>
 
-      <Step n={6} title="Decide" summary={lawful ? 'Release, hold, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
+      <Step n={6} title="Decide" summary={lawful ? 'Release, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
         <div className="decide">
           <button className="btn danger big" onClick={authorise} disabled={!lawful || striking || !est}>
             Authorise strike…
-          </button>
-          <button className="btn" onClick={holdForHour} disabled={!profile || striking}>
-            Hold for the best hour
           </button>
           <button className="btn calm" onClick={callOff} disabled={striking}>
             Call it off
@@ -1677,7 +1690,7 @@ export default function App() {
   );
 
   return (
-    <div className={`app m-${mobileTab}`}>
+    <div className={`app m-${mobileTab} ${nightness(shownPlan.hour) > 0.5 ? 'night' : ''} ${mapFull ? 'mapfull' : ''}`}>
       <header className="top">
         <div className="brand">
           <b>Collateral Damage</b>
@@ -1843,21 +1856,21 @@ export default function App() {
               <div className={`strike-dock ${strikeOpen ? 'open' : ''}`} role="group" aria-label="Decide">
                 {strikeOpen ? (
                   <>
-                    <button className="act strike" onClick={authorise} disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
+                    <button className="act strike pulse" onClick={authorise} disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
                       Authorise strike
                     </button>
-                    <button className="act wait" onClick={holdForHour} disabled={!profile}>
-                      Hold for best hour
-                    </button>
-                    <button className="act off" onClick={callOff}>
+                    <button
+                      className="act off"
+                      onClick={() => {
+                        setStrikeOpen(false);
+                        callOff();
+                      }}
+                    >
                       Call off
-                    </button>
-                    <button className="dock-close" onClick={() => setStrikeOpen(false)} aria-label="Close">
-                      ×
                     </button>
                   </>
                 ) : (
-                  <button className="act strike tab" onClick={() => setStrikeOpen(true)} title="Authorise, hold or call off">
+                  <button className="act strike tab" onClick={() => setStrikeOpen(true)} title="Authorise or call off">
                     Strike ▸
                   </button>
                 )}
@@ -1925,6 +1938,9 @@ export default function App() {
             )}
 
             <div className="hud-zoom">
+              <button className="full-btn" onClick={toggleMapFull} aria-pressed={mapFull} title={mapFull ? 'Leave full screen' : 'Map full screen'}>
+                {mapFull ? '✕' : '⤢'}
+              </button>
               {view === 'model' ? (
                 <>
                   <button onClick={() => modelRef.current?.preset('drone')}>Drone</button>
@@ -1942,7 +1958,7 @@ export default function App() {
                   <button onClick={() => (focusRef.current = { ...mapRef.current!.view, zoom: mapRef.current!.view.zoom / 1.4 })} aria-label="Zoom out">
                     −
                   </button>
-                  <button onClick={() => (focusRef.current = { cx: world.w / 2, cy: world.h / 2, zoom: 1 })}>City</button>
+                  <button onClick={() => (focusRef.current = { cx: world.city.w / 2, cy: world.city.h / 2, zoom: 1 })}>City</button>
                   <button
                     onClick={() => {
                       const c = targetCentre(target);
