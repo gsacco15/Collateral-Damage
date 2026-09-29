@@ -17,6 +17,10 @@ npm test           # Jev's tests
 npm run build      # static site in dist/
 ```
 
+### Deploy (Vercel)
+
+A static site: Jev runs entirely in the browser, in web workers, so there is no server to set up. In Vercel, **Add New → Project**, import this repository, and deploy; `vercel.json` sets the build (Jev's tests, then `vite build`) and the output folder. Every push then gets its own preview URL.
+
 Share a view with `#at=x,y,zoom` (metres and zoom), plus optionally `&h=hour&d=friday`, e.g. `/#at=585,200,4.2&h=12.5&d=friday` for Friday prayers at the Great Mosque.
 
 ## Jev, the engine (`src/jev/`)
