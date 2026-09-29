@@ -174,6 +174,10 @@ class SoundEngine {
   }
 
   /** Called on taps and key presses until the browser lets audio run. True once it does. */
+  /** Whether the browser is letting audio play right now. */
+  running() {
+    return this.ctx?.state === 'running';
+  }
   wake(): boolean {
     if (!this.enabled) return true;
     if (this.ctx?.state === 'running') return true;

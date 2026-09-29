@@ -202,9 +202,34 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // The opening card tells itself: its narration is queued as the page opens. Browsers hold all sound until the
   // first tap or key press, so it starts the moment you touch the page (or straight away, where the browser allows).
+  const introVoice = useRef<{ start: number; dur: number } | null>(null);
   useEffect(() => {
-    if (intro && sound.enabled) void sound.voice(0);
+    if (!intro || !sound.enabled) return;
+    const t0 = performance.now();
+    void sound.voice(0).then((d) => {
+      if (d && sound.running()) introVoice.current = { start: t0, dur: d };
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Step in: sound on, the card tells its story, then moves on to the guide by itself. The button becomes Skip,
+  // which wakes up after a moment, so one click can't jump straight past the card.
+  const [telling, setTelling] = useState<{ ms: number; skip: boolean } | null>(null);
+  const tellTimer = useRef(0);
+  const stepIn = async () => {
+    if (telling) {
+      if (!telling.skip) return;
+      window.clearTimeout(tellTimer.current);
+      return closeIntro(true);
+    }
+    if (!sound.enabled) sound.setEnabled(true);
+    const iv = introVoice.current;
+    const elapsed = iv ? (performance.now() - iv.start) / 1000 : Infinity;
+    let left = iv && elapsed < iv.dur - 1 ? iv.dur - elapsed : 0;
+    if (!left) left = await sound.voice(0); // not playing yet (or already over): tell it now
+    const ms = left ? left * 1000 + 700 : 5000;
+    setTelling({ ms, skip: false });
+    window.setTimeout(() => setTelling((t) => (t ? { ...t, skip: true } : t)), 1500);
+    tellTimer.current = window.setTimeout(() => closeIntro(true), ms);
+  };
   // Closing the opening card: it lifts away and the city clears, then the guide begins.
   const [introLeaving, setIntroLeaving] = useState(false);
   const closeIntro = (step: boolean) => {
@@ -213,8 +238,10 @@ export default function App() {
     } catch {
       /* fine: it just shows again next time */
     }
-    // Stepping in turns the sound on: the guide is told, not read. (This click also lets the browser play it.)
+    window.clearTimeout(tellTimer.current);
+    setTelling(null);
     if (step && !sound.enabled) sound.setEnabled(true);
+    if (!step) sound.stopVoice(); // looking around: the card's story stops with it
     setIntroLeaving(true);
     window.setTimeout(() => {
       setIntro(false);
@@ -2563,13 +2590,18 @@ export default function App() {
             </p>
             <p className="powered">Jev is powered by TypeSafe&rsquo;s System One model. The city, the numbers and the people are invented, for teaching; this is an explainer, not a targeting tool.</p>
             <div className="intro-actions">
-              <button className="btn primary big" onClick={() => closeIntro(true)} autoFocus>
-                Step in →
+              <button className={`btn primary big ${telling ? 'telling' : ''}`} onClick={() => void stepIn()} disabled={!!telling && !telling.skip} autoFocus>
+                {telling ? 'Skip →' : 'Step in →'}
               </button>
               <button className="btn" onClick={() => closeIntro(false)}>
                 Look around first
               </button>
             </div>
+            {telling && (
+              <div className="intro-progress" aria-hidden>
+                <i style={{ animationDuration: `${telling.ms}ms` }} />
+              </div>
+            )}
           </div>
         </div>
       )}

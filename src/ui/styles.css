@@ -819,3 +819,10 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .app.mapfull .map { position: fixed !important; inset: 0; z-index: 50; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; }
 .app.mapfull .top, .app.mapfull .mobile-tabs, .app.mapfull .mobile-panel { visibility: hidden; }
 .hud-zoom .full-btn { font-size: 14px; line-height: 1; }
+
+/* While the opening card tells its story: a thin line fills until it moves on to the guide. */
+.intro-progress { height: 2px; border-radius: 2px; background: rgba(40, 30, 20, 0.08); overflow: hidden; margin-top: 2px; }
+.intro-progress i { display: block; height: 100%; width: 100%; background: #cf5a2b; transform-origin: left; animation: introProgress linear forwards; }
+@keyframes introProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.intro-actions .btn.primary.big.telling { animation: none; }
+.intro-actions .btn.primary.big:disabled { opacity: 0.55; cursor: default; }
