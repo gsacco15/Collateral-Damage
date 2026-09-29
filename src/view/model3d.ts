@@ -1277,6 +1277,7 @@ export class Model3D {
     const q = new THREE.Quaternion();
     const v = new THREE.Vector3();
     const one = new THREE.Vector3(1, 1, 1);
+    const shopFront = new THREE.Vector3(2.6, 1.9, 1);
     const c = new THREE.Color();
     let n = 0;
     let i = 0;
@@ -1291,7 +1292,9 @@ export class Model3D {
       if (u >= lit) continue;
       const tone = (u * 997) % 1;
       c.set(k === 'hospital' || k === 'clinic' ? '#dcecff' : k === 'mosque' ? '#d8f5dc' : tone < 0.12 ? '#a8bcff' : tone < 0.55 ? '#ffc877' : '#ffdca0');
-      this.winMesh.setMatrixAt(n, m.compose(v.set(w.x, w.y, w.z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), w.yaw), one));
+      // A shop's ground floor is its shopfront: a wide lit window onto the street in the evening.
+      const front = k === 'shop' && w.y < 2;
+      this.winMesh.setMatrixAt(n, m.compose(v.set(w.x, front ? 1.3 : w.y, w.z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), w.yaw), front ? shopFront : one));
       this.winMesh.setColorAt(n, c);
       n++;
     }

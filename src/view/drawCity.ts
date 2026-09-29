@@ -2,6 +2,7 @@
 // Used twice: once into a large world-sized cache for smooth panning, and again sharp for the current view.
 import { BRIDGE_RUIN, riverX, rng, shownCount, type Building, type Population, type Rect, type Space, type World } from '../jev';
 import { C, grade, nightness, shade, sun, type Sun } from './paper';
+import { streetLights } from './streetLights';
 import { laid } from './textures';
 
 export interface CityOpts {
@@ -258,6 +259,30 @@ export function drawCityTop(g: CanvasRenderingContext2D, w: World, o: CityOpts) 
   for (const wl of w.walls) if (visible(v, wl)) g.fillRect(wl.x, wl.y, Math.max(wl.w, 0.55), Math.max(wl.h, 0.55));
   for (const t of w.trees) if (t.x > v.x - 10 && t.x < v.x + v.w + 10 && t.y > v.y - 10 && t.y < v.y + v.h + 10) drawTree(g, t.x, t.y, t.r, t.kind, sh);
   for (const b of w.buildings) if (visible(v, b.rects[0], 10)) drawBuilding(g, b, sh, o.damaged.has(b.id), o.scale);
+  // Street lights: a thin post on the kerb, its arm out over the road, and a long shadow.
+  g.lineCap = 'round';
+  for (const l of streetLights(w)) {
+    if (l.px < v.x - 5 || l.px > v.x + v.w + 5 || l.py < v.y - 5 || l.py > v.y + v.h + 5) continue;
+    g.strokeStyle = 'rgba(40,30,20,0.18)';
+    g.lineWidth = 0.22;
+    g.beginPath();
+    g.moveTo(l.px, l.py);
+    g.lineTo(l.px + sh.dx * 6, l.py + sh.dy * 6);
+    g.stroke();
+    g.strokeStyle = '#5c5751';
+    g.lineWidth = 0.18;
+    g.beginPath();
+    g.moveTo(l.px, l.py);
+    g.lineTo(l.x, l.y);
+    g.stroke();
+    g.fillStyle = '#4d4a46';
+    g.beginPath();
+    g.arc(l.px, l.py, 0.3, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#e9e2cf';
+    g.fillRect(l.x - 0.3, l.y - 0.3, 0.6, 0.6);
+  }
+  g.lineCap = 'butt';
 }
 
 /** Paper grain, the colour of the hour, and lights at night. Screen-space, after the city. */
@@ -361,25 +386,9 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
       g.fillStyle = grd;
       g.fillRect(x - r, y - r, r * 2, r * 2);
     };
-    for (let x = 12; x < w.w; x += 24) {
-      lamp(x, 350 - 10.5, 7, 0.42);
-      lamp(x, 350 + 10.5, 7, 0.42);
-    }
-    for (let y = 10; y < w.h; y += 26) {
-      lamp(riverX(y) - 24, y, 6, 0.35);
-      lamp(riverX(y) + 24, y, 6, 0.35);
-    }
-    for (const l of w.extras.lamps) lamp(l.x, l.y, 6, 0.45);
-    // And pools of light along the other streets, weaker and further apart (no lamp posts drawn, just their light).
-    for (const rd of w.roads) {
-      if (rd.kind !== 'street' || rd.rect.x > 1006) continue;
-      const q = rd.rect;
-      const h = q.w > q.h;
-      const len = h ? q.w : q.h;
-      for (let d = 16, k = 0; d < len; d += 34, k++) {
-        const side = k % 2 ? 1 : -1;
-        lamp(h ? q.x + d : q.x + q.w / 2 + side * (q.w / 2 - 1), h ? q.y + q.h / 2 + side * (q.h / 2 - 1) : q.y + d, 6, 0.3);
-      }
+    for (const l of streetLights(w)) {
+      if (l.flood) continue; // the works' floodlights are drawn above, cold white
+      lamp(l.x, l.y, l.r, 0.4);
     }
     g.globalCompositeOperation = 'source-over';
   }

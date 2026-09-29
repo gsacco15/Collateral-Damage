@@ -3,8 +3,9 @@
 // Everything is instanced: one draw per kind of thing, rebuilt each frame from the scene.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { riverX, type Rect, type World } from '../jev';
+import { type World } from '../jev';
 import { HULLS, type Ent } from './lifeScene';
+import { streetLights } from './streetLights';
 
 const box = (x: number, y: number, z: number, w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed();
 const up = new THREE.Vector3(0, 1, 0);
@@ -66,6 +67,7 @@ export class Life3D {
   private pools: THREE.InstancedMesh;
   private poolMat: THREE.MeshBasicMaterial;
   private dpoolMat!: THREE.MeshBasicMaterial;
+  private lampHeadMat!: THREE.MeshStandardMaterial;
 
   constructor(scene: THREE.Scene, world: World) {
     scene.add(this.group);
@@ -112,7 +114,7 @@ export class Life3D {
     add('mast', mergeGeometries([new THREE.CylinderGeometry(0.06, 0.18, 1, 4).translate(0, 0.5, 0).toNonIndexed(), box(0, 0.55, 0, 0.9, 0.03, 0.03), box(0, 0.75, 0, 0.6, 0.03, 0.03), box(0, 0.35, 0, 0.03, 0.03, 1.1)])!, std({ color: '#8a857e', roughness: 0.6 }), 20);
     add('chair', mergeGeometries([box(0, 0.45, 0, 0.5, 0.06, 0.5), box(0, 0.75, 0.22, 0.5, 0.6, 0.06), box(0, 0.22, 0, 0.4, 0.45, 0.4)])!, std({ color: '#8a6a48' }), 40, false);
     add('awning', mergeGeometries([box(0, 2.6, 0, 6, 0.06, 2.6).rotateX(0.22).toNonIndexed(), box(-2.9, 1.25, 1.2, 0.08, 2.5, 0.08), box(2.9, 1.25, 1.2, 0.08, 2.5, 0.08)])!, std({ side: THREE.DoubleSide }), 6);
-    this.dpoolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.dpoolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
     const dp = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), this.dpoolMat, 80);
     dp.count = 0;
     dp.frustumCulled = false;
@@ -120,27 +122,31 @@ export class Life3D {
     this.group.add(dp);
     this.meshes.dpool = dp;
 
-    // Night: pools of light on the ground under the street lights, and floodlights at the works. Fixed, faded in by the hour.
-    this.poolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), color: '#ffd28f', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
-    const spots: [number, number, number][] = [];
-    for (let x = 12; x < world.w; x += 24) spots.push([x, 350 - 10.5, 7], [x, 350 + 10.5, 7]);
-    for (let y = 10; y < world.h; y += 26) spots.push([riverX(y) - 24, y, 6], [riverX(y) + 24, y, 6]);
-    for (const rd of world.roads) {
-      if (rd.kind !== 'street' || rd.rect.x > 1006) continue;
-      const q: Rect = rd.rect;
-      const h = q.w > q.h;
-      const len = h ? q.w : q.h;
-      for (let d = 16, k = 0; d < len; d += 34, k++) {
-        const side = k % 2 ? 1 : -1;
-        spots.push([h ? q.x + d : q.x + q.w / 2 + side * (q.w / 2 - 1), h ? q.y + q.h / 2 + side * (q.h / 2 - 1) : q.y + d, 6]);
-      }
+    // Street lights (shared with the flat map): a paper post on the kerb, its arm over the road, a lamp head that
+    // glows after dark, and a smooth pool of light on the ground beneath it.
+    const lights = streetLights(world);
+    this.poolMat = new THREE.MeshBasicMaterial({ map: poolTexture(), color: '#ffd9a0', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+    this.pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), this.poolMat, lights.length);
+    const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.12, 6, 5).translate(0, 3, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
+    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.08, 0.08).translate(0.5, 0, 0), std({ color: '#5c5751', roughness: 0.6 }), lights.length);
+    this.lampHeadMat = new THREE.MeshStandardMaterial({ color: '#e9e2cf', emissive: '#ffd79a', emissiveIntensity: 0, roughness: 0.5 });
+    const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(0.7, 0.18, 0.4), this.lampHeadMat, lights.length);
+    lights.forEach((l, i) => {
+      const len = Math.hypot(l.x - l.px, l.y - l.py);
+      const yaw = Math.atan2(-(l.y - l.py), l.x - l.px);
+      const cold = l.flood;
+      this.pools.setMatrixAt(i, this.m.compose(this.v.set(l.x, 0.3, l.y), this.q.identity(), this.s.set(l.r, 1, l.r)));
+      this.pools.setColorAt(i, this.c.set(cold ? '#dfe9ff' : '#ffd9a0'));
+      posts.setMatrixAt(i, this.m.compose(this.v.set(l.px, 0, l.py), this.q.identity(), this.s.set(1, cold ? 1.4 : 1, 1)));
+      arms.setMatrixAt(i, this.m.compose(this.v.set(l.px, cold ? 8.3 : 5.95, l.py), this.q.setFromAxisAngle(up, yaw), this.s.set(Math.max(0.01, len), 1, 1)));
+      heads.setMatrixAt(i, this.m.compose(this.v.set(l.x, cold ? 8.2 : 5.85, l.y), this.q.setFromAxisAngle(up, yaw), this.s.set(1, 1, 1)));
+    });
+    for (const im of [this.pools, posts, arms, heads]) {
+      im.frustumCulled = false;
+      this.group.add(im);
     }
-    for (const b of world.buildings) if (b.kind === 'warehouse' || b.kind === 'factory') for (const [x, y] of [[b.rects[0].x, b.rects[0].y], [b.rects[0].x + b.rects[0].w, b.rects[0].y + b.rects[0].h]]) spots.push([x, y, 9]);
-    this.pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), this.poolMat, spots.length);
-    spots.forEach(([x, y, r], i) => this.pools.setMatrixAt(i, this.m.compose(this.v.set(x, 0.12, y), this.q.identity(), this.s.set(r, 1, r))));
-    this.pools.frustumCulled = false;
+    posts.castShadow = true;
     this.pools.renderOrder = 2;
-    this.group.add(this.pools);
   }
 
   private put(name: string, x: number, y: number, z: number, rotY: number, sx: number, sy: number, sz: number, col?: string, tiltX = 0) {
@@ -206,7 +212,7 @@ export class Life3D {
           break;
         case 'glow':
           this.put('lamp', e.x, e.y, e.z, 0, 1, 1, 1);
-          this.put('dpool', e.x, e.y, 0.12, 0, e.r * 1.4, 1, e.r * 1.4, '#7a5a30');
+          this.put('dpool', e.x, e.y, 0.3, 0, e.r * 1.4, 1, e.r * 1.4, '#ffcf8a');
           break;
         case 'duck':
           this.put('duck', e.x, e.y, 0, yawN(e.a), 1.8 * e.s, e.asleep ? 1.2 * e.s : 1.8 * e.s, 1.8 * e.s, e.drake ? '#8b7358' : '#9a8062');
@@ -244,7 +250,7 @@ export class Life3D {
           const yaw = e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
           for (const n2 of ['car', 'glass', 'wheels']) this.put(n2, e.x, e.y, 0, yaw, 1, 1, 1, n2 === 'car' ? '#f4f2ec' : undefined);
           this.put('lightbar', e.x, e.y, 0, yaw, 1, 1, 1, e.flash === 1 ? '#ff3a2a' : e.flash === 2 ? '#4a8cff' : '#6a5a6a');
-          if (e.flash) this.put('dpool', e.x, e.y, 0.14, 0, 7, 1, 7, e.flash === 1 ? '#7a1a10' : '#1a3a8a');
+          if (e.flash) this.put('dpool', e.x, e.y, 0.3, 0, 7, 1, 7, e.flash === 1 ? '#ff4a3a' : '#5a8cff');
           break;
         }
         case 'engine': {
@@ -266,13 +272,13 @@ export class Life3D {
           const f = 1 + e.flicker * 0.18;
           this.put('flame', e.x, e.y, 0.1, e.flicker, k, k * f, k);
           this.put('flamecore', e.x, e.y, 0.1, -e.flicker, k, k * (2 - f), k);
-          this.put('dpool', e.x, e.y, 0.13, 0, 8 * k * f, 1, 8 * k * f, '#a0501c');
+          this.put('dpool', e.x, e.y, 0.3, 0, 8 * k * f, 1, 8 * k * f, '#ff9a4a');
           break;
         }
         case 'post':
           this.put('pole', e.x, e.y, 0, 0, 1.4, 6.5, 1.4);
           this.put('posthead', e.x, e.y, 6.4, 0, 1, 1, 1, e.lit ? '#fff0c8' : '#6a6560');
-          if (e.lit) this.put('dpool', e.x, e.y, 0.12, 0, 10, 1, 10, '#6a5a3a');
+          if (e.lit) this.put('dpool', e.x, e.y, 0.3, 0, 10, 1, 10, '#ffe0a8');
           break;
         case 'antenna':
           this.put('mast', e.x, e.y, e.z, 0.4, 1.2, e.h, 1.2);
@@ -294,7 +300,9 @@ export class Life3D {
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
     (this.meshes.busglass.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 1.4;
-    this.poolMat.opacity = night * 0.55;
+    this.poolMat.opacity = night * 0.42;
+    this.dpoolMat.opacity = 0.55 * Math.max(0.3, night);
+    this.lampHeadMat.emissiveIntensity = night * 2.4;
     this.pools.visible = night > 0.05;
   }
 }
