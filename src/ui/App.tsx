@@ -1995,6 +1995,22 @@ export default function App() {
     void sound.narrate(ENDINGS[result].voice);
   };
   // The way in: tucked away at the very bottom of the page (the plan panel's foot on a desktop).
+  // The city's numbers at this hour, for the Settings panel: who lives here, where they are now, and the groups.
+  const GROUP_NAME: Record<string, string> = { help: 'Came back to help at a ruin', gate: 'Parents at a school gate', hospital: 'Families at the hospital', medic: 'Medics', security: 'Police', vendor: 'Street vendors', unhoused: 'Sleeping rough', elderly: 'Elderly, sitting out', displaced: 'Displaced families (aid queue)', visitor: 'Visitors off the bus', aid: 'Aid workers' };
+  const census = () => {
+    const HOMES = new Set(['home', 'apartment', 'villa', 'shack', 'tent', 'barracks']);
+    const groups = new Map<string, number>();
+    for (const c of popNow.crowds ?? []) groups.set(GROUP_NAME[c.kind] ?? c.kind, (groups.get(GROUP_NAME[c.kind] ?? c.kind) ?? 0) + c.n);
+    return {
+      hour: `${plan.day === 'friday' ? 'Friday' : 'weekday'} ${fmtHour(plan.hour)}`,
+      residents: Math.round(world.buildings.filter((b) => HOMES.has(b.kind)).reduce((t, b) => t + b.capacity, 0)),
+      inside: Math.round(popNow.expected.reduce((t, x) => t + x, 0)),
+      outdoors: Math.round(world.spaces.reduce((t, sp) => t + popNow.spaceQ[sp.id] * sp.capacity, 0)),
+      streets: Math.round(popNow.streetQ * (world.streetPts.length / 2)),
+      groups: [...groups].sort((a, b) => b[1] - a[1]),
+      drawn: mapRef.current?.crowd.visible().length ?? 0,
+    };
+  };
   // Switching the people model: Jev's last search was on the other model, so clear it rather than show numbers from
   // a different city.
   const switchPeople = (next: boolean) => {
@@ -3462,7 +3478,7 @@ export default function App() {
       </nav>
       <div className="mobile-panel">{mobileTab === 'plan' ? planDock : mobileTab === 'estimate' ? estimateDock : jevDock}</div>
       {secretBtn('phone')}
-      {settingsOpen && <SettingsPanel dark={dark} setDark={setDark} alive={alive} setAlive={switchPeople} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsPanel dark={dark} setDark={setDark} alive={alive} setAlive={switchPeople} onClose={() => setSettingsOpen(false)} census={census()} />}
     </div>
   );
 }

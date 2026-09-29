@@ -1,6 +1,6 @@
 // Settings and diagnostics, in one place: the look (light or dark), which people model runs (Classic or Living), and a
 // quick check that Jev's two server functions are there, have their key, and answer.
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 type Check = { state: 'idle' | 'running' | 'ok' | 'nokey' | 'offline' | 'error'; text: string; ms?: number };
 
@@ -23,7 +23,17 @@ async function probe(url: string, describe: (j: Record<string, unknown>) => stri
 
 const LABEL: Record<Check['state'], string> = { idle: 'Not tested', running: 'Testing…', ok: 'Working', nokey: 'No key', offline: 'Offline', error: 'Error' };
 
-export function SettingsPanel({ dark, setDark, alive, setAlive, onClose }: { dark: boolean; setDark: (v: boolean) => void; alive: boolean; setAlive: (v: boolean) => void; onClose: () => void }) {
+export interface Census {
+  hour: string;
+  residents: number;
+  inside: number;
+  outdoors: number;
+  streets: number;
+  groups: [string, number][];
+  drawn: number;
+}
+
+export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census }: { dark: boolean; setDark: (v: boolean) => void; alive: boolean; setAlive: (v: boolean) => void; onClose: () => void; census: Census }) {
   const [reads, setReads] = useState<Check>({ state: 'idle', text: 'Reads the conflicting reports on a target and judges how many people are inside.' });
   const [city, setCity] = useState<Check>({ state: 'idle', text: 'Judges how each district is behaving this hour (Living only).' });
   const [after, setAfter] = useState<Check>({ state: 'idle', text: 'Judges how the area round a strike responds (Living only).' });
@@ -98,6 +108,29 @@ export function SettingsPanel({ dark, setDark, alive, setAlive, onClose }: { dar
           <button className={`set-switch ${alive ? 'on' : ''}`} role="switch" aria-checked={alive} onClick={() => setAlive(!alive)}>
             <i />
           </button>
+        </div>
+
+        <div className="set-sec">
+          <b>City census · {census.hour}</b>
+          <div className="census">
+            <span>Residents (everyone who lives here)</span>
+            <b>{census.residents.toLocaleString()}</b>
+            <span>Inside buildings now</span>
+            <b>{census.inside.toLocaleString()}</b>
+            <span>Out in squares, the souk, yards, parks</span>
+            <b>{census.outdoors.toLocaleString()}</b>
+            <span>On the streets</span>
+            <b>{census.streets.toLocaleString()}</b>
+            {census.groups.map(([k, n]) => (
+              <Fragment key={k}>
+                <span className="grp">{k}</span>
+                <b>{n}</b>
+              </Fragment>
+            ))}
+            <span>Drawn on the map right now</span>
+            <b>{census.drawn.toLocaleString()}</b>
+          </div>
+          <p className="set-foot">{alive ? 'Living: groups listed separately. ' : 'Classic: no separate groups. '}The map draws a sample of those outside; the estimate counts them all.</p>
         </div>
 
         <div className="set-sec">

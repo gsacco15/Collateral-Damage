@@ -1723,6 +1723,25 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
     g.fillStyle = '#c0392b';
     g.fillRect(w.x - 0.62 * scale, w.y + bob - 0.08 * scale, 1.24 * scale, 0.16 * scale);
   }
+  if (w.role === 'aid') {
+    g.fillStyle = w.tint; // the vest
+    g.beginPath();
+    g.ellipse(w.x, w.y + bob, 0.5 * scale, 0.36 * scale, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  if (w.role === 'elderly') {
+    g.strokeStyle = '#5a4632'; // a walking stick
+    g.lineWidth = 0.1 * scale;
+    g.beginPath();
+    g.moveTo(w.x + 0.55 * scale, w.y + bob - 0.1 * scale);
+    g.lineTo(w.x + 0.8 * scale, w.y + bob + 0.55 * scale);
+    g.stroke();
+  }
+  if (w.role === 'displaced' || w.role === 'visitor') {
+    // A sack of flour or a jerry can from the distribution point; a suitcase off the bus.
+    g.fillStyle = w.role === 'displaced' ? (w.id % 2 ? '#e0d2b0' : '#e0c64a') : ['#6a4a3a', '#3a4a6b', '#2f2c29'][w.id % 3];
+    g.fillRect(w.x + 0.5 * scale, w.y + bob - 0.2 * scale, 0.5 * scale, 0.42 * scale);
+  }
   if (w.role === 'vendor') {
     const t = w.phase;
     const tx = w.x + Math.cos(t) * 0.75 * scale;

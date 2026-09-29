@@ -65,6 +65,14 @@ Small counted groups with their own hours, drawn in the scene and counted by the
 - **After the strike:** the result card reveals the truth ("Armed men were there: 3. Not counted in the civilian
   figures." or "No armed men were there. Whatever the reports said.").
 
+## More groups (built)
+- **Elderly** on doorsteps in the Old Town, quarter and terraces, mornings and evenings (walking stick).
+- **Displaced families** queuing at the camp's Distribution Point in the morning (sacks, jerry cans).
+- **Visitors** off the buses with their bags, morning and late afternoon (suitcase).
+- **Aid workers** at the Distribution Point and the camp clinic by day (pale blue vest).
+Settings shows a **City census** for the hour: residents (~17,400 in all homes), inside, outdoors, on the streets,
+each group, and how many are drawn on the map.
+
 ## Characters (2D and 3D)
 Police in dark blue with peaked caps; medics in white with a red band; vendors with a tray of goods; people
 sleeping rough with a bedroll at night. At a strike: a patrol car with lights, a fire engine and a white ambulance.

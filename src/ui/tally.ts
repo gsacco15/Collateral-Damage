@@ -35,6 +35,10 @@ const GROUP: Record<string, string> = {
   security: 'Police',
   vendor: 'Street vendors',
   unhoused: 'Sleeping rough',
+  elderly: 'Elderly, sitting out',
+  displaced: 'Displaced families',
+  visitor: 'Visitors off the bus',
+  aid: 'Aid workers',
 };
 
 export function tallyOf(world: World, o: Outcome, walkers: Walker[], cars: Car[], hour: number, friday: boolean): Tally {

@@ -106,6 +106,10 @@ export function personOut(w: Walker, hour: number, place?: string): Person {
   if (group === 'unhoused') return named(r, female, between(r, 12, 80), pick(r, ['sleeping rough, with nowhere else to go', 'living on the street since the war took the house']));
   if (group === 'help') return named(r, female, between(r, 14, 70), pick(r, ['came back to dig out the wounded', 'searching the rubble for a neighbour', 'carrying the injured out']));
   if (group === 'gate') return named(r, female, between(r, 22, 60), 'a parent, come to take their child home');
+  if (group === 'elderly') return named(r, female, between(r, 66, 90), pick(r, ['sitting out on the doorstep', 'watching the street, as every morning', 'talking with a neighbour']));
+  if (group === 'displaced') return named(r, female, between(r, 8, 70), pick(r, ['queuing for flour at the distribution point', 'carrying water back to the tent', 'waiting to register for aid']));
+  if (group === 'visitor') return named(r, female, between(r, 18, 70), pick(r, ['just off the bus, visiting family', 'arrived this morning to see a doctor', 'waiting for a lift with their bags']));
+  if (group === 'aid') return named(r, female, between(r, 23, 58), pick(r, ['an aid worker handing out flour', 'an aid worker registering families', 'a nurse at the camp clinic']));
   if (group === 'hospital') return named(r, female, between(r, 16, 75), 'waiting at the hospital for news of a relative');
   if (place && /school yard/i.test(place)) return named(r, female, between(r, 6, 12), 'playing in the school yard');
   if (place && /market|souk/i.test(place)) return named(r, female, household(r) || 30, 'shopping at the market');

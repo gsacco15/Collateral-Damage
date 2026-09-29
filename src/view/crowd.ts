@@ -48,7 +48,7 @@ export interface Walker {
   gone: boolean;
   d?: number; // Living: the district a pavement walker belongs to
   crowd?: string; // Living, after a strike: which crowd they're part of (at the ruin, a school gate, the hospital)
-  role?: 'security' | 'medic' | 'vendor' | 'unhoused'; // Living: who they are, drawn with what marks them out
+  role?: 'security' | 'medic' | 'vendor' | 'unhoused' | 'elderly' | 'displaced' | 'visitor' | 'aid'; // Living: who they are, drawn with what marks them out
 }
 
 export interface Car {
@@ -207,11 +207,13 @@ export class Crowd {
           wk.crowd = key;
           // Uniforms: the police in dark blue with a cap, medics in white with a red band. Those sleeping rough
           // in faded, dusty clothes. Everyone else as they are.
-          if (c.kind === 'security' || c.kind === 'medic' || c.kind === 'vendor' || c.kind === 'unhoused') wk.role = c.kind;
+          if (c.kind === 'security' || c.kind === 'medic' || c.kind === 'vendor' || c.kind === 'unhoused' || c.kind === 'elderly' || c.kind === 'displaced' || c.kind === 'visitor' || c.kind === 'aid') wk.role = c.kind;
           if (c.kind === 'security') (wk.cloth = '#2c3a55'), (wk.tint = '#2c3a55'), (wk.wear = 'cap');
           else if (c.kind === 'medic') (wk.cloth = '#f4f2ec'), (wk.tint = '#c0392b'), (wk.wear = 'cap');
           else if (c.kind === 'unhoused') wk.cloth = ['#8a7f70', '#6f665a', '#9a8f7a'][i % 3];
-          if (c.kind === 'unhoused' || c.kind === 'vendor' || c.kind === 'security') wk.speed *= 0.3; // mostly staying put
+          else if (c.kind === 'aid') wk.tint = '#5b8fc4'; // a pale blue vest
+          else if (c.kind === 'elderly') wk.cloth = ['#6f6a62', '#4f4a44', '#8a8378'][i % 3];
+          if (c.kind === 'unhoused' || c.kind === 'vendor' || c.kind === 'security' || c.kind === 'elderly' || c.kind === 'displaced' || c.kind === 'visitor') wk.speed *= 0.3; // mostly staying put
           this.walkers.push(wk);
         }
     }

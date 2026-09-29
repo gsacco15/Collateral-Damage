@@ -108,6 +108,8 @@ describe('Groups outside the usual pattern (Living)', () => {
     expect(day.filter((c) => c.kind === 'vendor').length).toBeGreaterThan(3);
     expect(night.some((c) => c.kind === 'vendor')).toBe(false);
     expect(day.some((c) => c.kind === 'security')).toBe(true);
+    const morning = population(city, 8, 'weekday', 6, {}, {}, [], true).crowds ?? [];
+    for (const k of ['elderly', 'displaced', 'visitor', 'aid']) expect(morning.some((c) => c.kind === k)).toBe(true);
   });
 });
 

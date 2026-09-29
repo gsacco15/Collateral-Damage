@@ -140,7 +140,7 @@ export interface Crowd {
   y: number;
   r: number;
   n: number;
-  kind: 'help' | 'gate' | 'hospital' | 'unhoused' | 'vendor' | 'security' | 'medic';
+  kind: 'help' | 'gate' | 'hospital' | 'unhoused' | 'vendor' | 'security' | 'medic' | 'elderly' | 'displaced' | 'visitor' | 'aid';
 }
 
 
@@ -403,6 +403,27 @@ function groupsOf(w: World): Group[] {
   }
   const ps = w.buildings.find((b) => b.name === 'Police Station');
   if (ps) g.push({ x: ps.cx, y: ps.rects[0].y + ps.rects[0].h + 2.5, r: 2.5, kind: 'security', n: () => 3 });
+  // The elderly: out on the doorstep in the cool of the morning and the evening, in the older neighbourhoods.
+  const r = rng(w.seed * 2203 + 5);
+  const old = w.buildings.filter((b) => (b.kind === 'home' || b.kind === 'apartment') && (b.district === 'oldtown' || b.district === 'quarter' || b.district === 'terraces'));
+  for (let i = 0; i < 10 && old.length; i++) {
+    const b = old[Math.floor(r() * old.length)];
+    const q = b.rects[0];
+    g.push({ x: q.x - 1.2, y: q.y + q.h * (0.3 + r() * 0.4), r: 1, kind: 'elderly', n: (h, fri) => (hours(h, 7, 10) || hours(h, 16, 19.5) || (fri && hours(h, 14, 16)) ? 2 : 0) });
+  }
+  // Displaced families: queuing at the camp's distribution point in the morning; aid workers there and at the camp
+  // clinic by day, in their vests.
+  const dist = w.spaces.find((sp) => sp.kind === 'distribution');
+  if (dist) {
+    const q = dist.rect;
+    for (let i = 0; i < 4; i++) g.push({ x: q.x + 4 + i * 8, y: q.y + q.h + 3, r: 3, kind: 'displaced', n: (h, fri) => (!fri && hours(h, 6.5, 11) ? 6 : hours(h, 11, 17) ? 1 : 0) });
+    g.push({ x: q.x + q.w / 2, y: q.y + q.h / 2, r: 4, kind: 'aid', n: (h, fri) => (!fri && hours(h, 7, 12) ? 4 : hours(h, 12, 16) ? 2 : 0) });
+  }
+  const clinic = w.buildings.find((b) => b.kind === 'clinic' && b.district === 'camp');
+  if (clinic) g.push({ x: clinic.cx, y: clinic.rects[0].y + clinic.rects[0].h + 2.5, r: 2.5, kind: 'aid', n: (h) => (hours(h, 8, 17) ? 2 : 0) });
+  // Visitors: off the buses with their bags, morning and late afternoon.
+  const bus = w.spaces.find((sp) => sp.kind === 'busstation');
+  if (bus) for (let i = 0; i < 3; i++) g.push({ x: bus.rect.x + 10 + i * 25, y: bus.rect.y + bus.rect.h + 3, r: 2.5, kind: 'visitor', n: (h) => (hours(h, 7, 9.5) || hours(h, 16, 18.5) ? 3 : hours(h, 9.5, 16) ? 1 : 0) });
   groupCache.set(w, g);
   return g;
 }

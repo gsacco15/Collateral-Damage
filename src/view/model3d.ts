@@ -1829,6 +1829,10 @@ export class Model3D {
       if (w.role === 'medic') wrap(1.05, 1.12, 0.18, 0, '#c0392b');
       else if (w.role === 'vendor') wrap(0.95, 1.1, 0.25, -0.45, '#b08a5e');
       else if (w.role === 'unhoused' && nightness(f.plan.hour) > 0.4) wrap(0.1, 2.2, 0.35, 0.6, '#6f665a');
+      else if (w.role === 'aid') wrap(1.05, 1.1, 0.55, 0, w.tint); // the vest
+      else if (w.role === 'elderly') wrap(0.5, 0.12, 1.0, -0.3, '#5a4632'); // a walking stick
+      else if (w.role === 'displaced') wrap(0.6, 0.55, 0.45, -0.35, w.id % 2 ? '#e0d2b0' : '#e0c64a'); // a sack or a jerry can
+      else if (w.role === 'visitor') wrap(0.3, 0.7, 0.55, -0.4, ['#6a4a3a', '#3a4a6b', '#2f2c29'][w.id % 3]); // a suitcase
       switch (w.wear) {
         case 'hijab':
         case 'shawl':
