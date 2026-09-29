@@ -561,7 +561,8 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .dock { display: none; }
   .stage { display: block; }
   .map { height: 62vh; min-height: 380px; }
-  .timebar { flex-direction: column; gap: 6px; }
+  .timebar { flex-direction: column; gap: 6px; align-items: stretch; }
+  .timebar .timeline { width: 100%; }
   .time-controls { flex-direction: row; width: auto; padding: 0; }
   .mobile-tabs { display: flex; position: sticky; top: 0; z-index: 9; background: var(--panel); border-bottom: 1px solid var(--line); }
   .mobile-tabs button { flex: 1; padding: 13px; border: 0; background: none; font-weight: 600; color: var(--text-3); border-bottom: 2px solid transparent; }
