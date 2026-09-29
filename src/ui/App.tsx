@@ -1322,7 +1322,8 @@ export default function App() {
     mobileTimers.current.forEach(clearTimeout);
     mobileTimers.current = [];
     demoDone.current = null;
-    if (phone && i != null && GUIDE[i].tab) {
+    // Only the steps about Jev's own panels (its reading of the reports, its search) are worth a trip down the page.
+    if (phone && i != null && GUIDE[i].tab && (GUIDE[i].glow || GUIDE[i].demo)) {
       // On a phone the panels sit under the map: glide down to the one this step is about, then back up.
       const down = () => document.querySelector('.mobile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       const up = () => window.scrollTo({ top: 0, behavior: 'smooth' });
