@@ -584,6 +584,18 @@ export class Model3D {
     this.camera.position.copy(t).add(dir.multiplyScalar(Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, dist))));
     this.controls.update();
   }
+  /** The spot on the ground under a point on the screen (client pixels), and roughly how many metres a pixel spans there. */
+  groundAt(clientX: number, clientY: number) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const hit = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -1), hit)) return null;
+    const d = this.camera.position.distanceTo(hit);
+    const mpp = (2 * d * Math.tan((this.camera.fov * Math.PI) / 360)) / r.height;
+    return { x: hit.x, y: hit.z, mpp };
+  }
   /** Where the camera is looking, and from how far: used when switching back to the flat map. */
   lookingAt() {
     const t = this.controls.target;

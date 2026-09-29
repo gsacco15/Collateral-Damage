@@ -842,3 +842,59 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 @keyframes introProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .intro-actions .btn.primary.big.telling { animation: none; }
 .intro-actions .btn.primary.big:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------------------------------------------------------------- the secret mission */
+.mission-btn { font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 9px; border: 1px solid rgba(160, 110, 30, 0.35); background: #f7eed8; color: #6b4a12; cursor: pointer; white-space: nowrap; }
+.mission-btn span { color: #c9921f; }
+.mission-btn:hover { background: #f3e5c3; }
+.mission-btn.on { background: #3a2c14; color: #f6e7c4; border-color: #3a2c14; }
+.mission-btn.on span { color: #e8b44a; }
+.mission-hud { position: absolute; z-index: 6; top: 100px; left: 12px; width: 250px; display: flex; flex-direction: column; gap: 5px; padding: 11px 13px 12px; border-radius: 4px 12px 12px 12px; background: #f8f1df; border: 1px solid rgba(120, 85, 25, 0.22); box-shadow: var(--float), inset 3px 0 0 #d9a33a; animation: fade 0.3s ease; }
+.mission-hud .k { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9a6b1c; }
+.mission-hud b { font-size: 14.5px; font-weight: 600; color: #2d2415; }
+.mh-top { display: flex; align-items: center; justify-content: space-between; }
+.mh-x { border: 0; background: none; font-size: 16px; line-height: 1; color: #9a8a6a; cursor: pointer; padding: 0 2px; }
+.mh-where { font-size: 12.5px; color: #5a4a30; }
+.mh-now { font-family: var(--mono); font-size: 10.5px; color: #8a7a5a; }
+.mh-now.yes { color: #a2641a; }
+.mh-go { align-self: flex-start; margin-top: 3px; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 8px; border: 0; background: #3a2c14; color: #f6e7c4; cursor: pointer; }
+.mh-go:hover { background: #50401f; }
+.mh-clues-btn { align-self: flex-start; margin-top: 4px; border: 0; background: none; padding: 0; font-family: var(--mono); font-size: 10.5px; color: #7a6440; cursor: pointer; }
+.mh-clues { margin: 2px 0 0; padding-left: 17px; display: flex; flex-direction: column; gap: 5px; max-height: 190px; overflow: auto; }
+.mh-clues li { font-size: 12px; line-height: 1.45; color: #4a3d28; }
+.talk { position: absolute; z-index: 8; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(470px, calc(100% - 24px)); padding: 14px 18px 14px; border-radius: 4px 14px 14px 14px; background: #fbf7ec; border: 1px solid rgba(80, 60, 30, 0.18); box-shadow: var(--float), inset 4px 0 0 #d9a33a; animation: up 0.3s ease; }
+.talk.red { box-shadow: var(--float), inset 4px 0 0 #c23b2e; }
+.talk.handler { background: #eef0ee; box-shadow: var(--float), inset 4px 0 0 #4a5a66; }
+.talk-x { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 18px; line-height: 1; color: #9a8f7c; cursor: pointer; }
+.talk-who { display: flex; align-items: baseline; gap: 9px; margin-bottom: 6px; padding-right: 20px; }
+.talk-who b { font-size: 15px; font-weight: 650; color: #241d12; }
+.talk-who span { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: #8d7a58; }
+.talk p { margin: 0; font-size: 14px; line-height: 1.6; color: #2f281c; font-style: italic; }
+.talk p span { opacity: 0.12; transition: opacity 0.25s ease; }
+.talk p span.on { opacity: 1; }
+.talk-acts { display: flex; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
+.talk-acts button { font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 9px; border: 1px solid rgba(40, 30, 20, 0.15); background: #fff; color: var(--text-1); cursor: pointer; }
+.talk-acts button.primary { background: #3a2c14; border-color: #3a2c14; color: #f6e7c4; }
+.talk.red .talk-acts button.primary { background: #b02a1e; border-color: #b02a1e; color: #fff; }
+.mission-end { position: absolute; z-index: 9; right: 12px; top: 60px; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 72px); overflow: auto; padding: 22px 24px 18px; border-radius: 6px; background: #fbf7ec; border: 1px solid rgba(80, 60, 30, 0.2); box-shadow: 0 30px 70px rgba(30, 20, 10, 0.35), 0 2px 0 rgba(255, 255, 255, 0.6) inset; animation: fade 0.6s ease both; }
+.me-stamp { display: inline-block; margin-bottom: 12px; padding: 6px 14px 5px; border: 3px double currentColor; border-radius: 6px; font: 700 22px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: #b02a1e; transform: rotate(-5deg); mix-blend-mode: multiply; animation: file-stamp 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) 0.5s both; }
+@keyframes file-stamp { from { opacity: 0; transform: rotate(-5deg) scale(1.8); } to { opacity: 1; transform: rotate(-5deg) scale(1); } }
+.mission-end.miss .me-stamp { color: #3f5f78; }
+.me-line { margin: 0 0 12px; font-size: 14px; line-height: 1.6; font-style: italic; color: #2f281c; }
+.me-count { display: flex; align-items: baseline; gap: 10px; padding: 10px 0; border-top: 1px solid rgba(80, 60, 30, 0.15); border-bottom: 1px solid rgba(80, 60, 30, 0.15); }
+.me-count b { font-size: 40px; line-height: 1; font-weight: 600; color: var(--critical); }
+.me-count span { font-size: 13px; color: var(--text-2); }
+.me-names { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.me-names li { font-size: 12.5px; color: #3f3526; padding-left: 12px; position: relative; }
+.me-names li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 5px; height: 5px; border-radius: 50%; border: 1.5px solid var(--critical); }
+.me-names li.more { color: var(--text-3); }
+.me-names li.more::before { display: none; }
+.me-foot { margin: 12px 0 0; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: #8d7a58; }
+@media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px) {
+  .mission-btn { padding: 5px 8px; font-size: 11.5px; }
+  .mission-hud { top: auto; bottom: 64px; left: 8px; width: min(250px, calc(100% - 16px)); padding: 9px 11px 10px; }
+  .talk { bottom: 8px; width: calc(100% - 16px); padding: 12px 14px; }
+  .talk p { font-size: 13.5px; }
+  .mission-end { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 62%; padding: 16px 16px 14px; }
+}
+.map:has(.mission-end) .outcome { display: none; }

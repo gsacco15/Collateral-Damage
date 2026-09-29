@@ -122,6 +122,10 @@ export class Life3D {
     add('bus', mergeGeometries([box(0, 1.5, 0, 11, 2.6, 2.5), box(-0.3, 3.0, 0, 2.4, 0.4, 1.3)])!, std({ roughness: 0.6 }), 16);
     add('busglass', mergeGeometries([box(0.2, 2.0, 1.26, 9.6, 0.8, 0.04), box(0.2, 2.0, -1.26, 9.6, 0.8, 0.04), box(5.51, 1.9, 0, 0.04, 1.2, 2.2)])!, new THREE.MeshStandardMaterial({ color: '#2b3440', emissive: '#ffd9a0', emissiveIntensity: 0, roughness: 0.3 }), 16, false);
     add('scooter', mergeGeometries([box(0, 0.45, 0, 1.6, 0.35, 0.32), box(0.55, 0.9, 0, 0.12, 0.7, 0.12)])!, std({ roughness: 0.5 }), 20);
+    // The mission: a folded paper tag over the one you're looking for, a ring on the ground, the courier's letters.
+    add('mark', new THREE.OctahedronGeometry(1, 0).scale(0.75, 1.1, 0.12), new THREE.MeshStandardMaterial({ roughness: 0.7, flatShading: true, emissive: '#5a3a10', emissiveIntensity: 0.6 }), 8, false);
+    add('mring', new THREE.RingGeometry(1.7, 2.05, 28).rotateX(-Math.PI / 2).translate(0, 0.08, 0), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6, depthWrite: false }), 8, false);
+    add('letter', box(0, 0, 0, 0.9, 0.02, 0.58), std({ color: '#fbfaf6', side: THREE.DoubleSide }), 40, false);
     add('smoke', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#b9b4ac', roughness: 1, flatShading: true, transparent: true, opacity: 0.38, depthWrite: false }), 300, false);
     add('beacon', new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2a1a' }), 30, false);
     add('lamp', new THREE.SphereGeometry(0.25, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffe2a8' }), 40, false);
@@ -423,6 +427,20 @@ export class Life3D {
             this.put('bus', e.x, e.y, 0, yaw, 1, 1, 1, e.col);
             this.put('busglass', e.x, e.y, 0, yaw, 1, 1, 1);
           }
+          break;
+        case 'moto':
+          this.put('scooter', e.x, e.y, 0, -e.a, 1.25, 1.25, 1.25, e.col);
+          if (e.rider) {
+            this.put('body', e.x, e.y, 0.45, 0, 1.2, 0.95, 1.2, '#4a4a50');
+            this.put('head', e.x, e.y, 0.2, 0, 1.3, 1.3, 1.3, '#1f1f22');
+          }
+          break;
+        case 'mark':
+          this.put('mark', e.x, e.y, e.z + 1.4, e.spin, 1, 1, 1, e.col);
+          this.put('mring', e.x, e.y, 0, 0, 1 + ((time * 0.8) % 1) * 0.8, 1, 1 + ((time * 0.8) % 1) * 0.8, e.col);
+          break;
+        case 'letter':
+          this.put('letter', e.x, e.y, e.z, e.a, 1.8, 1.8, 1.8, undefined, e.tilt);
           break;
         case 'scooter':
           this.put('scooter', e.x, e.y, 0, Math.atan2(Math.sin(e.a), Math.cos(e.a)) * -1, 1, 1, 1, e.col);

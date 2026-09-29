@@ -58,6 +58,12 @@ import { personIn, personInCar, personLine, personOut } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
+import { addSceneExtra } from '../view/lifeScene';
+import { bakerLine, current, DONE, EARLY, ENDINGS, FIGURES, figureAt, HANDLER_BRIEF, inHours, loadMission, MEETS, missionEnts, newMission, SAMIR, saveMission, scatterLetters, setLive, STRANGER, type FigureId, type MissionState } from '../mission/mission';
+import { EndCard, MissionHud, TalkCard, type Talk } from '../mission/MissionUI';
+
+// The secret mission's people live in the same scene as everyone else, in both views.
+addSceneExtra(missionEnts);
 import { sound, type Bed, type CityCue } from './sound';
 import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
@@ -166,6 +172,17 @@ export default function App() {
   const [matrix, setMatrix] = useState<MatrixCell[]>([]);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [striking, setStriking] = useState(false);
+  // The secret mission: where you are in the file, who's talking, and how it ended.
+  const [mission, setMissionState] = useState<MissionState>(loadMission);
+  const missionRef = useRef(mission);
+  const setMission = (s: MissionState) => {
+    missionRef.current = s;
+    setLive(s);
+    saveMission(s);
+    setMissionState(s);
+  };
+  const [talk, setTalk] = useState<Talk | null>(null);
+  const [missionEnd, setMissionEnd] = useState<{ result: 'clean' | 'hurt' | 'miss'; others: number; names: string[] } | null>(null);
   const [countMode, setCountMode] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
@@ -387,6 +404,7 @@ export default function App() {
   const logRef = useRef<HTMLDivElement>(null);
   const focusRef = useRef<{ cx: number; cy: number; zoom: number; dur?: number } | null>(null);
   const canvas3dRef = useRef<HTMLCanvasElement>(null);
+  const down3d = useRef<{ x: number; y: number } | null>(null);
   const labels3dRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<Model3D | null>(null);
   const strikeRef = useRef<{ plan: Plan; outcome: Outcome; before: number[] } | null>(null);
@@ -1280,7 +1298,12 @@ export default function App() {
     let text = '';
     let named: PlaceStory;
     const who = outcome ? personAtPoint(px, py, wx, wy) : '';
+    const fig = !who ? figureUnder(px, py, wx, wy) : null;
     if (who) text = who;
+    else if (fig) {
+      const f = FIGURES.find((q) => q.id === fig);
+      text = fig === 'moto' ? '<b>A red motorbike</b><span>Click to look</span>' : fig === 'samir' ? `<b>${SAMIR.name}</b><span>The courier · click</span>` : `<b>${f!.name}</b><span>${f!.role} · click to talk</span>`;
+    }
     else if (b && mapMode === 'target') {
       const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
@@ -1303,6 +1326,13 @@ export default function App() {
     el.innerHTML = text;
     el.style.display = '';
     el.style.transform = `translate(${px + 14}px, ${py + 14}px)`;
+  };
+  // Someone from the secret file under the pointer (a few pixels' grace, more on a phone).
+  const figureUnder = (px: number, py: number, wx: number, wy: number) => {
+    const m = mapRef.current;
+    if (!m) return null;
+    const r = Math.abs(m.toWorld(px + (phone ? 18 : 11), py).x - wx);
+    return figureAt(wx, wy, Math.max(1.4, r), plan.hour);
   };
   // A red ring under the pointer: who they were.
   const personAtPoint = (px: number, py: number, wx: number, wy: number) => {
@@ -1341,6 +1371,8 @@ export default function App() {
       const p = localXY(e);
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
         const w = m.toWorld(p.x, p.y);
+        const who = figureUnder(p.x, p.y, w.x, w.y);
+        if (who) return onFigure(who);
         aimAt(w.x, w.y);
       }
       return;
@@ -1360,6 +1392,8 @@ export default function App() {
           tipHide.current = window.setTimeout(hideTip, 4000);
           return;
         }
+        const fig = figureUnder(p.x, p.y, w.x, w.y);
+        if (fig) return onFigure(fig);
         openPeople(w.x, w.y, p.x, p.y);
       }
     }
@@ -1580,6 +1614,154 @@ export default function App() {
     focusRef.current = { cx: x, cy: y, zoom };
     if (view === 'model') modelRef.current?.flyTo(x, y, zoom <= 2.5 ? 320 : zoom <= 4 ? 190 : 130);
   };
+  // ------------------------------------------------------------ the secret mission
+
+  const MISSION_AUDIO = ['voice/mission-brief', 'voice/mission-tea', 'voice/mission-mech', 'voice/mission-fish', 'voice/mission-samir', 'moto', 'mission-sting', 'paper-flutter'];
+  /** Someone talks: the card shows at once, the words come in with the voice when it has loaded. */
+  const speak = (t: Talk, voice?: string) => {
+    setTalk({ ...t, secs: voice && soundOn ? undefined : 0 });
+    if (!voice || !soundOn) return;
+    void sound.narrate(voice).then((secs) => setTalk((c) => (c && c.key === t.key ? { ...c, secs } : c)));
+  };
+  const hush = () => {
+    setTalk(null);
+    sound.stopVoice();
+  };
+  /** Go to whoever the file wants next; if they aren't there at this hour, turn the clock to when they are. */
+  const goMission = (s = missionRef.current) => {
+    const c = current(s);
+    if (!c) return;
+    const spot = c === 'samir' ? MEETS[s.meet] : c;
+    if (!inHours(plan.hour, spot.from, spot.to)) {
+      setDayPlay(false);
+      setPlan({ hour: (spot.from + 0.25) % 24 });
+    }
+    stopTour();
+    setGuide(null);
+    flyTo(spot.x, spot.y, phone ? 7 : 8.5);
+    if (c === 'samir') sound.play('moto', 0.5);
+  };
+  const briefMission = (s: MissionState) =>
+    speak(
+      {
+        key: `brief-${Date.now()}`,
+        name: 'Your handler',
+        role: 'A new file: The Courier',
+        text: HANDLER_BRIEF.text,
+        tone: 'handler',
+        actions: [
+          {
+            label: 'Take the file',
+            primary: true,
+            onClick: () => {
+              hush();
+              sound.play('mission-sting');
+              const n = { ...s, on: true, step: 1 };
+              setMission(n);
+              goMission(n);
+            },
+          },
+        ],
+      },
+      HANDLER_BRIEF.voice,
+    );
+  const startMission = () => {
+    const s = newMission(missionRef.current);
+    setMission(s);
+    setMissionEnd(null);
+    sound.preload(MISSION_AUDIO.concat(`voice/mission-baker-${MEETS[s.meet].key}`));
+    briefMission(s);
+  };
+  /** Someone in the file (or the red motorbike) was clicked. */
+  const onFigure = (id: FigureId | 'moto') => {
+    const s = missionRef.current;
+    const key = `${id}-${Date.now()}`;
+    sound.play('ui-click');
+    if (id === 'moto')
+      return speak({
+        key,
+        name: 'A red motorbike',
+        role: 'Somewhere on the Long Boulevard',
+        text: s.on && s.step >= 2 ? 'Too fast for the street, no plate on the back. Gone before you can see his face. You won’t catch him on the move: find out where he stops.' : 'Too fast for the street, no plate on the back. Gone before you can see his face.',
+        tone: 'red',
+        actions: [],
+      });
+    if (id === 'samir') {
+      const m = MEETS[s.meet];
+      return speak(
+        {
+          key,
+          name: SAMIR.name,
+          role: `The courier · ${m.place}`,
+          text: SAMIR.line,
+          tone: 'red',
+          actions: [
+            {
+              label: 'Mark him as the target',
+              primary: true,
+              onClick: () => {
+                hush();
+                chooseTarget(groundId(m.x, m.y));
+                setLawful(true); // the file says so; whether anyone else is standing there is still up to you
+                setMapMode('explore');
+                setStrikeOpen(true);
+                flyTo(m.x, m.y, 4.4);
+              },
+            },
+            { label: 'Not yet', onClick: hush },
+          ],
+        },
+        SAMIR.voice,
+      );
+    }
+    const f = FIGURES.find((q) => q.id === id)!;
+    const n = FIGURES.indexOf(f) + 1;
+    const card = (text: string, actions: Talk['actions'] = []) => speak({ key, name: f.name, role: f.role, text, tone: 'gold', actions });
+    if (!s.on || s.step === 0 || s.step === 6) return card(STRANGER[id], s.step === 6 ? [] : [{ label: 'Open the secret file', primary: true, onClick: startMission }]);
+    if (n < s.step) return card(DONE[id]);
+    if (n > s.step) return card(EARLY[id]);
+    const b = id === 'baker' ? bakerLine(MEETS[s.meet]) : null;
+    speak(
+      {
+        key,
+        name: f.name,
+        role: f.role,
+        text: b?.line ?? f.line,
+        tone: 'gold',
+        actions: [
+          {
+            label: 'Note it in the file',
+            primary: true,
+            onClick: () => {
+              hush();
+              sound.play('mission-sting');
+              const cur = missionRef.current;
+              setMission({ ...cur, step: n + 1, clues: [...cur.clues, b?.clue ?? f.clue] });
+            },
+          },
+        ],
+      },
+      b?.voice ?? f.voice,
+    );
+  };
+  /** The people a strike hurt, by name, for the end of the file. */
+  const namesOf = (o: Outcome) => {
+    const out: string[] = [];
+    for (const [bid, slots] of Object.entries(o.hurtSlots))
+      for (const i of slots) {
+        const b = world.buildings[+bid];
+        const p = personIn(b, i, plan.hour, plan.day === 'friday');
+        out.push(`${p.name}, ${p.age === 0 ? 'a baby' : p.age}: ${p.doing}`);
+      }
+    return out;
+  };
+  const finishMission = (result: 'clean' | 'hurt' | 'miss', others: number, names: string[]) => {
+    const s = missionRef.current;
+    if (result === 'miss') setMission({ ...s, step: 4, meet: (s.meet + 1 + Math.floor(Math.random() * (MEETS.length - 1))) % MEETS.length, clues: s.clues.slice(0, 3) });
+    else setMission({ ...s, step: 6, result });
+    setMissionEnd({ result, others, names });
+    void sound.narrate(ENDINGS[result].voice);
+  };
   const pickPlace = (kind: 'b' | 's', id: number) => {
     if (kind === 'b') {
       const b = world.buildings[id];
@@ -1622,6 +1804,18 @@ export default function App() {
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
+      // The secret file: was the courier there, and did it reach him?
+      const ms = missionRef.current;
+      const mm = MEETS[ms.meet];
+      if (ms.on && ms.step === 5 && plan.target === groundId(mm.x, mm.y)) {
+        const killed = inHours(plan.hour, mm.from, mm.to) && Math.hypot(o.ix - mm.x, o.iy - mm.y) < Math.max(8, weapon(plan.weapon).blast * 1.1);
+        if (killed) {
+          scatterLetters(mm.x, mm.y);
+          sound.play('paper-flutter', 0.8);
+        }
+        const names = namesOf(o).slice(0, 5);
+        window.setTimeout(() => finishMission(killed ? (o.count > 0 ? 'hurt' : 'clean') : 'miss', o.count, names), (stampDelay(o) + 3.4) * 1000);
+      }
       // The boom follows the bomb: the 2,000-lb shakes the room, the smallest is a hard crack.
       if (mega) {
         // Its own long, rolling boom; and the camera pulls slowly back to show how much of the city is gone.
@@ -2073,6 +2267,18 @@ export default function App() {
           )}
         </nav>
         <div className="top-right">
+          <button
+            className={`mission-btn ${mission.on ? 'on' : ''}`}
+            onClick={() => {
+              if (mission.on) return setMission({ ...mission, on: false });
+              if (mission.step >= 1 && mission.step < 6) return setMission({ ...mission, on: true });
+              startMission();
+            }}
+            aria-pressed={mission.on}
+            title="A secret mission: find the courier"
+          >
+            <span aria-hidden>✦</span> Secret file
+          </button>
           <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
             Explored {explored}/{world.places.length} ▾
           </button>
@@ -2160,7 +2366,21 @@ export default function App() {
               }}
               aria-label="The city, seen from above"
             />
-            <canvas ref={canvas3dRef} className={`canvas3d ${view === 'model' ? 'on' : ''}`} aria-label="The city as a tilted model" />
+            <canvas
+              ref={canvas3dRef}
+              className={`canvas3d ${view === 'model' ? 'on' : ''}`}
+              aria-label="The city as a tilted model"
+              onPointerDown={(e) => (down3d.current = { x: e.clientX, y: e.clientY })}
+              onPointerUp={(e) => {
+                // A tap (not a drag) on someone from the secret file, in 3D.
+                const d0 = down3d.current;
+                down3d.current = null;
+                if (!d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) > 5) return;
+                const g = modelRef.current?.groundAt(e.clientX, e.clientY);
+                const who = g && figureAt(g.x, g.y, Math.max(1.6, g.mpp * (phone ? 20 : 13)), plan.hour);
+                if (who) onFigure(who);
+              }}
+            />
             <div ref={labels3dRef} className={`labels3d ${view === 'model' ? 'on' : ''}`} />
             {view === 'model' && !modelReady && <div className="loading">Building the model…</div>}
 
@@ -2211,6 +2431,36 @@ export default function App() {
               <div className="map-note" role="status">
                 {note}
               </div>
+            )}
+            {mission.on && !missionEnd && !striking && (
+              <MissionHud
+                s={mission}
+                hour={shownPlan.hour}
+                onGo={() => goMission()}
+                onBrief={() => briefMission(mission)}
+                onNew={startMission}
+                onHide={() => {
+                  hush();
+                  setMission({ ...mission, on: false });
+                }}
+              />
+            )}
+            {talk && <TalkCard talk={talk} onClose={hush} />}
+            {missionEnd && (
+              <EndCard
+                {...missionEnd}
+                onAgain={() => {
+                  sound.stopVoice();
+                  const miss = missionEnd.result === 'miss';
+                  setMissionEnd(null);
+                  if (miss) goMission();
+                  else startMission();
+                }}
+                onClose={() => {
+                  sound.stopVoice();
+                  setMissionEnd(null);
+                }}
+              />
             )}
 
             <div className="hud-layers">

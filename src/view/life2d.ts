@@ -10,6 +10,7 @@ export interface Draw2D {
   traffic: boolean;
   figure: (w: Walker) => void;
   car: (x: number, y: number, horizontal: boolean, dir: 1 | -1, color: string) => void;
+  px?: number; // metres per screen pixel, for things that should keep a size on screen
 }
 
 const CLOTHS = ['#5b6b7c', '#8a7a5c', '#6e4a3a', '#d8d2c4', '#3f4a3a', '#7d6b8a', '#2f3440'];
@@ -135,7 +136,7 @@ function duck(g: CanvasRenderingContext2D, x: number, y: number, a: number, s: n
   g.save();
   g.translate(x, y);
   g.rotate(a);
-  g.scale(1.8, 1.8); // a little larger than life, like the people, so they read on the map
+  g.scale(2.6, 2.6); // a little larger than life, like the people, so they read on the map
   g.fillStyle = drake ? '#8b7358' : '#9a8062';
   g.beginPath();
   g.ellipse(0, 0.1 * s, 0.22 * s, 0.38 * s, 0, 0, Math.PI * 2);
@@ -306,7 +307,7 @@ function bus(g: CanvasRenderingContext2D, x: number, y: number, dir: 1 | -1, nig
   g.restore();
 }
 
-function scooter(g: CanvasRenderingContext2D, x: number, y: number, a: number, col: string, night: number, sway: number) {
+function scooter(g: CanvasRenderingContext2D, x: number, y: number, a: number, col: string, night: number, sway: number, rider = true) {
   g.save();
   g.translate(x, y);
   g.rotate(a + sway);
@@ -316,6 +317,13 @@ function scooter(g: CanvasRenderingContext2D, x: number, y: number, a: number, c
   g.fillRect(-0.95, -0.12, 1.9, 0.24); // wheels, front to back
   g.fillStyle = col;
   g.fillRect(-0.5, -0.3, 1.1, 0.6);
+  if (!rider) {
+    // Parked: the seat and the handlebars.
+    g.fillStyle = '#2b2b2e';
+    g.fillRect(-0.35, -0.12, 0.55, 0.24);
+    g.fillRect(0.45, -0.38, 0.1, 0.76);
+    return void g.restore();
+  }
   // The rider: shoulders and a helmet (or not).
   g.fillStyle = '#4a4a50';
   g.beginPath();
@@ -1028,6 +1036,19 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         g.arc(e.x, e.y, 0.35, 0, Math.PI * 2);
         g.fill();
         break;
+      case 'moto':
+        // The courier's red motorbike: always drawn, and a touch bigger than the others so it can be picked out.
+        g.save();
+        g.translate(e.x, e.y);
+        g.scale(1.3, 1.3);
+        scooter(g, 0, 0, e.a, e.col, n, 0, e.rider);
+        g.restore();
+        break;
+      case 'mark':
+        mark2d(g, e, t, d.px ?? 0.2);
+        break;
+      case 'letter':
+        break; // drawn over the smoke: see drawLetters2D
       case 'scooter':
         if (d.traffic) scooter(g, e.x, e.y, e.a, e.col, n, e.sway);
         break;
@@ -1069,4 +1090,84 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       g.fill();
     }
   }
+}
+
+/**
+ * A folded paper tag hanging over someone the mission wants you to find: a diamond, lit on one fold and shaded on
+ * the other, turning slowly, with a soft ring on the ground under them. Keeps a readable size when zoomed out.
+ */
+function mark2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'mark' }>, t: number, px: number) {
+  const k = Math.max(1.3, 13 * px);
+  const pulse = (t * 0.8) % 1;
+  g.save();
+  g.strokeStyle = e.col;
+  g.globalAlpha = 0.8 * (1 - pulse);
+  g.lineWidth = Math.max(0.15, 2 * px);
+  g.beginPath();
+  g.ellipse(e.x, e.y, (1.6 + pulse * 2.2) * k * 0.6, (1.6 + pulse * 2.2) * k * 0.45, 0, 0, Math.PI * 2);
+  g.stroke();
+  g.globalAlpha = 1;
+  const cx = e.x;
+  const cy = e.y - e.z * k * 0.55 - 1.2;
+  const w = 0.75 * k * Math.abs(Math.cos(e.spin)) + 0.22 * k;
+  const h = 1.1 * k;
+  // A thread down to them.
+  g.strokeStyle = 'rgba(40,30,20,0.35)';
+  g.lineWidth = Math.max(0.06, 0.6 * px);
+  g.beginPath();
+  g.moveTo(cx, cy + h);
+  g.lineTo(e.x, e.y - 0.8);
+  g.stroke();
+  const left = Math.cos(e.spin) > 0;
+  g.fillStyle = shade(e.col, left ? 1.12 : 0.78);
+  g.beginPath();
+  g.moveTo(cx, cy - h);
+  g.lineTo(cx - w, cy);
+  g.lineTo(cx, cy + h);
+  g.closePath();
+  g.fill();
+  g.fillStyle = shade(e.col, left ? 0.78 : 1.12);
+  g.beginPath();
+  g.moveTo(cx, cy - h);
+  g.lineTo(cx + w, cy);
+  g.lineTo(cx, cy + h);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(40,30,20,0.4)';
+  g.lineWidth = Math.max(0.05, 0.5 * px);
+  g.stroke();
+  g.restore();
+}
+function shade(hex: string, f: number) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v * f)));
+  return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+
+/** The courier's letters, drawn last, over the smoke of the strike. */
+export function drawLetters2D(g: CanvasRenderingContext2D, ents: Ent[]) {
+  for (const e of ents) if (e.t === 'letter') letter2d(g, e);
+}
+
+/** One of the courier's letters, in the air: an envelope, its flap folded, and its shadow on the ground below. */
+function letter2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'letter' }>) {
+  const y = e.y - e.z * 0.55;
+  g.fillStyle = 'rgba(40,30,20,0.16)';
+  g.fillRect(e.x - 0.8, e.y - 0.5, 1.6, 1);
+  g.save();
+  g.translate(e.x, y);
+  g.rotate(e.a);
+  g.scale(2.6, 2.6);
+  g.scale(1, Math.max(0.25, Math.abs(Math.cos(e.tilt))));
+  g.fillStyle = '#fbfaf6';
+  g.strokeStyle = 'rgba(60,50,40,0.5)';
+  g.lineWidth = 0.06;
+  g.fillRect(-0.5, -0.32, 1, 0.64);
+  g.strokeRect(-0.5, -0.32, 1, 0.64);
+  g.beginPath();
+  g.moveTo(-0.5, -0.32);
+  g.lineTo(0, 0.05);
+  g.lineTo(0.5, -0.32);
+  g.stroke();
+  g.restore();
 }

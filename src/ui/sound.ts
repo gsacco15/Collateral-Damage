@@ -44,6 +44,9 @@ export type Cue =
   | 'aftermath'
   | 'stamp'
   | 'radio-static'
+  | 'moto'
+  | 'paper-flutter'
+  | 'mission-sting'
   | 'amb-call-to-prayer';
 
 /** Small one-off sounds of the city, played now and then, placed left or right by where they are on screen. */
@@ -94,6 +97,9 @@ const VOLUME: Partial<Record<Cue, number>> = {
   aftermath: 0.6,
   stamp: 0.7,
   'radio-static': 0.16,
+  moto: 0.45,
+  'paper-flutter': 0.5,
+  'mission-sting': 0.45,
   'amb-call-to-prayer': 0.3,
 };
 

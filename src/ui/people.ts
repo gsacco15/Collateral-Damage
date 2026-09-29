@@ -72,8 +72,10 @@ export function personIn(b: Building, i: number, hour: number, friday: boolean):
       return named(r, false, between(r, 19, 58), 'filling a tanker');
     case 'greenhouse':
       return named(r, female, between(r, 14, 70), 'picking tomatoes');
-    case 'tent':
-    case 'shelter': {
+    case 'shelter':
+    case 'tent': {
+      // A shelter in town is a bus stop; in the camp it's someone's home.
+      if (b.kind === 'shelter' && b.district !== 'camp') return named(r, female, between(r, 8, 78), pick(r, ['waiting for the minibus south', 'waiting for a bus home', 'selling tickets from a folding table', 'seeing a cousin off']));
       const age = household(r);
       return named(r, female, age, h >= 21 || h < 6 ? 'asleep in the tent' : age < 16 ? 'playing between the tents' : 'queueing for water');
     }

@@ -29,8 +29,8 @@ import {
   type World,
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
-import { drawLife2D } from './life2d';
-import { lifeScene } from './lifeScene';
+import { drawLetters2D, drawLife2D } from './life2d';
+import { lifeScene, type Ent } from './lifeScene';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
 import { C, hexA, mix, nightness, sun, type Sun } from './paper';
 
@@ -592,9 +592,10 @@ export class MapView {
     if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
     // Life on the water and in the streets (see lifeScene): the same scene the 3D model builds.
+    let ents: Ent[] = [];
     {
       const wpn = weapon(plan.weapon);
-      const ents = lifeScene({
+      ents = lifeScene({
         world: this.world,
         time: this.time,
         hour: f.plan.hour,
@@ -610,10 +611,12 @@ export class MapView {
         traffic: s > 0.9,
         figure: (w) => drawFigure(g, w, this.time, sh, night, px),
         car: (x, y, horizontal, dir, color) => drawCar(g, { id: -1, x, y, horizontal, dir, lane: 0, from: 0, to: 0, speed: 0, color, hurt: false }, 0, sh, false),
+        px,
       });
     }
     if (fx) this.drawFx(g, fx, px);
     this.drawSmoke(g, night);
+    drawLetters2D(g, ents);
     this.drawChimneys(g, f.plan.hour, damaged, night);
     if (night < 0.5) this.drawBirds(g, px, 1 - night * 2);
 
