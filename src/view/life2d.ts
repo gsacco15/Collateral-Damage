@@ -279,10 +279,11 @@ function plume(g: CanvasRenderingContext2D, time: number, x0: number, y0: number
   }
 }
 
-function bus(g: CanvasRenderingContext2D, x: number, y: number, dir: 1 | -1, night: number, col: string) {
+function bus(g: CanvasRenderingContext2D, x: number, y: number, dir: 1 | -1, night: number, col: string, v = false) {
   g.save();
   g.translate(x, y);
-  if (dir < 0) g.rotate(Math.PI);
+  if (v) g.rotate(dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+  else if (dir < 0) g.rotate(Math.PI);
   g.fillStyle = 'rgba(40,30,20,0.25)';
   g.fillRect(-5.2, -1.1, 11, 2.8);
   g.fillStyle = col;
@@ -537,7 +538,7 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         rod(g, { time: t, night: n }, e.x, e.y, e.a, e.len, e.seed);
         break;
       case 'bus':
-        if (d.traffic) bus(g, e.x, e.y, e.dir, n, e.col);
+        if (d.traffic) bus(g, e.x, e.y, e.dir, n, e.col, e.v);
         break;
       case 'fire':
         fire(g, e.x, e.y, e.size, e.flicker, n);

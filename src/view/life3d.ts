@@ -95,8 +95,8 @@ export class Life3D {
     add('car', carGeo(), std({ roughness: 0.6, flatShading: false }), 700);
     add('glass', box(-0.3, 1.33, 0, 2.3, 0.56, 1.72), std({ color: '#2b3440', roughness: 0.25, metalness: 0.4, flatShading: false }), 700, false);
     add('wheels', mergeGeometries([[1.3, 0.95], [1.3, -0.95], [-1.3, 0.95], [-1.3, -0.95]].map(([x, z]) => new THREE.CylinderGeometry(0.36, 0.36, 0.28, 8).rotateX(Math.PI / 2).translate(x, 0.36, z).toNonIndexed()))!, std({ color: '#232120' }), 700, false);
-    add('bus', mergeGeometries([box(0, 1.5, 0, 11, 2.6, 2.5), box(-0.3, 3.0, 0, 2.4, 0.4, 1.3)])!, std({ roughness: 0.6 }), 4);
-    add('busglass', mergeGeometries([box(0.2, 2.0, 1.26, 9.6, 0.8, 0.04), box(0.2, 2.0, -1.26, 9.6, 0.8, 0.04), box(5.51, 1.9, 0, 0.04, 1.2, 2.2)])!, new THREE.MeshStandardMaterial({ color: '#2b3440', emissive: '#ffd9a0', emissiveIntensity: 0, roughness: 0.3 }), 4, false);
+    add('bus', mergeGeometries([box(0, 1.5, 0, 11, 2.6, 2.5), box(-0.3, 3.0, 0, 2.4, 0.4, 1.3)])!, std({ roughness: 0.6 }), 16);
+    add('busglass', mergeGeometries([box(0.2, 2.0, 1.26, 9.6, 0.8, 0.04), box(0.2, 2.0, -1.26, 9.6, 0.8, 0.04), box(5.51, 1.9, 0, 0.04, 1.2, 2.2)])!, new THREE.MeshStandardMaterial({ color: '#2b3440', emissive: '#ffd9a0', emissiveIntensity: 0, roughness: 0.3 }), 16, false);
     add('scooter', mergeGeometries([box(0, 0.45, 0, 1.6, 0.35, 0.32), box(0.55, 0.9, 0, 0.12, 0.7, 0.12)])!, std({ roughness: 0.5 }), 20);
     add('smoke', new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#b9b4ac', roughness: 1, flatShading: true, transparent: true, opacity: 0.38, depthWrite: false }), 300, false);
     add('beacon', new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff2a1a' }), 30, false);
@@ -230,8 +230,11 @@ export class Life3D {
           for (const n of ['car', 'glass', 'wheels']) this.put(n, e.x, e.y, 0, e.h ? (e.dir > 0 ? 0 : Math.PI) : e.dir > 0 ? -Math.PI / 2 : Math.PI / 2, 1, 1, 1, n === 'car' ? e.col : undefined);
           break;
         case 'bus':
-          this.put('bus', e.x, e.y, 0, e.dir > 0 ? 0 : Math.PI, 1, 1, 1, e.col);
-          this.put('busglass', e.x, e.y, 0, e.dir > 0 ? 0 : Math.PI, 1, 1, 1);
+          {
+            const yaw = e.v ? (e.dir > 0 ? -Math.PI / 2 : Math.PI / 2) : e.dir > 0 ? 0 : Math.PI;
+            this.put('bus', e.x, e.y, 0, yaw, 1, 1, 1, e.col);
+            this.put('busglass', e.x, e.y, 0, yaw, 1, 1, 1);
+          }
           break;
         case 'scooter':
           this.put('scooter', e.x, e.y, 0, Math.atan2(Math.sin(e.a), Math.cos(e.a)) * -1, 1, 1, 1, e.col);

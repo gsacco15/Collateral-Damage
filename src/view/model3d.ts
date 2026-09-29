@@ -1259,7 +1259,7 @@ export class Model3D {
         }
       }
     }
-    this.winMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.25, 1.06), this.winMat, Math.min(this.wins.length, 60000));
+    this.winMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.35, 1.12), this.winMat, Math.min(this.wins.length, 60000));
     this.winMesh.count = 0;
     this.winMesh.frustumCulled = false;
     scene.add(this.winMesh);
@@ -1272,7 +1272,7 @@ export class Model3D {
     const key = `${bucket}|${this.damageKey}`;
     if (key === this.winKey) return;
     this.winKey = key;
-    const share = hr >= 18 && hr < 23 ? 0.75 : hr >= 23 || hr < 1 ? 0.45 : hr < 5 ? 0.14 : hr < 7 ? 0.32 : 0.5;
+    const share = hr >= 18 && hr < 23 ? 0.82 : hr >= 23 || hr < 1 ? 0.55 : hr < 5 ? 0.2 : hr < 7 ? 0.38 : 0.55;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const v = new THREE.Vector3();

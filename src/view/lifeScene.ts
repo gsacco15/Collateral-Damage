@@ -27,7 +27,7 @@ export type Ent =
   | { t: 'dog'; x: number; y: number; a: number; col: string; moving: boolean; lying: boolean }
   | { t: 'cat'; x: number; y: number; a: number; col: string; curled: boolean; z: number }
   | { t: 'car'; x: number; y: number; h: boolean; dir: 1 | -1; col: string }
-  | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string }
+  | { t: 'bus'; x: number; y: number; dir: 1 | -1; col: string; v?: boolean } // v: parked nose-in, north-south
   | { t: 'scooter'; x: number; y: number; a: number; col: string; sway: number }
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number }
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
@@ -502,8 +502,8 @@ export function lifeScene(c: SceneCtx): Ent[] {
       const legs: [number, number][] = [];
       for (let k = 0; k < pts.length - 1; k++) legs.push([pts[k], pts[k + 1]]);
       const route = [...legs, ...legs.map(([a, b]) => [b, a] as [number, number]).reverse()];
-      const speed = 7;
-      const lap = route.reduce((s, [a, b]) => s + Math.abs(b - a) / speed + 5, 0);
+      const speed = 4.2; // a city bus in traffic, unhurried
+      const lap = route.reduce((s, [a, b]) => s + Math.abs(b - a) / speed + 12, 0);
       let u = (t + i * lap * 0.5) % lap;
       let x = west;
       let dir: 1 | -1 = 1;
@@ -515,15 +515,28 @@ export function lifeScene(c: SceneCtx): Ent[] {
           break;
         }
         u -= tt;
-        if (u < 5) {
+        if (u < 12) {
           x = b;
           break;
         }
-        u -= 5;
+        u -= 12;
       }
       const y = 350 + (dir > 0 ? 4 : -4);
       if (far(x, y)) out.push({ t: 'bus', x, y, dir, col: i ? '#d9c38a' : '#6f9a8a' });
     }
+  // Buses and minibuses parked nose-in at the bus station's bays: more in the day, a few overnight.
+  if (station) {
+    const q = station.rect;
+    const pr = rng(station.id * 31 + 5);
+    let k = 0;
+    for (let x = q.x + 5.6; x < q.x + q.w - 5; x += 7, k++) {
+      const busy = pr();
+      const y = q.y + 14 + pr() * (q.h - 11 - 18) + 5.5;
+      const col = pr() < 0.5 ? '#d9c38a' : pr() < 0.5 ? '#e6e1d6' : '#6f9a8a';
+      if (busy > (h >= 6 && h < 21 ? 0.72 : 0.4)) continue;
+      if (far(x, y)) out.push({ t: 'bus', x, y, dir: k % 2 ? 1 : -1, col, v: true });
+    }
+  }
   F.scooters.forEach((s, i) => {
     if (!(h >= 6 && h < 23) && i % 3) return;
     const len = s.h ? s.r.w : s.r.h;

@@ -309,7 +309,7 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
     // Rooms lit behind the windows: many in the evening, going out one by one after midnight, a few before dawn.
     // Each window sits on the wall line, a small warm square with its light spilling out onto the street.
     const hr = ((o.hour % 24) + 24) % 24;
-    const share = hr >= 18 && hr < 23 ? 0.75 : hr >= 23 || hr < 1 ? 0.45 : hr < 5 ? 0.14 : hr < 7 ? 0.32 : 0.5;
+    const share = hr >= 18 && hr < 23 ? 0.82 : hr >= 23 || hr < 1 ? 0.55 : hr < 5 ? 0.2 : hr < 7 ? 0.38 : 0.55;
     const bucket = Math.floor(hr * 2); // which rooms are lit changes through the night
     const warm = (x: number, y: number, rad: number, a: number, col: string) => {
       const grd = g.createRadialGradient(x, y, 0, x, y, rad);
@@ -325,7 +325,7 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
       if (!n && !always && b.kind !== 'mosque') continue;
       const lr = rng(b.id * 31 + 7);
       const small = b.kind === 'shack' || b.kind === 'tent';
-      const rooms = b.kind === 'apartment' ? b.floors * 4 : always ? 16 : b.kind === 'office' ? 6 : small ? 1 : b.kind === 'villa' ? 4 : 3;
+      const rooms = b.kind === 'apartment' ? b.floors * 4 : always ? 16 : b.kind === 'office' ? 6 : small ? 1 : b.kind === 'villa' ? 5 : 4 + Math.min(4, Math.floor(b.area / 120));
       const lit = always ? 0.85 : b.kind === 'office' ? (hr >= 18 && hr < 21 ? 0.3 : 0.06) : b.kind === 'shop' ? (hr >= 18 && hr < 23 ? 0.8 : 0.05) : share;
       const sw = rng(b.id * 131 + bucket * 17);
       for (const q of b.rects) {
@@ -522,14 +522,15 @@ function drawSpace(g: CanvasRenderingContext2D, s: Space, scale: number) {
         g.lineTo(x, q.y + 10);
         g.stroke();
       }
-      // Parked buses or trucks.
-      const long = s.kind === 'busstation' ? 11 : 8;
+      // Parked trucks in the yard (the bus station's buses are part of the living scene, in both views).
+      const long = 8;
+      if (s.kind === 'busstation') break;
       for (let x = q.x + 4; x < q.x + q.w - 6; x += 7) {
         if (r() < 0.35) continue;
         const y = q.y + 14 + r() * (q.h - long - 18);
         g.fillStyle = 'rgba(40,30,20,0.25)';
         g.fillRect(x + 0.8, y + 0.8, 3.2, long);
-        g.fillStyle = s.kind === 'busstation' ? (r() < 0.5 ? '#d9c38a' : '#e6e1d6') : r() < 0.5 ? '#6f7a6a' : '#8b7a5e';
+        g.fillStyle = r() < 0.5 ? '#6f7a6a' : '#8b7a5e';
         g.fillRect(x, y, 3.2, long);
         g.fillStyle = 'rgba(40,50,60,0.5)';
         g.fillRect(x + 0.4, y + 0.4, 2.4, 1.6);
