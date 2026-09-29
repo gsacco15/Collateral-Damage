@@ -9,7 +9,7 @@ import { drawCity } from './drawCity';
 import type { Layers, Outcome } from './map';
 import { grade, nightness, sun } from './paper';
 import { Life3D } from './life3d';
-import { lifeScene } from './lifeScene';
+import { casualties, lifeScene } from './lifeScene';
 import { terrain } from './terrain';
 
 export interface Frame3D {
@@ -1800,10 +1800,7 @@ export class Model3D {
     const hq = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
     for (const w of f.walkers) {
-      if (w.hurt) {
-        if (rings < 800) this.rings.setMatrixAt(rings++, m.makeTranslation(w.x, 0.08, w.y));
-        continue;
-      }
+      if (w.hurt) continue; // a red ring instead (below)
       if (n >= 1600) break;
       const bob = w.path.length ? Math.abs(Math.sin((now + w.phase) * 9)) * 0.12 : 0;
       m.compose(v.set(w.x, bob, w.y), q.identity(), one);
@@ -1872,10 +1869,15 @@ export class Model3D {
       this.carTails.setMatrixAt(k, m);
       this.carBeams.setMatrixAt(k, m);
       this.carBodies.setColorAt(k, c.set(car.hurt ? '#3d3935' : car.color));
-      if (car.hurt && rings < 800) this.rings.setMatrixAt(rings++, new THREE.Matrix4().compose(v.set(car.x, 0.08, car.y), q.identity(), new THREE.Vector3(2.4, 1, 2.4)));
       k++;
     }
     this.carBodies.count = this.carGlass.count = this.carWheels.count = this.carLights.count = this.carTails.count = this.carBeams.count = k;
+    // Everyone the strike killed or badly hurt, where they were: red rings that shrink away as the responders leave.
+    for (const { c: hc, k } of casualties()) {
+      if (rings >= 800) break;
+      const sz = (hc.who.kind === 'car' ? 2.4 : hc.who.kind === 'in' ? 0.8 : 1) * k;
+      this.rings.setMatrixAt(rings++, new THREE.Matrix4().compose(v.set(hc.x, hc.who.kind === 'in' ? 0.35 : 0.08, hc.y), q.identity(), new THREE.Vector3(sz, 1, sz)));
+    }
     this.rings.count = rings;
     for (const im of [this.people, this.heads, this.wraps, this.rings, this.carBodies, this.carGlass, this.carWheels, this.carLights, this.carTails, this.carBeams]) {
       im.instanceMatrix.needsUpdate = true;

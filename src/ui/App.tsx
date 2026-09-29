@@ -72,7 +72,7 @@ import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
 import { SettingsPanel, type StrikeLog } from './Settings';
-import { addResponse, clearResponses, RESPONSE, responseScenes } from '../view/lifeScene';
+import { addResponse, clearResponses, dropLastResponse, RESPONSE, responseScenes } from '../view/lifeScene';
 import { tallyOf } from './tally';
 import { readIntel } from './jevLive';
 import { addSceneExtra } from '../view/lifeScene';
@@ -1570,7 +1570,7 @@ export default function App() {
     if (!el || view !== 'map' || striking) return;
     let text = '';
     let named: PlaceStory;
-    const who = outcome ? personAtPoint(px, py, wx, wy) : '';
+    const who = personAtPoint(px, py, wx, wy);
     const fig = !who ? figureUnder(px, py, wx, wy) : null;
     const passer = !who && !fig && mapMode === 'explore' ? passerAt(px, py, wx, wy) : '';
     if (who) text = who;
@@ -1670,9 +1670,9 @@ export default function App() {
       const p = localXY(e);
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
         const w = m.toWorld(p.x, p.y);
-        // After a strike, tapping a red ring says who it was (phones have no hover).
+        // Tapping a red ring says who it was (phones have no hover); zoomed right in, so does tapping anyone.
         const fig0 = figureUnder(p.x, p.y, w.x, w.y);
-        const who = striking ? '' : (outcome ? personAtPoint(p.x, p.y, w.x, w.y) : '') || (!fig0 ? passerAt(p.x, p.y, w.x, w.y) : '');
+        const who = striking ? '' : personAtPoint(p.x, p.y, w.x, w.y) || (!fig0 ? passerAt(p.x, p.y, w.x, w.y) : '');
         const el = tipRef.current;
         if (who && el) {
           el.innerHTML = who;
@@ -2165,6 +2165,7 @@ export default function App() {
     focusRef.current = mega ? { cx: plan.aimX, cy: plan.aimY + 10, zoom: 2.4, dur: 1.4 } : { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
     if (mega && view === 'model') modelRef.current?.flyTo(plan.aimX, plan.aimY, 460, 1.4);
     // Rolling again replaces the last strike; a new strike adds to the ruins.
+    const reroll = !!(outcome && strikeRef.current);
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     const marksBefore = outcome && strikeRef.current ? strikeRef.current.marksBefore : marksRef.current;
     const ledgerBefore = outcome && strikeRef.current ? strikeRef.current.ledgerBefore : ledgerRef.current;
@@ -2249,7 +2250,9 @@ export default function App() {
       sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', verdict + 1.9);
       sound.radio('radio-08-bda', verdict + 2.7);
       // The first responders: they arrive in about half a minute, sirens first (see the ambience, and lifeScene).
-      addResponse(o.ix, o.iy, Math.min(1, 0.3 + o.count / 30 + weapon(plan.weapon).blast / 60));
+      // The red rings for the people it hurt stay with that scene until the responders leave.
+      if (reroll) dropLastResponse();
+      addResponse(o.ix, o.iy, Math.min(1, 0.3 + o.count / 30 + weapon(plan.weapon).blast / 60), m.casualtiesOf(o));
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, {}, {}, before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));

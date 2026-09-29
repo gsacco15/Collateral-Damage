@@ -31,7 +31,7 @@ import {
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
 import { drawLetters2D, drawLife2D } from './life2d';
-import { lifeScene, type Ent } from './lifeScene';
+import { casualties, lifeScene, type Casualty, type Ent } from './lifeScene';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
 import { C, hexA, mix, nightness, sun, type Sun } from './paper';
 
@@ -104,31 +104,28 @@ interface StrikeFx {
 }
 
 export class MapView {
-  private shownOutcome: Outcome | null = null;
-  /** The person behind the nearest red ring within r metres of (x, y), once a strike's result is showing. */
-  hurtAt(x: number, y: number, r: number): { kind: 'in'; b: Building; i: number } | { kind: 'out'; w: Walker } | { kind: 'car'; c: Car } | null {
-    const o = this.shownOutcome;
-    if (!o) return null;
-    let best: { kind: 'in'; b: Building; i: number } | { kind: 'out'; w: Walker } | { kind: 'car'; c: Car } | null = null;
+  /** The person behind the nearest red ring within r metres of (x, y), while the rings are showing. */
+  hurtAt(x: number, y: number, r: number): Casualty['who'] | null {
+    let best: Casualty['who'] | null = null;
     let bd = r;
-    for (const [id, slots] of Object.entries(o.hurtSlots)) {
-      const b = this.world.buildings[+id];
-      for (const i of slots) {
-        const d = Math.hypot(b.slots[i * 2] - x, b.slots[i * 2 + 1] - y);
-        if (d < bd) (bd = d), (best = { kind: 'in', b, i });
-      }
-    }
-    for (const w of this.crowd.walkers) {
-      if (!w.hurt) continue;
-      const d = Math.hypot(w.x - x, w.y - y);
-      if (d < bd) (bd = d), (best = { kind: 'out', w });
-    }
-    for (const c of this.crowd.cars) {
-      if (!c.hurt) continue;
+    for (const { c } of casualties()) {
       const d = Math.hypot(c.x - x, c.y - y);
-      if (d < bd) (bd = d), (best = { kind: 'car', c });
+      if (d < bd) (bd = d), (best = c.who);
     }
     return best;
+  }
+  /** Everyone a strike hurt, where they were as it hit (kept for the red rings after the result card is gone). */
+  casualtiesOf(o: Outcome): Casualty[] {
+    const out: Casualty[] = [];
+    for (const [id, slots] of Object.entries(o.hurtSlots)) {
+      const b = this.world.buildings[+id];
+      for (const i of slots) out.push({ x: b.slots[i * 2], y: b.slots[i * 2 + 1], who: { kind: 'in', b, i } });
+    }
+    const ws = new Set(o.hurtWalkers);
+    for (const w of this.crowd.walkers) if (ws.has(w.id)) out.push({ x: w.x, y: w.y, who: { kind: 'out', w } });
+    const cs = new Set(o.hurtCars);
+    for (const c of this.crowd.cars) if (cs.has(c.id)) out.push({ x: c.x, y: c.y, who: { kind: 'car', c } });
+    return out;
   }
   /** Close enough to tell one person from the next: only then can you point at someone to see who they are. */
   static readonly PEOPLE_ZOOM = 8;
@@ -367,7 +364,6 @@ export class MapView {
     this.explore(f);
 
     const shown = f.outcome;
-    this.shownOutcome = shown;
     const damaged = new Set([...f.ruins, ...(shown ? shown.damaged : [])]);
     const sharp = this.ensureCaches(f, damaged);
 
@@ -472,19 +468,23 @@ export class MapView {
           g.arc(x, y, rr, 0, Math.PI * 2);
         }
         g.fill();
-        if (hurt?.size) {
-          g.strokeStyle = C.red;
-          g.lineWidth = Math.max(0.3, 1.3 * px);
-          g.beginPath();
-          for (const i of hurt) {
-            const x = b.slots[i * 2];
-            const y = b.slots[i * 2 + 1];
-            g.moveTo(x + rr * 1.4, y);
-            g.arc(x, y, rr * 1.4, 0, Math.PI * 2);
-          }
-          g.stroke();
-        }
       }
+    }
+
+    // The red rings: everyone the strike killed or badly hurt, where they were, until the responders leave.
+    if (s > 0.9) {
+      const rr = Math.max(0.35, Math.min(0.7, 1.8 * px)) * 1.4;
+      const fs = Math.max(1, 1.6 * px);
+      g.strokeStyle = C.red;
+      g.lineWidth = Math.max(0.3, 1.3 * px);
+      for (const { c, k } of casualties()) {
+        if (!inView(view, c.x, c.y)) continue;
+        g.globalAlpha = k;
+        g.beginPath();
+        g.arc(c.x, c.y, c.who.kind === 'in' ? rr : c.who.kind === 'car' ? 1.7 * fs : 1.1 * fs, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
     }
 
     // People on foot.
@@ -1706,14 +1706,7 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Sun, night: number, px: number) {
   const scale = Math.max(1, 1.6 * px);
-  if (w.hurt) {
-    g.strokeStyle = C.red;
-    g.lineWidth = Math.max(0.3, 1.3 * px);
-    g.beginPath();
-    g.arc(w.x, w.y, 1.1 * scale, 0, Math.PI * 2);
-    g.stroke();
-    return;
-  }
+  if (w.hurt) return; // drawn as a red ring (see casualties), then taken away with the responders
   const bob = w.path.length ? Math.sin((time + w.phase) * 11) * 0.12 : 0;
   g.fillStyle = `rgba(40,30,20,${0.22 * (1 - night * 0.5)})`;
   g.beginPath();

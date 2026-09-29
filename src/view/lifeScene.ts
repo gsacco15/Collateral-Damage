@@ -3,7 +3,7 @@
 // scooters, smoke from ovens, fires and generators, the red lights on the masts. One description of the scene at a
 // moment, drawn by the flat map and built by the 3D model alike, so both always show the same thing.
 import { buildingAt, inRect, riverX, rng, type Building, type Rect, type World } from '../jev';
-import type { Wear } from './crowd';
+import type { Car, Walker, Wear } from './crowd';
 import { soukScene, type GoodsKind } from './souk';
 
 export interface SceneCtx {
@@ -590,16 +590,37 @@ interface Response {
   y: number;
   sev: number;
   t0: number;
+  hurt: Casualty[];
 }
 const responses: Response[] = [];
 const nowS = () => performance.now() / 1000;
 export const RESPONSE = { siren: [30, 32, 75, 85], hose: [37, 90], arrive: [30, 34, 38], leave: 150, gone: 160, fireOut: [45, 90], smokeGone: 170 };
-export function addResponse(x: number, y: number, sev: number) {
-  responses.push({ x, y, sev, t0: nowS() });
+/** Someone a strike killed or badly hurt, where they were when it hit: a red ring until the responders leave. */
+export interface Casualty {
+  x: number;
+  y: number;
+  who: { kind: 'in'; b: Building; i: number } | { kind: 'out'; w: Walker } | { kind: 'car'; c: Car };
+}
+export function addResponse(x: number, y: number, sev: number, hurt: Casualty[] = []) {
+  responses.push({ x, y, sev, t0: nowS(), hurt });
   if (responses.length > 4) responses.shift();
+}
+/** Rolling a strike again replaces the last one's scene. */
+export function dropLastResponse() {
+  responses.pop();
 }
 export function clearResponses() {
   responses.length = 0;
+}
+/** The rings still showing, and how far each has faded (1 = full, 0 = gone): they go as the police leave. */
+export function casualties() {
+  const t = nowS();
+  const out: { c: Casualty; k: number }[] = [];
+  for (const r of responses) {
+    const k = Math.max(0, Math.min(1, (RESPONSE.gone - (t - r.t0)) / (RESPONSE.gone - RESPONSE.leave)));
+    if (k > 0) for (const c of r.hurt) out.push({ c, k });
+  }
+  return out;
 }
 /** The live scenes: where, and how many seconds since the strike (for the sirens). */
 export function responseScenes() {
