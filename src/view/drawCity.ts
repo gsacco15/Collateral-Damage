@@ -281,26 +281,66 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
     g.globalCompositeOperation = 'screen';
     g.setTransform(...toWorld);
     const v = o.view;
+    // Rooms lit behind the windows: many in the evening, going out one by one after midnight, a few before dawn.
+    // Each window sits on the wall line, a small warm square with its light spilling out onto the street.
+    const hr = ((o.hour % 24) + 24) % 24;
+    const share = hr >= 18 && hr < 23 ? 0.75 : hr >= 23 || hr < 1 ? 0.45 : hr < 5 ? 0.14 : hr < 7 ? 0.32 : 0.5;
+    const bucket = Math.floor(hr * 2); // which rooms are lit changes through the night
+    const warm = (x: number, y: number, rad: number, a: number, col: string) => {
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+      grd.addColorStop(0, `rgba(${col},${a * night})`);
+      grd.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = grd;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    };
     for (const b of w.buildings) {
       if (o.damaged.has(b.id) || !visible(v, b.rects[0], 10)) continue;
       const n = shownCount(o.pop, b);
-      if (!n) continue;
-      const q = b.rects[0];
+      const always = b.kind === 'hospital' || b.kind === 'clinic';
+      if (!n && !always && b.kind !== 'mosque') continue;
       const lr = rng(b.id * 31 + 7);
       const small = b.kind === 'shack' || b.kind === 'tent';
-      const lights = small ? (lr() < 0.6 ? 1 : 0) : Math.min(b.kind === 'apartment' ? 7 : 4, Math.ceil(n / 3));
-      for (let i = 0; i < lights; i++) {
-        const side = Math.floor(lr() * 4);
-        const u = 0.12 + lr() * 0.76;
-        const x = side === 0 ? q.x + q.w * u : side === 1 ? q.x + q.w + 0.4 : side === 2 ? q.x + q.w * u : q.x - 0.4;
-        const y = side === 0 ? q.y - 0.4 : side === 1 ? q.y + q.h * u : side === 2 ? q.y + q.h + 0.4 : q.y + q.h * u;
-        const rad = small ? 2 + lr() : 3 + lr() * 2 + (b.kind === 'apartment' ? 1.5 : 0);
-        const grd = g.createRadialGradient(x, y, 0, x, y, rad);
-        grd.addColorStop(0, `rgba(255,190,110,${0.5 * night})`);
-        grd.addColorStop(1, 'rgba(255,190,110,0)');
-        g.fillStyle = grd;
-        g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      const rooms = b.kind === 'apartment' ? b.floors * 4 : always ? 16 : b.kind === 'office' ? 6 : small ? 1 : b.kind === 'villa' ? 4 : 3;
+      const lit = always ? 0.85 : b.kind === 'office' ? (hr >= 18 && hr < 21 ? 0.3 : 0.06) : b.kind === 'shop' ? (hr >= 18 && hr < 23 ? 0.8 : 0.05) : share;
+      const sw = rng(b.id * 131 + bucket * 17);
+      for (const q of b.rects) {
+        for (let i = 0; i < rooms; i++) {
+          const side = Math.floor(lr() * 4);
+          const u = 0.1 + lr() * 0.8;
+          const on = sw() < lit;
+          if (!on) continue;
+          const x = side === 0 ? q.x + q.w * u : side === 1 ? q.x + q.w : side === 2 ? q.x + q.w * u : q.x;
+          const y = side === 0 ? q.y : side === 1 ? q.y + q.h * u : side === 2 ? q.y + q.h : q.y + q.h * u;
+          // Mostly warm lamps; a hospital's cool strip lights; now and then the blue of a television.
+          const col = always ? '215,235,255' : sw() < 0.12 ? '160,185,255' : sw() < 0.5 ? '255,200,125' : '255,222,165';
+          warm(x, y, small ? 2.4 : 3.6 + (b.kind === 'apartment' ? 1 : 0), 0.55, col);
+          g.fillStyle = `rgba(${col},${0.85 * night})`;
+          const along = side === 0 || side === 2;
+          g.fillRect(x - (along ? 0.65 : 0.3), y - (along ? 0.3 : 0.65), along ? 1.3 : 0.6, along ? 0.6 : 1.3);
+        }
       }
+      if (b.kind === 'mosque') warm(b.cx, b.cy, 18, 0.35, '200,245,210');
+    }
+    // Floodlights on the depot, the warehouses, the factories and the power station: cold white, all night.
+    for (const b of w.buildings) {
+      if (o.damaged.has(b.id) || !visible(v, b.rects[0], 12)) continue;
+      if (!(b.kind === 'warehouse' || b.kind === 'factory' || b.kind === 'fueltank' || b.kind === 'silo')) continue;
+      const q = b.rects[0];
+      if (b.kind === 'fueltank' || b.kind === 'silo') {
+        warm(q.x + q.w / 2, q.y + q.h + 2, 6, 0.3, '230,240,255');
+        continue;
+      }
+      for (const [x, y] of [
+        [q.x, q.y],
+        [q.x + q.w, q.y + q.h],
+      ])
+        warm(x, y, 9, 0.38, '230,240,255');
+    }
+    // Lanterns strung over the souk until late.
+    for (const s of w.spaces) {
+      if (s.kind !== 'market' || !visible(v, s.rect, 10) || !(hr >= 17 || hr < 0.5)) continue;
+      const lr = rng(s.id * 17 + 3);
+      for (let i = 0; i < 14; i++) warm(s.rect.x + lr() * s.rect.w, s.rect.y + lr() * s.rect.h, 4, 0.45, '255,190,110');
     }
     // The kilns are fired through the night: a low orange glow from the vents.
     for (const b of w.buildings) {
@@ -330,6 +370,17 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
       lamp(riverX(y) + 24, y, 6, 0.35);
     }
     for (const l of w.extras.lamps) lamp(l.x, l.y, 6, 0.45);
+    // And pools of light along the other streets, weaker and further apart (no lamp posts drawn, just their light).
+    for (const rd of w.roads) {
+      if (rd.kind !== 'street' || rd.rect.x > 1006) continue;
+      const q = rd.rect;
+      const h = q.w > q.h;
+      const len = h ? q.w : q.h;
+      for (let d = 16, k = 0; d < len; d += 34, k++) {
+        const side = k % 2 ? 1 : -1;
+        lamp(h ? q.x + d : q.x + q.w / 2 + side * (q.w / 2 - 1), h ? q.y + q.h / 2 + side * (q.h / 2 - 1) : q.y + d, 6, 0.3);
+      }
+    }
     g.globalCompositeOperation = 'source-over';
   }
   g.restore();
