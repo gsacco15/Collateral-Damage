@@ -71,18 +71,20 @@ interface GuideStep {
   tab?: 'estimate' | 'jev';
   pulse?: boolean; // make the reach ring breathe
   drawer?: 'day' | 'jev';
+  glow?: 'jev-card'; // softly outline this card so it's clear what the step means
+  play?: boolean; // play through the day while on this step
 }
 
 const GUIDE: GuideStep[] = [
   { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target' },
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
-  { title: "Who's inside right now?", text: "Nobody knows exactly. Overhead images only see people outside, not everyone carries a phone, the census is years old. Jev reads these reports and says how likely each head count is. Its reading is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate' },
+  { title: "Who's inside right now?", text: "Nobody knows exactly. Overhead images only see people outside, not everyone carries a phone, the census is years old. Jev reads these reports and says how likely each head count is. Its reading is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
   { title: 'Where it would hurt', text: 'The red wash is the chance that someone standing in the open would be killed or badly hurt, over hundreds of replays of the strike. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
   { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, open: 'approach' },
-  { drawer: 'day', title: 'Change the hour', text: 'Drag through the day below the map. The school fills in the morning and empties at night; homes do the opposite. The line shows what each hour would cost.', plan: { hour: 2 } },
+  { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true },
   { title: 'Who signs off', text: 'Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.', open: 'rules' },
-  { title: 'Let Jev search', text: 'Jev tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel. It keeps the plan that destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev' },
+  { title: 'Let Jev search', text: 'Jev is there to keep collateral damage as low as it can be. It tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel, so it sees the whole range of possible outcomes. It keeps the plan that still destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev' },
   { title: 'Your decision', text: "Authorise strike opens the final decision: the numbers, who signs, the protected places in reach. Hold the red button to release. Afterwards the ruins stay. Pick another building and plan again, or rebuild the city.", open: 'decide' },
 ];
 
@@ -139,6 +141,9 @@ export default function App() {
   };
   const [aimDrag, setAimDrag] = useState(false);
   const [dayPlay, setDayPlay] = useState(false);
+  // Explore: click a building to see who's inside. Target: click or drag the target onto any building.
+  const [mapMode, setMapMode] = useState<'explore' | 'target'>('explore');
+  const [retarget, setRetarget] = useState<{ x: number; y: number; bid: number | null } | null>(null);
   const [explored, setExplored] = useState(0);
   const [toast, setToast] = useState<Place | null>(null);
   const [view, setView] = useState<'map' | 'model'>('map');
@@ -349,7 +354,7 @@ export default function App() {
 
   useEffect(() => {
     if (!dayPlay) return;
-    const id = window.setInterval(() => setPlanState((p) => ({ ...p, hour: (Math.round(p.hour * 2) / 2 + 0.5) % 24 })), 500);
+    const id = window.setInterval(() => setPlanState((p) => ({ ...p, hour: (Math.round(p.hour * 2) / 2 + 0.5) % 24 })), 600);
     return () => clearInterval(id);
   }, [dayPlay]);
 
@@ -372,6 +377,7 @@ export default function App() {
       if (k === 'f') setPanels(fullMap);
       if (k === 'l') setLayersOpen((o) => !o);
       if (k === 'm') sound.setEnabled(!sound.enabled);
+      if (k === 'x') setMapMode((v) => (v === 'target' ? 'explore' : 'target'));
       if (e.key === '[') setPlanState((p) => ({ ...p, hour: (p.hour + 23.5) % 24 }));
       if (e.key === ']') setPlanState((p) => ({ ...p, hour: (p.hour + 0.5) % 24 }));
       if (e.key === ',') setPlanState((p) => ({ ...p, heading: (p.heading + 345) % 360 }));
@@ -576,6 +582,8 @@ export default function App() {
     ghost: following ? null : ghostPlan,
     trail: phase === 'search' || phase === 'done' ? trailRef.current : [],
     spotMode: countMode,
+    targetMode: mapMode === 'target',
+    retarget,
     hover,
     selected: pop?.bid ?? null,
     outcome,
@@ -684,7 +692,7 @@ export default function App() {
   useEffect(() => () => modelRef.current?.dispose(), []);
 
   // Pointer: drag the aim, pan, zoom, click a building to count its people.
-  const drag = useRef<{ mode: 'aim' | 'pan' | 'heading'; x: number; y: number; cx: number; cy: number } | null>(null);
+  const drag = useRef<{ mode: 'aim' | 'pan' | 'heading' | 'retarget'; x: number; y: number; cx: number; cy: number } | null>(null);
   const localXY = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -699,6 +707,13 @@ export default function App() {
     if (!b || b.id === target.buildingId || !b.capacity) return setPop(null);
     setPop({ bid: b.id, x: px, y: py, n: obs[b.id] ?? shownCount(popNow, b) });
   };
+  // Can this building be made the target? Not a ruin, not the current target, and someone must use it.
+  const targetable = (b: ReturnType<MapView['buildingAt']>) => !!b && b.capacity > 0 && !ruins.includes(b.id) && b.id !== target.buildingId;
+  const retargetTo = (bid: number) => {
+    const briefed = world.targets.find((t) => t.buildingId === bid);
+    chooseTarget(briefed ? briefed.id : `b:${bid}`);
+    sound.play('ui-weapon');
+  };
   const onDown = (e: React.PointerEvent) => {
     const m = mapRef.current;
     if (!m || striking) return;
@@ -711,7 +726,10 @@ export default function App() {
     const hp = m.toScreen(m.handleWorld(plan).x, m.handleWorld(plan).y);
     (e.target as Element).setPointerCapture(e.pointerId);
     hideTip();
-    if (!outcome && Math.hypot(p.x - hp.x, p.y - hp.y) < 18) {
+    if (mapMode === 'target' && !outcome && inTarget(w.x, w.y)) {
+      drag.current = { mode: 'retarget', x: p.x, y: p.y, cx: 0, cy: 0 };
+      setRetarget({ x: w.x, y: w.y, bid: null });
+    } else if (!outcome && Math.hypot(p.x - hp.x, p.y - hp.y) < 18) {
       drag.current = { mode: 'heading', x: p.x, y: p.y, cx: 0, cy: 0 };
       setHeadingDrag(true);
     } else if (!outcome && (nearAim || inTarget(w.x, w.y))) {
@@ -729,6 +747,9 @@ export default function App() {
     if (d?.mode === 'heading') {
       const deg = (Math.atan2(plan.aimX - w.x, -(plan.aimY - w.y)) * 180) / Math.PI;
       setPlan({ heading: ((Math.round(deg / 5) * 5) % 360 + 360) % 360 });
+    } else if (d?.mode === 'retarget') {
+      const b = m.buildingAt(w.x, w.y);
+      setRetarget({ x: w.x, y: w.y, bid: targetable(b) ? b!.id : null });
     } else if (d?.mode === 'aim') moveAim(w.x, w.y);
     else if (d?.mode === 'pan') {
       const { s } = m.cam();
@@ -749,7 +770,10 @@ export default function App() {
     const el = tipRef.current;
     if (!el || view !== 'map' || striking) return;
     let text = '';
-    if (b) {
+    if (b && mapMode === 'target') {
+      const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : !b.capacity ? 'Nobody uses it: not a target' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
+      text = `<b>${placeName(b)}</b><span>${why}</span>`;
+    } else if (b) {
       const n = obs[b.id] ?? shownCount(popNow, b);
       const hurt = est && est.byBuilding[b.id] > 0.05 ? ` · ${est.byBuilding[b.id].toFixed(1)} expected hurt` : '';
       text = `<b>${placeName(b)}</b><span>${b.capacity ? `${n} inside now` : 'no one inside'} · ${MATERIAL_NAME[b.material].toLowerCase()}${hurt}</span>`;
@@ -770,7 +794,24 @@ export default function App() {
     drag.current = null;
     setAimDrag(false);
     setHeadingDrag(false);
+    setRetarget(null);
     const m = mapRef.current;
+    if (d?.mode === 'retarget' && m && e.type === 'pointerup') {
+      const p = localXY(e);
+      const w = m.toWorld(p.x, p.y);
+      const b = m.buildingAt(w.x, w.y);
+      if (targetable(b)) retargetTo(b!.id);
+      return;
+    }
+    if (d?.mode === 'pan' && m && e.type === 'pointerup' && mapMode === 'target') {
+      const p = localXY(e);
+      if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
+        const w = m.toWorld(p.x, p.y);
+        const b = m.buildingAt(w.x, w.y);
+        if (targetable(b)) retargetTo(b!.id);
+      }
+      return;
+    }
     if (d?.mode === 'pan' && m && e.type === 'pointerup') {
       const p = localXY(e);
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
@@ -818,6 +859,8 @@ export default function App() {
   };
   const goGuide = (i: number | null) => {
     setGuide(i);
+    // "Change the hour" plays through the day; any other step (or leaving the guide) stops it.
+    setDayPlay(i != null && !!GUIDE[i].play);
     if (i == null) return sound.stopVoice();
     sound.voice(i + 1);
     const g = GUIDE[i];
@@ -843,6 +886,13 @@ export default function App() {
     setPop(null);
     setOutcome(null);
   };
+  // Once the opening card is gone, the Guide button breathes for a few seconds so people know it's there.
+  const [guideHint, setGuideHint] = useState(true);
+  useEffect(() => {
+    if (intro || !guideHint) return;
+    const id = window.setTimeout(() => setGuideHint(false), 9000);
+    return () => window.clearTimeout(id);
+  }, [intro, guideHint]);
   // On the map, pan and zoom; in 3D, glide the camera there too.
   const flyTo = (x: number, y: number, zoom = 4) => {
     focusRef.current = { cx: x, cy: y, zoom };
@@ -912,7 +962,30 @@ export default function App() {
     profile.forEach((v, i) => {
       if (v.p90 < profile[h].p90 || (v.p90 === profile[h].p90 && v.mean < profile[h].mean)) h = i;
     });
+    setDayPlay(false);
     setPlan({ hour: h + 0.5 });
+    flash(`Holding until ${fmtHour(h + 0.5)}, the hour that would hurt the fewest people: ${profile[h].p90} at most, nine times in ten.`);
+  };
+  // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
+  const callOff = () => {
+    setConfirm(false);
+    poolRef.current?.stop();
+    setDayPlay(false);
+    endStrike();
+    flash('Called off. Nothing was released.');
+    sound.play('ui-toggle');
+  };
+  const authorise = () => {
+    setConfirm(true);
+    sound.radio('radio-02-estimate', 0.3);
+  };
+  // A short line across the map, for a few seconds.
+  const [note, setNote] = useState<string | null>(null);
+  const noteTimer = useRef(0);
+  const flash = (t: string) => {
+    setNote(t);
+    window.clearTimeout(noteTimer.current);
+    noteTimer.current = window.setTimeout(() => setNote(null), 4200);
   };
 
   // ------------------------------------------------------------ derived
@@ -962,7 +1035,7 @@ export default function App() {
         )}
       </Step>
 
-      <Step n={2} title="Weapon and fuze" summary={`${w.short} · ${fuze(plan.fuze).name}${weaponWarn ? ` · destroys it ${pct(est!.pk)}` : ''}`} status={weaponWarn ? 'warn' : 'ok'} open={open.has('weapon')} onToggle={() => toggleStep('weapon')}>
+      <Step n={2} title="Weapon" summary={`${w.short} · ${fuze(plan.fuze).name}${weaponWarn ? ` · destroys it ${pct(est!.pk)}` : ''}`} status={weaponWarn ? 'warn' : 'ok'} open={open.has('weapon')} onToggle={() => toggleStep('weapon')}>
         <div className="armoury" key={plan.weapon}>
           <Origami id={plan.weapon} size={1.35} fold />
           <div>
@@ -1050,20 +1123,13 @@ export default function App() {
 
       <Step n={6} title="Decide" summary={lawful ? 'Release, hold, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
         <div className="decide">
-          <button
-            className="btn danger big"
-            onClick={() => {
-              setConfirm(true);
-              sound.radio('radio-02-estimate', 0.3);
-            }}
-            disabled={!lawful || striking || !est}
-          >
+          <button className="btn danger big" onClick={authorise} disabled={!lawful || striking || !est}>
             Authorise strike…
           </button>
           <button className="btn" onClick={holdForHour} disabled={!profile || striking}>
             Hold for the best hour
           </button>
-          <button className="btn" onClick={resetCity} disabled={striking}>
+          <button className="btn calm" onClick={callOff} disabled={striking}>
             Call it off
           </button>
         </div>
@@ -1085,7 +1151,9 @@ export default function App() {
           <p className="hint">{approval.note}</p>
         </div>
       </section>
-      <JevCard reading={reading} hour={plan.hour} />
+      <div className={`jev-slot ${guide != null && GUIDE[guide].glow === 'jev-card' ? 'glow' : ''}`}>
+        <JevCard reading={reading} hour={plan.hour} />
+      </div>
       <section className="card">
         <h3>How bad could it be?</h3>
         <p className="sub">{est.runs} runs, each with a different landing point and a different count of people.</p>
@@ -1283,10 +1351,11 @@ export default function App() {
           <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
             Explored {explored}/{world.places.length} ▾
           </button>
-          <button className={`sound-btn ${soundOn ? 'on' : ''}`} onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound is on (M)' : 'Sound is off (M)'}>
-            <span aria-hidden>{soundOn ? '🔊' : '🔇'}</span> {soundOn ? 'Sound on' : 'Sound off'}
+          <button className={`sound-btn ${soundOn ? 'on' : ''}`} aria-label="Sound" onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound is on (M)' : 'Sound is off (M)'}>
+            <span aria-hidden>{soundOn ? '🔊' : '🔇'}</span>
+            <span className="lbl">{soundOn ? 'Sound on' : 'Sound off'}</span>
           </button>
-          <button className="btn small" onClick={() => (guide == null ? setIntro(true) : goGuide(null))}>
+          <button className={`btn small ${guideHint && guide == null ? 'attention' : ''}`} onClick={() => (guide == null ? setIntro(true) : goGuide(null))}>
             {guide == null ? 'Guide' : 'End guide'}
           </button>
           <Seg small value={view} onChange={setView} options={[['map', 'Map'], ['model', '3D']]} />
@@ -1325,7 +1394,7 @@ export default function App() {
           <div className="map">
             <canvas
               ref={canvasRef}
-              className={`canvas ${countMode ? 'count' : ''} ${hover != null && hover === target.buildingId && !countMode ? 'aim' : ''}`}
+              className={`canvas ${countMode ? 'count' : ''} ${hover != null && hover === target.buildingId && !countMode ? 'aim' : ''} ${mapMode === 'target' ? 'target-mode' : ''} ${retarget ? 'dragging' : ''}`}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}
@@ -1347,6 +1416,37 @@ export default function App() {
               </span>
               {following && <em>Jev testing</em>}
             </div>
+
+            {view === 'map' && (
+              <div className="hud-mode" role="radiogroup" aria-label="What clicking the map does">
+                <button role="radio" aria-checked={mapMode === 'explore'} className={mapMode === 'explore' ? 'on' : ''} onClick={() => setMapMode('explore')} title="Click a building to see who's inside (X)">
+                  Explore
+                </button>
+                <button role="radio" aria-checked={mapMode === 'target'} className={`tgt ${mapMode === 'target' ? 'on' : ''}`} onClick={() => setMapMode('target')} title="Click any building, or drag the target onto it, to make it the target (X)">
+                  <span aria-hidden>⌖</span> Target
+                </button>
+              </div>
+            )}
+            {mapMode === 'target' && view === 'map' && !striking && !outcome && <div className="hud-hint">Click any building to make it the target, or drag the target onto one.</div>}
+
+            {!striking && !outcome && !confirm && (
+              <div className="action-bar" role="group" aria-label="Decide">
+                <button className="act strike" onClick={authorise} disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
+                  Authorise strike
+                </button>
+                <button className="act wait" onClick={holdForHour} disabled={!profile}>
+                  Hold for best hour
+                </button>
+                <button className="act off" onClick={callOff}>
+                  Call off
+                </button>
+              </div>
+            )}
+            {note && (
+              <div className="map-note" role="status">
+                {note}
+              </div>
+            )}
 
             <div className="hud-layers">
               <button className={`layers-btn ${layersOpen ? 'on' : ''}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen} title="Map layers (L)">
@@ -1409,7 +1509,9 @@ export default function App() {
                   <button onClick={() => modelRef.current?.preset('drone')}>Drone</button>
                   <button onClick={() => modelRef.current?.preset('street')}>Street</button>
                   <button onClick={() => modelRef.current?.preset('top')}>Top</button>
-                  <button onClick={() => modelRef.current?.toTarget()}>Target</button>
+                  <button className="tgt-btn" onClick={() => modelRef.current?.toTarget()}>
+                    <span aria-hidden>⌖</span> Target
+                  </button>
                 </>
               ) : (
                 <>
@@ -1425,8 +1527,10 @@ export default function App() {
                       const c = targetCentre(target);
                       focusRef.current = { cx: c.x + 20, cy: c.y + 10, zoom: 3.2 };
                     }}
+                    className="tgt-btn"
+                    title="Fly to the target"
                   >
-                    Target
+                    <span aria-hidden>⌖</span> Target
                   </button>
                 </>
               )}
@@ -1731,7 +1835,10 @@ export default function App() {
                 {dayPlay ? '❚❚ Pause' : '▶ Play the day'}
               </button>
             </div>
-            <Timeline profile={profile} hour={plan.hour} onHour={(h) => setPlan({ hour: h })} day={plan.day === 'friday' ? 'Friday' : 'weekday'} />
+            <Timeline profile={profile} hour={plan.hour} onHour={(h) => {
+                setDayPlay(false);
+                setPlan({ hour: h });
+              }} day={plan.day === 'friday' ? 'Friday' : 'weekday'} />
                 </div>
               ) : phase === 'idle' ? (
                 <div className="drawer-empty">

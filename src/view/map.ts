@@ -71,6 +71,8 @@ export interface MapFrame {
   ghost: Plan | null;
   trail: Plan[]; // the plans Jev tried most recently, newest last
   spotMode: boolean;
+  targetMode?: boolean; // clicking picks a new target
+  retarget?: { x: number; y: number; bid: number | null } | null; // dragging the target onto another building
   hover: number | null;
   selected: number | null;
   outcome: Outcome | null;
@@ -452,11 +454,39 @@ export class MapView {
       leader(g, b.cx, b.cy, b.cx, top - 10 * px * 3, px);
       label(g, b.cx, top - 10 * px * 3, placeName(b), px, {});
     }
-    if (f.hover != null && f.hover !== f.selected) {
+    const pick = f.retarget ? f.retarget.bid : f.targetMode ? f.hover : null;
+    if (f.hover != null && f.hover !== f.selected && pick == null) {
       const b = this.world.buildings[f.hover];
       g.strokeStyle = f.spotMode ? C.jev : 'rgba(29,27,24,0.55)';
       g.lineWidth = 1.6 * px;
       for (const q of b.rects) g.strokeRect(q.x - 0.6, q.y - 0.6, q.w + 1.2, q.h + 1.2);
+    }
+    // Target mode: the building under the pointer lights up red, ready to be picked.
+    if (pick != null && pick !== targetOf(this.world, plan.target).buildingId && this.world.buildings[pick]?.capacity && !f.ruins.includes(pick)) {
+      const b = this.world.buildings[pick];
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
+      g.fillStyle = `rgba(200,40,30,${0.1 + 0.08 * pulse})`;
+      for (const q of b.rects) g.fillRect(q.x, q.y, q.w, q.h);
+      g.strokeStyle = '#c8281e';
+      g.lineWidth = 2 * px;
+      g.setLineDash([5 * px, 3 * px]);
+      for (const q of b.rects) g.strokeRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);
+      g.setLineDash([]);
+    }
+    // Dragging the target: a dashed line from where it is to where it's going.
+    if (f.retarget) {
+      const c = targetOf(this.world, plan.target).rect;
+      const x0 = c.x + c.w / 2;
+      const y0 = c.y + c.h / 2;
+      g.strokeStyle = 'rgba(200,40,30,0.8)';
+      g.lineWidth = 1.6 * px;
+      g.setLineDash([6 * px, 4 * px]);
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(f.retarget.x, f.retarget.y);
+      g.stroke();
+      g.setLineDash([]);
+      drawAim(g, f.retarget.x, f.retarget.y, px, 1.1, '#c8281e');
     }
 
     // Jev's trail: the last plans it tried, fading.

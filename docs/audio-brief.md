@@ -2,16 +2,8 @@
 
 ## Status
 
-- **Generated with ElevenLabs and in `public/audio/`:**
-  - all 21 sound effects and ambience beds;
-  - guide narration 00, 02 and 06 (voice: *Artaius, Calm British Narrator*);
-  - radio lines 02 and 06 (Cell: *Daniel*, Overwatch: *Brian*).
-- **Still to make:**
-  - `voice/guide-01, 03, 04, 05, 07, 08, 09, 10`;
-  - `radio-01, 03, 04, 05, 07, 08`;
-  - `music-bed` (optional).
-
-  ElevenLabs disabled free-tier access partway through, so these weren't made. The nodes are ready on the ElevenLabs canvas *Collateral Damage — sounds and voices*: run them there, or make them anywhere from the scripts below. Drop the files in with these exact names; the app plays whatever is present and skips what isn't.
+- **Generated with ElevenLabs and in `public/audio/`:** all 21 sound effects and ambience beds, all 11 guide narrations (voice: *Artaius, Calm British Narrator*) and all 8 radio lines (Cell: *Daniel*, Overwatch: *Brian*). They live on the ElevenLabs canvas *Collateral Damage — sounds and voices*.
+- **Still to make (optional):** `music-bed`.
 
 Hand this whole file to the AI or tools you use to make the sounds and voices. It has the context, the tone, every file needed with its specs, and the scripts.
 
@@ -156,13 +148,13 @@ Files: `public/audio/voice/guide-00.mp3` to `guide-10.mp3`. Keep each to the tex
 > Fragments lean the way the bomb travels. Turn the approach so they fly west, away from the school.
 
 **guide-07 (Change the hour)**
-> Move through the day. The school fills in the morning and empties at night; homes do the opposite. Every hour has a different cost.
+> Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. Every hour has a different cost.
 
 **guide-08 (Who signs off)**
 > Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.
 
 **guide-09 (Let Jev search)**
-> Jev tries every way to do it: every weapon, fuze, direction, aim point and hour. Three thousand eight hundred and forty plans, each replayed a hundred and twenty times. It keeps the plan that destroys the target and hurts the fewest people.
+> Jev tries every way to do it: every weapon, fuze, direction, aim point and hour. Three thousand eight hundred and forty plans, each replayed a hundred and twenty times. Across all those possible outcomes, it looks for the plan that still destroys the target and keeps the harm to civilians as low as it can be.
 
 **guide-10 (Your decision)**
 > The final decision shows the numbers, who signs, and the protected places in reach. Hold the button to release. Afterwards, the ruins stay. Pick another building and plan again, or rebuild the city.
