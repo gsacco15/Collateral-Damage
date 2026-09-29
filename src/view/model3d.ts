@@ -537,7 +537,31 @@ export class Model3D {
     }
     const farMesh = new THREE.Mesh(mergeGeometries(farBoxes)!, new THREE.MeshStandardMaterial({ color: '#e0d6c6', roughness: 1 }));
     s.add(farMesh);
-    this.scene.fog = new THREE.Fog('#e6d8c0', 500, 1900);
+    // Beyond it: sand dunes, then folded-paper mountains, fading into the haze so the distance has depth.
+    const dunes: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 90; i++) {
+      const a = r() * Math.PI * 2;
+      const d = 900 + r() * 700;
+      const g = new THREE.SphereGeometry(1, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+      g.scale(60 + r() * 90, 10 + r() * 22, 30 + r() * 50);
+      g.rotateY(-0.4 + r() * 0.3);
+      g.translate(w.w / 2 + Math.cos(a) * d, 0, w.h / 2 + Math.sin(a) * d * 0.85);
+      dunes.push(g);
+    }
+    const hills: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 46; i++) {
+      const a = (i / 46) * Math.PI * 2 + r() * 0.1;
+      const d = 1500 + r() * 450;
+      const h = 90 + r() * 220;
+      const g = new THREE.ConeGeometry(160 + r() * 220, h, 5 + Math.floor(r() * 3), 1);
+      g.rotateY(r() * Math.PI);
+      g.translate(w.w / 2 + Math.cos(a) * d, h / 2 - 4, w.h / 2 + Math.sin(a) * d);
+      hills.push(g);
+    }
+    const sand = (c: string) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true });
+    s.add(new THREE.Mesh(mergeGeometries(dunes)!, sand('#dcc39c')));
+    s.add(new THREE.Mesh(mergeGeometries(hills)!, sand('#cdb088')));
+    this.scene.fog = new THREE.Fog('#e6d8c0', 500, 2100);
   }
 
   /** All buildings, merged by material. Rebuilt without the damaged ones after a strike. */
@@ -773,6 +797,7 @@ export class Model3D {
     };
     for (const id of ids) {
       const b = this.world.buildings[id];
+      if (!b) continue; // the bridge
       const r = rng(id * 13 + 1);
       const main = paper[b.paper];
       if (b.round) {
@@ -935,6 +960,7 @@ export class Model3D {
     // Dark smoke from whatever else went off.
     for (const id of o.damaged) {
       const b = this.world.buildings[id];
+      if (!b) continue;
       if (!b.hazard && !(o.secondary.length && b.id === targetOf(this.world, plan.target).buildingId)) continue;
       for (let i = 0; i < 8; i++) puff(b.cx + (r() - 0.5) * 14, 4, b.cy + (r() - 0.5) * 14, 0.3 + r() * 0.15, new THREE.Vector3(0.8, 6 + r() * 6, 0), 600 + r() * 900, 1.2, 3);
     }

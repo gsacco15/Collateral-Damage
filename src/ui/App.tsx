@@ -24,6 +24,7 @@ import {
   sources,
   targetCentre,
   targetOf,
+  BRIDGE_RUIN,
   WEAPONS,
   weapon,
   type Candidate,
@@ -99,7 +100,7 @@ const loadDiscovered = () => {
 const planFor = (world: ReturnType<typeof buildCity>, target: TargetId): Plan => {
   const t = targetOf(world, target);
   const a = targetCentre(t);
-  return { target, weapon: 'large', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
+  return { target, weapon: 'medium', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
 };
 
 export default function App() {
@@ -110,7 +111,7 @@ export default function App() {
   const [lawful, setLawful] = useState(true);
   const [rulesId, setRulesId] = useState('iraq2003');
   const [runs, setRuns] = useState(400);
-  const [layers, setLayers] = useState<Layers>({ people: true, circle: false, pattern: false, impacts: false, labels: true, protect: true, danger: true });
+  const [layers, setLayers] = useState<Layers>({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true });
   const [est, setEst] = useState<Estimate | null>(null);
   const [field, setField] = useState<DangerField | null>(null);
   const [computing, setComputing] = useState(false);
@@ -143,6 +144,7 @@ export default function App() {
   const [dayPlay, setDayPlay] = useState(false);
   // Explore: click a building to see who's inside. Target: click or drag the target onto any building.
   const [mapMode, setMapMode] = useState<'explore' | 'target'>('explore');
+  const [strikeOpen, setStrikeOpen] = useState(false);
   const [retarget, setRetarget] = useState<{ x: number; y: number; bid: number | null } | null>(null);
   const [explored, setExplored] = useState(0);
   const [toast, setToast] = useState<Place | null>(null);
@@ -709,6 +711,11 @@ export default function App() {
   };
   // Can this building be made the target? Not a ruin, not the current target, and someone must use it.
   const targetable = (b: ReturnType<MapView['buildingAt']>) => !!b && b.capacity > 0 && !ruins.includes(b.id) && b.id !== target.buildingId;
+  // The bridge isn't a building, so Target mode checks for it by position.
+  const onBridge = (x: number, y: number) => {
+    const q = targetOf(world, 'bridge').rect;
+    return plan.target !== 'bridge' && !ruins.includes(BRIDGE_RUIN) && x >= q.x && x <= q.x + q.w && y >= q.y - 1 && y <= q.y + q.h + 1;
+  };
   const retargetTo = (bid: number) => {
     const briefed = world.targets.find((t) => t.buildingId === bid);
     chooseTarget(briefed ? briefed.id : `b:${bid}`);
@@ -773,6 +780,8 @@ export default function App() {
     if (b && mapMode === 'target') {
       const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : !b.capacity ? 'Nobody uses it: not a target' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
+    } else if (!b && mapMode === 'target' && onBridge(wx, wy)) {
+      text = '<b>Boulevard bridge</b><span>Click to make this the target</span>';
     } else if (b) {
       const n = obs[b.id] ?? shownCount(popNow, b);
       const hurt = est && est.byBuilding[b.id] > 0.05 ? ` · ${est.byBuilding[b.id].toFixed(1)} expected hurt` : '';
@@ -801,6 +810,7 @@ export default function App() {
       const w = m.toWorld(p.x, p.y);
       const b = m.buildingAt(w.x, w.y);
       if (targetable(b)) retargetTo(b!.id);
+      else if (!b && onBridge(w.x, w.y)) chooseTarget('bridge');
       return;
     }
     if (d?.mode === 'pan' && m && e.type === 'pointerup' && mapMode === 'target') {
@@ -809,6 +819,7 @@ export default function App() {
         const w = m.toWorld(p.x, p.y);
         const b = m.buildingAt(w.x, w.y);
         if (targetable(b)) retargetTo(b!.id);
+        else if (!b && onBridge(w.x, w.y)) chooseTarget('bridge');
       }
       return;
     }
@@ -883,6 +894,7 @@ export default function App() {
       setPanels((p) => ({ ...p, drawer: true }));
     }
     if (g.open) setPanels((p) => ({ ...p, plan: true }));
+    if (g.open === 'decide') setStrikeOpen(true);
     setPop(null);
     setOutcome(null);
   };
@@ -1206,9 +1218,9 @@ export default function App() {
               Jev <span className={`status ${phase}`}>{phase === 'idle' ? 'idle' : phase === 'checklist' ? 'checking' : phase === 'search' ? (status.running ? 'searching' : 'paused') : 'done'}</span>
             </h3>
             <p className="sub">
-              Jev reads the intelligence, replays each plan 120 times with different luck, and tries every way to strike {target.short}: every weapon, fuze, direction, aim point and hour. It keeps the plan that destroys the target and hurts the fewest people.
+              Tries every way to strike {target.short} and keeps the one that hurts the fewest people.
             </p>
-            <p className="powered">Powered by TypeSafe&rsquo;s System One model, which reads the intelligence. The replays run here, in your browser.</p>
+            <p className="powered">TypeSafe System One</p>
           </div>
         </div>
         <div className="row">
@@ -1430,16 +1442,27 @@ export default function App() {
             {mapMode === 'target' && view === 'map' && !striking && !outcome && <div className="hud-hint">Click any building to make it the target, or drag the target onto one.</div>}
 
             {!striking && !outcome && !confirm && (
-              <div className="action-bar" role="group" aria-label="Decide">
-                <button className="act strike" onClick={authorise} disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
-                  Authorise strike
-                </button>
-                <button className="act wait" onClick={holdForHour} disabled={!profile}>
-                  Hold for best hour
-                </button>
-                <button className="act off" onClick={callOff}>
-                  Call off
-                </button>
+              <div className={`strike-dock ${strikeOpen ? 'open' : ''}`} role="group" aria-label="Decide">
+                {strikeOpen ? (
+                  <>
+                    <button className="act strike" onClick={authorise} disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
+                      Authorise strike
+                    </button>
+                    <button className="act wait" onClick={holdForHour} disabled={!profile}>
+                      Hold for best hour
+                    </button>
+                    <button className="act off" onClick={callOff}>
+                      Call off
+                    </button>
+                    <button className="dock-close" onClick={() => setStrikeOpen(false)} aria-label="Close">
+                      ×
+                    </button>
+                  </>
+                ) : (
+                  <button className="act strike tab" onClick={() => setStrikeOpen(true)} title="Authorise, hold or call off">
+                    Strike ▸
+                  </button>
+                )}
               </div>
             )}
             {note && (

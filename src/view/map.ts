@@ -1,6 +1,7 @@
 // The map: the paper city seen from above, the people in it, the plan's overlays, labels found by exploring,
 // and the strike. A big world-scale cache keeps panning smooth; a sharp view-scale render follows when it settles.
 import {
+  BRIDGE_RUIN,
   buildingAt,
   buildingDist,
   collapse,
@@ -310,6 +311,7 @@ export class MapView {
     }
     const fx = this.fx;
     if (fx) this.stepFx(fx, dt);
+    this.crowd.broken = f.ruins.includes(BRIDGE_RUIN) || !!f.outcome?.damaged.includes(BRIDGE_RUIN) ? this.world.targets.find((t) => t.id === 'bridge')!.rect : null;
     this.crowd.step(dt, fx && fx.impacted ? { x: fx.outcome.ix, y: fx.outcome.iy, t: fx.t - fx.impactAt } : null, f.pop);
     this.explore(f);
 
@@ -394,14 +396,14 @@ export class MapView {
 
     // People inside, seen as if the roofs were glass. Tinted by Jev's expected harm for their building.
     if (f.layers.people && s > 1.1) {
-      const rr = Math.max(0.26, Math.min(0.5, 1.3 * px));
+      const rr = Math.max(0.35, Math.min(0.7, 1.8 * px));
       for (const b of this.world.buildings) {
         if (!inView(view, b.cx, b.cy, 40)) continue;
         const n = shownCount(f.pop, b);
         if (!n) continue;
         const hurt = shown ? new Set(shown.hurtSlots[b.id] ?? []) : null;
         const known = f.pop.observed[b.id] >= 0;
-        const base = known ? '#1b3a5c' : '#4a4038';
+        const base = known ? '#1b3a5c' : '#2a2622';
         let col = base;
         if (!shown && f.est && f.layers.pattern) {
           const exp = f.pop.observed[b.id] >= 0 ? f.pop.observed[b.id] : f.pop.expected[b.id];
@@ -733,9 +735,9 @@ export class MapView {
     const o = fx.outcome;
     if (!fx.impacted && fx.t >= fx.impactAt) {
       fx.impacted = true;
-      this.shake = 1;
       const r = rng(Math.round(o.ix * 100 + o.iy));
       const w = weapon(fx.plan.weapon);
+      this.shake = Math.min(1.4, 0.25 + w.blast / 18); // a small bomb nudges the table; a big one rattles it
       const e = effect(fx.plan, structureAt(this.world, o.ix, o.iy));
       const n = 70 + Math.round(w.blast * 6);
       const cols = ['#f3f1ec', '#c99f69', '#8f8781', '#e7ddcc', '#d6d1c7', '#6b5a45'];
@@ -754,6 +756,7 @@ export class MapView {
       // Secondary fires: dark smoke over whatever else went off.
       for (const id of o.damaged) {
         const b = this.world.buildings[id];
+        if (!b) continue;
         if (!b.hazard && !(b.id === targetOf(this.world, fx.plan.target).buildingId && o.secondary.length)) continue;
         for (let i = 0; i < 6; i++) fx.puffs.push({ x: b.cx + (r() - 0.5) * 10, y: b.cy + (r() - 0.5) * 10, r: 3, grow: 7, life: -0.5 - r() * 1.2, seed: r() * 1000, dark: 0.9 });
       }
@@ -855,6 +858,29 @@ export class MapView {
       g.fill();
       g.restore();
     }
+    // The flash and the shockwave, sized by the weapon: a pop for the smallest, a wide white burst for the biggest.
+    const since = t - fx.impactAt;
+    if (fx.impacted && since < 1.2) {
+      const blast = weapon(plan.weapon).blast;
+      if (since < 0.45) {
+        const k = since / 0.45;
+        const rr = blast * (0.5 + k * 0.9);
+        const grd = g.createRadialGradient(o.ix, o.iy, 0, o.ix, o.iy, rr);
+        grd.addColorStop(0, `rgba(255,250,228,${0.95 * (1 - k)})`);
+        grd.addColorStop(0.4, `rgba(255,214,140,${0.6 * (1 - k)})`);
+        grd.addColorStop(1, 'rgba(255,190,110,0)');
+        g.fillStyle = grd;
+        g.beginPath();
+        g.arc(o.ix, o.iy, rr, 0, Math.PI * 2);
+        g.fill();
+      }
+      const k = since / 1.2;
+      g.strokeStyle = `rgba(255,255,255,${0.7 * (1 - k)})`;
+      g.lineWidth = Math.max(0.4, blast * 0.06 * (1 - k));
+      g.beginPath();
+      g.arc(o.ix, o.iy, blast * (0.3 + k * 2.4), 0, Math.PI * 2);
+      g.stroke();
+    }
     for (const p of fx.puffs) {
       if (p.life < 0) continue;
       const k = Math.min(1, p.life / 7);
@@ -907,6 +933,7 @@ export function resolveStrike(world: World, plan: Plan, pop: Population, walkers
     }
   }
   if (destroyed && t.buildingId != null) damaged.add(t.buildingId);
+  if (destroyed && plan.target === 'bridge') damaged.add(BRIDGE_RUIN);
   for (const b of world.buildings) {
     const d = buildingDist(b, ix, iy);
     if (d > reach) continue;
@@ -1211,10 +1238,94 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
   g.beginPath();
   g.ellipse(w.x, w.y + bob, 0.62 * scale, 0.45 * scale, 0, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = w.skin;
-  g.beginPath();
-  g.arc(w.x, w.y + bob - 0.05 * scale, 0.3 * scale, 0, Math.PI * 2);
-  g.fill();
+  // The head, and what's on it. Detail only when zoomed in enough to see it.
+  const hx = w.x;
+  const hy = w.y + bob - 0.05 * scale;
+  const hr = 0.3 * scale;
+  const near = px < 0.16;
+  // Facing: the way they're walking, or a slow look around when standing.
+  const next = w.path[0];
+  const a = next && (next.x !== w.x || next.y !== w.y) ? Math.atan2(next.y - w.y, next.x - w.x) : w.phase + Math.sin(time * 0.3 + w.phase) * 0.8;
+  const fx = Math.cos(a);
+  const fy = Math.sin(a);
+  switch (w.wear) {
+    case 'abaya': // full black, a narrow slit for the eyes
+      g.fillStyle = '#141215';
+      g.beginPath();
+      g.arc(hx, hy, hr * 1.12, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'hijab': // a coloured scarf over the head and shoulders, the face at the front
+      g.fillStyle = w.cloth === '#e7e1d4' || w.cloth === '#d9c7a4' ? '#5b6d80' : w.cloth;
+      g.beginPath();
+      g.arc(hx - fx * hr * 0.12, hy - fy * hr * 0.12, hr * 1.12, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = w.skin;
+      g.beginPath();
+      g.arc(hx + fx * hr * 0.55, hy + fy * hr * 0.55, hr * 0.42, 0, Math.PI * 2);
+      g.fill();
+      break;
+    case 'turban': // a wide wrapped crown
+      g.fillStyle = w.phase > 5 ? '#f0ebe0' : '#3b3a44';
+      g.beginPath();
+      g.arc(hx, hy, hr * 1.2, 0, Math.PI * 2);
+      g.fill();
+      if (near) {
+        g.strokeStyle = 'rgba(0,0,0,0.25)';
+        g.lineWidth = hr * 0.12;
+        g.beginPath();
+        g.arc(hx, hy, hr * 0.7, a, a + Math.PI * 1.4);
+        g.stroke();
+      }
+      break;
+    case 'keffiyeh': // white with red check, falling behind onto the shoulders
+      g.fillStyle = '#f3efe6';
+      g.beginPath();
+      g.ellipse(hx - fx * hr * 0.35, hy - fy * hr * 0.35, hr * 1.25, hr * 1.05, a, 0, Math.PI * 2);
+      g.fill();
+      if (near) {
+        g.fillStyle = '#b23a30';
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if ((i + j) & 1) g.fillRect(hx - fx * hr * 0.3 + i * hr * 0.42 - hr * 0.1, hy - fy * hr * 0.3 + j * hr * 0.42 - hr * 0.1, hr * 0.2, hr * 0.2);
+        g.strokeStyle = '#1d1b1e'; // the black cord
+        g.lineWidth = hr * 0.14;
+        g.beginPath();
+        g.arc(hx, hy, hr * 0.62, 0, Math.PI * 2);
+        g.stroke();
+      }
+      break;
+    case 'cap': // a small white cap on dark hair
+      g.fillStyle = '#231b16';
+      g.beginPath();
+      g.arc(hx, hy, hr, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#f2eee6';
+      g.beginPath();
+      g.arc(hx - fx * hr * 0.1, hy - fy * hr * 0.1, hr * 0.72, 0, Math.PI * 2);
+      g.fill();
+      break;
+    default: // bare: hair on top, the face at the front
+      g.fillStyle = w.skin;
+      g.beginPath();
+      g.arc(hx, hy, hr, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#231b16';
+      g.beginPath();
+      g.arc(hx - fx * hr * 0.28, hy - fy * hr * 0.28, hr * 0.78, 0, Math.PI * 2);
+      g.fill();
+  }
+  // Two dots for eyes, on the side they're facing.
+  if (near) {
+    const ex = hx + fx * hr * (w.wear === 'hijab' ? 0.72 : 0.78);
+    const ey = hy + fy * hr * (w.wear === 'hijab' ? 0.72 : 0.78);
+    const sx = -fy * hr * 0.3;
+    const sy = fx * hr * 0.3;
+    g.fillStyle = w.wear === 'abaya' ? '#e8dcc8' : '#141215';
+    const er = Math.max(0.045, hr * 0.12);
+    g.beginPath();
+    g.arc(ex + sx, ey + sy, er, 0, Math.PI * 2);
+    g.arc(ex - sx, ey - sy, er, 0, Math.PI * 2);
+    g.fill();
+  }
 }
 
 function leader(g: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, px: number) {
@@ -1286,9 +1397,24 @@ function paperTexture(size = 256) {
       img.data[i + 3] = 255;
     }
   g.putImageData(img, 0, 0);
-  g.globalAlpha = 0.05;
+  // A few long, faint creases, as if the sheet had been folded once and flattened.
+  for (let i = 0; i < 5; i++) {
+    const x0 = r() * size;
+    const y0 = r() * size;
+    const a = r() * Math.PI;
+    const l = size * (0.4 + r() * 0.6);
+    for (const [off, col] of [[0, 'rgba(90,70,50,0.07)'], [0.8, 'rgba(255,255,255,0.18)']] as const) {
+      g.strokeStyle = col;
+      g.lineWidth = 0.8;
+      g.beginPath();
+      g.moveTo(x0 + off, y0);
+      g.lineTo(x0 + off + Math.cos(a) * l, y0 + Math.sin(a) * l);
+      g.stroke();
+    }
+  }
+  g.globalAlpha = 0.065;
   g.strokeStyle = '#6b5a45';
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 260; i++) {
     const x = r() * size;
     const y = r() * size;
     const a = r() * Math.PI;

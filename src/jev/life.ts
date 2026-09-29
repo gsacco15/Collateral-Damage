@@ -110,6 +110,7 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
   }
   // Ruins from earlier strikes: nobody is inside any more.
   for (const id of ruins) {
+    if (id < 0) continue; // the bridge: nobody lives on it
     expected[id] = 0;
     observed[id] = 0;
   }

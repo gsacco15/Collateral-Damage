@@ -1,6 +1,6 @@
 // Draws the static city in world coordinates onto a context that's already scaled (1 unit = 1 metre).
 // Used twice: once into a large world-sized cache for smooth panning, and again sharp for the current view.
-import { riverX, rng, shownCount, type Building, type Population, type Rect, type Space, type World } from '../jev';
+import { BRIDGE_RUIN, riverX, rng, shownCount, type Building, type Population, type Rect, type Space, type World } from '../jev';
 import { C, grade, nightness, shade, sun, type Sun } from './paper';
 import { laid } from './textures';
 
@@ -22,15 +22,21 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
   // Paper table beyond the city.
   g.fillStyle = laid(g, 'road', 1, false);
   g.fillRect(v.x - 50, v.y - 50, v.w + 100, v.h + 100);
-  // Blocks beyond the edge, so the city doesn't stop at the frame.
+  // Beyond the city: one ring of outlying blocks, then open sand and dunes.
+  g.fillStyle = laid(g, 'sand', 5);
+  g.fillRect(v.x - 50, v.y - 50, v.w + 100, v.h + 100);
+  g.fillStyle = C.street;
+  g.fillRect(-60, -60, w.w + 120, w.h + 120);
   g.fillStyle = laid(g, 'ground', 2);
-  for (let bx = -3; bx < 13; bx++)
-    for (let by = -3; by < 10; by++) {
+  for (let bx = -1; bx < 11; bx++)
+    for (let by = -1; by < 8; by++) {
       const x = bx * 110 - 50;
       const y = by * 110 - 50;
       if (x > -120 && x < w.w + 10 && y > -120 && y < w.h + 10) continue;
-      g.fillRect(x + 6, y + 6, 98, 98);
+      if (x + 110 < -60 || y + 110 < -60 || x > w.w + 60 || y > w.h + 60) continue;
+      g.fillRect(Math.max(x + 6, -54), Math.max(y + 6, -54), Math.min(98, w.w + 54 - Math.max(x + 6, -54)), Math.min(98, w.h + 54 - Math.max(y + 6, -54)));
     }
+  drawDunes(g, w, v);
   // Blocks.
   for (const bl of w.blocks) {
     if (!visible(v, bl)) continue;
@@ -81,6 +87,7 @@ export function drawCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, sha
       g.setLineDash([]);
     }
   }
+  if (o.damaged.has(BRIDGE_RUIN)) drawBrokenBridge(g, w.targets.find((t) => t.id === 'bridge')!.rect);
   // The roundabout and its fountain.
   const rb = w.roundabout;
   g.fillStyle = C.road;
@@ -166,7 +173,7 @@ export function finishCity(g: CanvasRenderingContext2D, w: World, o: CityOpts, p
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (pattern) {
     g.globalCompositeOperation = 'multiply';
-    g.globalAlpha = 0.45;
+    g.globalAlpha = 0.58;
     g.fillStyle = pattern;
     g.fillRect(0, 0, width, height);
   }
@@ -835,6 +842,129 @@ function drawRubble(g: CanvasRenderingContext2D, q: Rect, paper: Building['paper
     g.fillRect(-len / 2 + sh.dx * 1.4, -0.2 + sh.dy * 1.4, len, 0.4);
     g.fillStyle = paper === 'kraft' ? '#a7804f' : r() < 0.5 ? '#8d8479' : '#efe9dd';
     g.fillRect(-len / 2, -0.2, len, 0.4);
+    g.restore();
+  }
+}
+
+/** The boulevard bridge, dropped: a torn gap over the water, its two ends hanging, the middle span in the canal. */
+function drawBrokenBridge(g: CanvasRenderingContext2D, q: Rect) {
+  const r = rng(4242);
+  const mid = q.x + q.w / 2;
+  const top = q.y - 2;
+  const bot = q.y + q.h + 2;
+  const steps = 7;
+  const edge = (side: -1 | 1) => {
+    const pts: [number, number][] = [];
+    for (let i = 0; i <= steps; i++) pts.push([mid + side * (13 + r() * 5), top + ((bot - top) * i) / steps]);
+    return pts;
+  };
+  const left = edge(-1);
+  const right = edge(1);
+  // Fallen slabs in the water first, so the gap's edges lie over them.
+  const slab = (cx: number, cy: number, w: number, h: number, rot: number) => {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(rot);
+    g.fillStyle = 'rgba(30,40,45,0.25)';
+    g.fillRect(-w / 2 + 1.2, -h / 2 + 1.6, w, h);
+    g.fillStyle = '#8f887d';
+    g.fillRect(-w / 2, -h / 2, w, h);
+    g.fillStyle = '#b3aa9c';
+    g.fillRect(-w / 2, -h / 2, w, 0.8);
+    g.restore();
+  };
+  // The gap: deep water where the road was.
+  g.fillStyle = C.waterDeep;
+  g.beginPath();
+  left.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  for (let i = right.length - 1; i >= 0; i--) g.lineTo(right[i][0], right[i][1]);
+  g.closePath();
+  g.fill();
+  g.save();
+  g.clip();
+  slab(mid - 4, q.y + q.h * 0.35, 16, q.h * 0.55, -0.35);
+  slab(mid + 5, q.y + q.h * 0.75, 12, q.h * 0.42, 0.5);
+  // Ripples round the wreck.
+  g.strokeStyle = 'rgba(255,255,255,0.45)';
+  g.lineWidth = 0.35;
+  for (let i = 0; i < 5; i++) {
+    g.beginPath();
+    g.arc(mid + (r() - 0.5) * 14, top + r() * (bot - top), 2 + r() * 3, 0, Math.PI);
+    g.stroke();
+  }
+  g.restore();
+  // Torn edges: a lit paper edge and a shadow under each hanging end.
+  for (const [pts, side] of [[left, -1], [right, 1]] as const) {
+    g.strokeStyle = 'rgba(20,20,20,0.5)';
+    g.lineWidth = 2.4;
+    g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x - side * 0.9, y) : g.moveTo(x - side * 0.9, y)));
+    g.stroke();
+    g.strokeStyle = '#fbf7ee';
+    g.lineWidth = 0.9;
+    g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.stroke();
+    // Bent rebar sticking out.
+    g.strokeStyle = '#5a4a3c';
+    g.lineWidth = 0.3;
+    for (let i = 1; i < pts.length - 1; i += 2) {
+      g.beginPath();
+      g.moveTo(pts[i][0], pts[i][1]);
+      g.lineTo(pts[i][0] - side * (1.5 + r() * 2), pts[i][1] + (r() - 0.5) * 2);
+      g.stroke();
+    }
+  }
+  // Scorch and grit on the ends that are left.
+  for (let i = 0; i < 40; i++) {
+    const side = r() < 0.5 ? -1 : 1;
+    const x = mid + side * (12 + r() * 14);
+    const y = top + r() * (bot - top);
+    g.fillStyle = r() < 0.4 ? 'rgba(40,32,26,0.35)' : 'rgba(120,110,98,0.6)';
+    g.fillRect(x, y, 0.4 + r() * 1.1, 0.4 + r() * 0.9);
+  }
+  const sc = g.createRadialGradient(mid, q.y + q.h / 2, 4, mid, q.y + q.h / 2, 26);
+  sc.addColorStop(0, 'rgba(35,28,22,0.3)');
+  sc.addColorStop(1, 'rgba(35,28,22,0)');
+  g.fillStyle = sc;
+  g.fillRect(mid - 28, top - 6, 56, bot - top + 12);
+}
+
+/** Sand dunes beyond the city: crescent ridges, a lit face towards the sun and a soft shadow behind. */
+function drawDunes(g: CanvasRenderingContext2D, w: World, v: Rect) {
+  const r = rng(314);
+  for (let i = 0; i < 260; i++) {
+    const x = -700 + r() * (w.w + 1400);
+    const y = -600 + r() * (w.h + 1200);
+    const len = 40 + r() * 90;
+    const depth = len * (0.22 + r() * 0.18);
+    const rot = -0.5 + r() * 0.35; // the wind shapes them all the same way
+    if (x > -90 - len / 2 && x < w.w + 90 + len / 2 && y > -90 - depth && y < w.h + 90 + depth) continue;
+    if (!visible(v, { x: x - len, y: y - len, w: len * 2, h: len * 2 }, 0)) continue;
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot);
+    // Shadow side (lee): a darker crescent.
+    g.fillStyle = 'rgba(150,112,70,0.22)';
+    g.beginPath();
+    g.moveTo(-len / 2, 0);
+    g.quadraticCurveTo(0, depth * 1.3, len / 2, 0);
+    g.quadraticCurveTo(0, depth * 0.35, -len / 2, 0);
+    g.fill();
+    // Lit side (windward): a pale sweep.
+    g.fillStyle = 'rgba(255,246,226,0.38)';
+    g.beginPath();
+    g.moveTo(-len / 2, 0);
+    g.quadraticCurveTo(0, -depth * 1.1, len / 2, 0);
+    g.quadraticCurveTo(0, -depth * 0.2, -len / 2, 0);
+    g.fill();
+    // The crest, a thin fold in the paper.
+    g.strokeStyle = 'rgba(120,88,52,0.35)';
+    g.lineWidth = 0.7;
+    g.beginPath();
+    g.moveTo(-len / 2, 0);
+    g.quadraticCurveTo(0, depth * 0.35, len / 2, 0);
+    g.stroke();
     g.restore();
   }
 }

@@ -97,6 +97,8 @@ export interface District {
 
 /** The four briefed targets, or any building by id (`b:123`). */
 export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | `b:${number}`;
+/** In the list of ruins, the boulevard bridge (which isn't a building) once it has been dropped. */
+export const BRIDGE_RUIN = -1;
 export interface Target {
   id: TargetId;
   name: string;

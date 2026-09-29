@@ -2,6 +2,17 @@
 import { rng, shownCount, type Building, type Population, type Rect, type World } from '../jev';
 import { CLOTH, SKIN } from './paper';
 
+// Head coverings, very simply: bare, a cap, a keffiyeh, a turban, a hijab, or a full black abaya and niqab.
+export type Wear = 'bare' | 'cap' | 'keffiyeh' | 'turban' | 'hijab' | 'abaya';
+const WEARS: [Wear, number][] = [['bare', 0.3], ['cap', 0.12], ['keffiyeh', 0.14], ['turban', 0.08], ['hijab', 0.22], ['abaya', 0.14]];
+const pickWear = (u: number): Wear => {
+  for (const [w, p] of WEARS) {
+    if (u < p) return w;
+    u -= p;
+  }
+  return 'bare';
+};
+
 export interface Walker {
   id: number;
   x: number;
@@ -10,6 +21,7 @@ export interface Walker {
   speed: number;
   skin: string;
   cloth: string;
+  wear: Wear; // what's on their head, seen from above
   phase: number;
   kind: 'street' | 'space' | 'transit';
   zone: Rect | null; // the open space they wander in
@@ -39,6 +51,7 @@ const MAX_SPACE_WALKERS = 80;
 export class Crowd {
   walkers: Walker[] = [];
   cars: Car[] = [];
+  broken: Rect | null = null; // a dropped bridge: cars turn back before the gap
   private r = rng(4242);
   private nextId = 1;
   private lines = new Map<string, number[]>();
@@ -63,6 +76,7 @@ export class Crowd {
 
   private spawn(kind: Walker['kind'], x: number, y: number, zone: Rect | null = null): Walker {
     const r = this.r;
+    const wear = pickWear(r());
     return {
       id: this.nextId++,
       x,
@@ -70,7 +84,8 @@ export class Crowd {
       path: [],
       speed: kind === 'space' ? 0.8 + r() * 1.2 : 1.1 + r() * 0.6,
       skin: SKIN[Math.floor(r() * SKIN.length)],
-      cloth: CLOTH[Math.floor(r() * CLOTH.length)],
+      cloth: wear === 'abaya' ? '#1c1a1d' : CLOTH[Math.floor(r() * CLOTH.length)],
+      wear,
       phase: r() * 10,
       kind,
       zone,
@@ -284,6 +299,16 @@ export class Crowd {
         if (c.fled) boost = 1.8;
       } else c.fled = false;
       const v = c.dir * c.speed * boost * dt;
+      const gap = this.broken;
+      if (gap && c.horizontal && c.y > gap.y - 2 && c.y < gap.y + gap.h + 2) {
+        const mid = gap.x + gap.w / 2;
+        const edge = mid - c.dir * 14; // where the road ends
+        if ((c.dir === 1 && c.x < mid && c.x + v >= edge) || (c.dir === -1 && c.x > mid && c.x + v <= edge)) {
+          c.dir = c.dir === 1 ? -1 : 1;
+          continue;
+        }
+        if (Math.abs(c.x - mid) < 12) c.x = mid - c.dir * 20; // never parked in mid-air
+      }
       if (c.horizontal) {
         c.x += v;
         if (c.x > c.to) c.x = c.from;
