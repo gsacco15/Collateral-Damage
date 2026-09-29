@@ -791,7 +791,7 @@ export class MapView {
       for (let i = 0; i < puffs; i++) {
         const a = r() * Math.PI * 2;
         const d = r() * w.blast * 0.9;
-        fx.puffs.push({ x: o.ix + Math.cos(a) * d, y: o.iy + Math.sin(a) * d, r: 2 + r() * 3, grow: (3 + r() * 5) * Math.sqrt(w.blast / 10), life: 0, seed: r() * 1000, dark: r() });
+        fx.puffs.push({ x: o.ix + Math.cos(a) * d, y: o.iy + Math.sin(a) * d, r: 2 + r() * 3, grow: (3 + r() * 5) * Math.sqrt(w.blast / 10), life: -0.35 - r() * 0.35, seed: r() * 1000, dark: r() });
       }
       // Secondary fires: dark smoke over whatever else went off.
       for (const id of o.damaged) {
@@ -1074,39 +1074,7 @@ export class MapView {
       g.fill();
       g.restore();
     }
-    // The flash and the shockwave, sized by the weapon: a pop for the smallest, a wide white burst for the biggest.
     const since = t - fx.impactAt;
-    // Size grows faster than the blast radius, so the difference between bombs is plain to see:
-    // the 2,000-lb bomb is a wide, long fireball; the smallest barely more than a flash.
-    const size = 13 * (weapon(plan.weapon).blast / 13) ** 1.45;
-    const lasts = 0.9 + size / 40;
-    if (fx.impacted && since < lasts + 0.4) {
-      const blast = size;
-      if (since < lasts) {
-        const k = since / lasts;
-        const rr = blast * (0.8 + Math.sqrt(k) * 1.5);
-        const grd = g.createRadialGradient(o.ix, o.iy, 0, o.ix, o.iy, rr);
-        grd.addColorStop(0, `rgba(255,250,228,${0.98 * (1 - k) ** 0.6})`);
-        grd.addColorStop(0.4, `rgba(255,200,120,${0.75 * (1 - k) ** 0.8})`);
-        grd.addColorStop(1, 'rgba(255,190,110,0)');
-        g.fillStyle = grd;
-        g.beginPath();
-        g.arc(o.ix, o.iy, rr, 0, Math.PI * 2);
-        g.fill();
-      }
-      const k = since / (lasts + 0.4);
-      g.strokeStyle = `rgba(255,255,255,${0.75 * (1 - k)})`;
-      g.lineWidth = Math.max(0.4, blast * 0.08 * (1 - k));
-      g.beginPath();
-      g.arc(o.ix, o.iy, blast * (0.3 + k * 2.8), 0, Math.PI * 2);
-      g.stroke();
-      // A ring of dust kicked up along the ground by the pressure wave.
-      g.strokeStyle = `rgba(214,204,188,${0.5 * (1 - k)})`;
-      g.lineWidth = Math.max(1, blast * 0.35 * (1 - k));
-      g.beginPath();
-      g.arc(o.ix, o.iy, blast * (0.25 + k * 2.1), 0, Math.PI * 2);
-      g.stroke();
-    }
     for (let i = 0; i < fx.fired; i++) {
       const sb = o.blasts[i];
       const s2 = since - sb.at;
@@ -1154,6 +1122,40 @@ export class MapView {
       }
       g.closePath();
       g.fill();
+    }
+    // Drawn over the smoke and dust so the fireball is always seen. The flash and the shockwave, sized by the weapon: a pop for the smallest, a wide white burst for the biggest.
+    // Size grows faster than the blast radius, so the difference between bombs is plain to see:
+    // the 2,000-lb bomb is a wide, long fireball; the smallest barely more than a flash.
+    const size = 13 * (weapon(plan.weapon).blast / 13) ** 1.45;
+    const lasts = 0.9 + size / 40;
+    if (fx.impacted && since < lasts + 0.4) {
+      const blast = size;
+      if (since < lasts) {
+        const k = since / lasts;
+        const rr = blast * (0.8 + Math.sqrt(k) * 1.5);
+        const grd = g.createRadialGradient(o.ix, o.iy, 0, o.ix, o.iy, rr);
+        // White-hot at the centre, then orange and red so it reads against the pale paper.
+        grd.addColorStop(0, `rgba(255,248,220,${0.98 * (1 - k) ** 0.6})`);
+        grd.addColorStop(0.3, `rgba(255,175,70,${0.9 * (1 - k) ** 0.7})`);
+        grd.addColorStop(0.65, `rgba(225,85,40,${0.6 * (1 - k) ** 0.8})`);
+        grd.addColorStop(1, 'rgba(160,50,25,0)');
+        g.fillStyle = grd;
+        g.beginPath();
+        g.arc(o.ix, o.iy, rr, 0, Math.PI * 2);
+        g.fill();
+      }
+      const k = since / (lasts + 0.4);
+      g.strokeStyle = `rgba(255,255,255,${0.75 * (1 - k)})`;
+      g.lineWidth = Math.max(0.4, blast * 0.08 * (1 - k));
+      g.beginPath();
+      g.arc(o.ix, o.iy, blast * (0.3 + k * 2.8), 0, Math.PI * 2);
+      g.stroke();
+      // A ring of dust kicked up along the ground by the pressure wave.
+      g.strokeStyle = `rgba(214,204,188,${0.5 * (1 - k)})`;
+      g.lineWidth = Math.max(1, blast * 0.35 * (1 - k));
+      g.beginPath();
+      g.arc(o.ix, o.iy, blast * (0.25 + k * 2.1), 0, Math.PI * 2);
+      g.stroke();
     }
     for (let i = 0; i < fx.fired; i++) {
       const sb = o.blasts[i];

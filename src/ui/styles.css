@@ -779,6 +779,16 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 
 /* Phones: the strike dock and the final decision, smaller and see-through so the city stays visible. */
 @media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px) {
+  /* After a strike, on a phone: keep the blast in view. A small stamp up top, a slim see-through result at the bottom. */
+  .stamp { top: 29%; padding: 6px 12px 5px; border-width: 3px; }
+  .stamp b { font-size: 15px; }
+  .stamp span { font-size: 8.5px; white-space: nowrap; }
+  .outcome { top: auto; bottom: 10px; left: 10px; right: 10px; width: auto; padding: 9px 12px 10px; background: rgba(251, 250, 246, 0.7); }
+  .outcome .k, .outcome p { display: none; }
+  .outcome .big { margin: 0 0 8px; padding-bottom: 7px; }
+  .outcome .big b { font-size: 30px; }
+  .outcome .big span { font-size: 12px; }
+  .outcome .row .btn { padding: 5px 9px; font-size: 12px; }
   /* The opening card, if it shows on a small screen: the heading, the key line, the buttons. */
   .intro { align-items: end; padding: 10px; }
   .intro-card { width: 100%; max-height: 60vh; padding: 14px 16px 12px; gap: 6px; border-radius: 16px; }
