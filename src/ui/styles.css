@@ -987,3 +987,37 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .options .special-row .cyc { padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-2); border-radius: 8px; font: 500 16px var(--sans); color: var(--text-2); }
 .options .special-row .cyc::before { display: none; }
 .options .special-row button.special { border: 1px solid rgba(140, 47, 34, 0.3); border-radius: 9px; }
+
+/* Jev's confidence, in words. */
+.jevcard .judgment { grid-template-columns: 38px minmax(0, 1fr) 40px auto 74px; }
+.jevcard .judgment .conf { font: 400 10px var(--sans); color: var(--text-3); text-align: right; line-height: 1.2; }
+.jevcard .judgment .conf b { font: 600 11px var(--mono); color: var(--text-2); }
+/* Jev's controls: speed and processors folded away. */
+.advanced { margin-top: 4px; }
+.advanced summary { font-size: 11.5px; color: var(--text-3); cursor: pointer; }
+.advanced[open] summary { margin-bottom: 8px; }
+/* The current choice, easy to see at a glance. */
+.options button.on { background: var(--hi); box-shadow: inset 3px 0 0 var(--dot); }
+.options button.on b { color: var(--text-1); }
+.seg button.on { background: var(--ink); color: var(--on-ink); box-shadow: 0 1px 3px rgba(40, 30, 20, 0.25); }
+.special-row button.special.on { box-shadow: inset 3px 0 0 var(--dot); background: var(--hi); }
+/* When the map shows one of Jev's plans instead of yours. */
+.preview-bar { position: absolute; z-index: 7; left: 50%; top: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: 11px; background: rgba(var(--glass), 0.96); border: 1px solid color-mix(in srgb, var(--s1) 40%, transparent); box-shadow: var(--float); font-size: 12px; color: var(--text-1); max-width: calc(100% - 24px); }
+.preview-bar i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--s1); margin-right: 4px; animation: preview-blink 1.2s ease-in-out infinite; }
+.preview-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-bar button { flex: 0 0 auto; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 8px; border: 0; background: var(--s1); color: #fff; cursor: pointer; }
+@keyframes preview-blink { 50% { opacity: 0.35; } }
+
+/* The closing debrief after a strike on Warehouse 14 or the school. */
+.debrief { position: absolute; z-index: 8; left: 12px; bottom: 64px; width: min(360px, 48%); padding: 14px 16px 12px; border-radius: 4px 14px 14px 14px; background: rgba(var(--glass), 0.97); border: 1px solid var(--line); box-shadow: var(--float), inset 4px 0 0 #4a5a66; animation: up 0.35s ease; }
+.debrief.hurt { box-shadow: var(--float), inset 4px 0 0 var(--critical); }
+.debrief.spared { box-shadow: var(--float), inset 4px 0 0 var(--good); }
+.debrief .k { display: block; font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; padding-right: 20px; }
+.debrief p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; font-style: italic; color: var(--text-1); }
+.debrief-count { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); }
+.debrief-count b { font: 600 18px var(--mono); color: var(--text-1); }
+.debrief-count b.bad { color: var(--critical); }
+.debrief-count span + b { margin-left: 8px; }
+@media (max-width: 760px), (max-height: 520px), (pointer: coarse) and (max-width: 1100px) {
+  .debrief { left: 8px; right: 8px; top: 48px; bottom: auto; width: auto; }
+}

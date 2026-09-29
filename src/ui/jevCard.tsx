@@ -15,6 +15,9 @@ function fits(r: string, reading: JevReading) {
   return n < top.lo ? 'fewer' : n > top.hi ? 'more' : 'fits';
 }
 
+/** How sure, in words: a plain label for the confidence number. */
+const sureWord = (c: number) => (c >= 0.8 ? 'sure' : c >= 0.5 ? 'fairly sure' : 'a guess');
+
 export function JevCard({ reading, hour }: { reading: JevReply | null; hour: number }) {
   const n = reading && reading.ok ? (reading.reports?.length ?? 0) : 0;
   return (
@@ -56,8 +59,8 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
                     ))}
                   </span>
                   <b>{LEVELS[top].label}</b>
-                  <span className="conf mono" title="How sure Jev is">
-                    {s.confidence.toFixed(2)}
+                  <span className="conf" title={`How sure Jev is about this answer: ${Math.round(s.confidence * 100)} out of 100`}>
+                    <b>{Math.round(s.confidence * 100)}%</b> {sureWord(s.confidence)}
                   </span>
                 </div>
               );
@@ -67,7 +70,9 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
               <span className="q">Do the reports agree?</span>
               <span />
               <b title={AGREE[reading.agree.choice]}>{reading.agree.choice}</b>
-              <span className="conf mono">{reading.agree.confidence.toFixed(2)}</span>
+              <span className="conf" title={`How sure Jev is about this answer: ${Math.round(reading.agree.confidence * 100)} out of 100`}>
+                <b>{Math.round(reading.agree.confidence * 100)}%</b> {sureWord(reading.agree.confidence)}
+              </span>
             </div>
           </div>
           <details className="jev-fold">
@@ -75,7 +80,7 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
             <p className="jev-meta mono">
               {reading.sites.length + 1} typed judgments in one call · {reading.ms} ms · {reading.model} · {reading.usage.input_tokens.toLocaleString()} input tokens · ≈ ${readingCost(reading).toFixed(5)} · cached after the first ask
             </p>
-            <p className="jev-meta">The number after each answer is how sure Jev is (0 to 1). The simulator draws its head counts from the bars.</p>
+            <p className="jev-meta">Each answer ends with how sure Jev is: above 80% it's sure, 50 to 80% fairly sure, below that it's a guess. The bars are the chances of each head count, and the simulator draws from them.</p>
           </details>
           <details className="jev-fold reports">
             <summary>The {n} reports Jev read</summary>

@@ -182,7 +182,9 @@ export default function App() {
     setMissionState(s);
   };
   const [talk, setTalk] = useState<Talk | null>(null);
-  const [specialIdx, setSpecialIdx] = useState(0); // which special weapon the bottom slot shows
+  const [specialIdx, setSpecialIdx] = useState(0);
+  // The closing debrief, after a strike that destroys Warehouse 14 or touches the school.
+  const [debrief, setDebrief] = useState<{ kind: 'hurt' | 'empty' | 'spared'; count: number; inSchool: number } | null>(null); // which special weapon the bottom slot shows
   // Dark mode: a switch at the foot of the page, remembered in this browser.
   const [dark, setDark] = useState(() => {
     try {
@@ -1884,6 +1886,21 @@ export default function App() {
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
+      // The debrief: when the strike destroys Warehouse 14 or touches the school, a closing word on the story. Not in
+      // the guide (it tells its own), and not at the end of the secret file.
+      const schoolB = world.buildings.find((b) => b.name === 'Cotton Street School');
+      const whId = targetOf(world, 'warehouse').buildingId;
+      const inSchool = schoolB ? (o.hurtSlots[schoolB.id]?.length ?? 0) : 0;
+      const schoolHit = !!schoolB && (o.damaged.includes(schoolB.id) || inSchool > 0);
+      const whHit = whId != null && o.damaged.includes(whId);
+      const missionEnd = missionRef.current.on && missionRef.current.step === 5;
+      if (guide == null && !missionEnd && (whHit || schoolHit)) {
+        const kind = inSchool > 0 ? 'hurt' : schoolHit ? 'empty' : 'spared';
+        window.setTimeout(() => {
+          setDebrief({ kind, count: o.count, inSchool });
+          void sound.narrate(`voice/debrief-${kind}`);
+        }, (stampDelay(o) + 4.2) * 1000);
+      }
       // The secret file: was the courier there, and did it reach him?
       const ms = missionRef.current;
       const mm = MEETS[ms.meet];
@@ -1926,6 +1943,7 @@ export default function App() {
   };
   /** Clear the last strike's effects, keeping the ruins. */
   function endStrike() {
+    setDebrief(null);
     mapRef.current?.clearStrike();
     strikeRef.current = null;
     setOutcome(null);
@@ -2284,18 +2302,6 @@ export default function App() {
         <h3>Controls</h3>
         <div className="slider">
           <span>
-            Pace <em>{SPEEDS[speed] === Infinity ? 'as fast as it can' : `${SPEEDS[speed]} plans/s, slowed to watch`}</em>
-          </span>
-          <input type="range" min={0} max={SPEEDS.length - 1} step={1} value={speed} onChange={(e) => setSpeed(+e.target.value)} />
-        </div>
-        <div className="slider">
-          <span>
-            Workers in parallel <em>{status.workers}</em>
-          </span>
-          <input type="range" min={1} max={Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4))} step={1} value={status.workers || 1} onChange={(e) => poolRef.current?.setWorkers(+e.target.value)} />
-        </div>
-        <div className="slider">
-          <span>
             Must destroy the target <em>{pct(minPk)} of runs</em>
           </span>
           <input type="range" min={0.5} max={0.99} step={0.01} value={minPk} onChange={(e) => setMinPk(+e.target.value)} />
@@ -2320,6 +2326,21 @@ export default function App() {
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
           <span>Show each plan on the map as Jev tries it</span>
         </label>
+        <details className="advanced">
+          <summary>Advanced: speed and processors</summary>
+        <div className="slider">
+          <span>
+            Pace <em>{SPEEDS[speed] === Infinity ? 'as fast as it can' : `${SPEEDS[speed]} plans/s, slowed to watch`}</em>
+          </span>
+          <input type="range" min={0} max={SPEEDS.length - 1} step={1} value={speed} onChange={(e) => setSpeed(+e.target.value)} />
+        </div>
+        <div className="slider">
+          <span>
+            Workers in parallel <em>{status.workers}</em>
+          </span>
+          <input type="range" min={1} max={Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4))} step={1} value={status.workers || 1} onChange={(e) => poolRef.current?.setWorkers(+e.target.value)} />
+        </div>
+        </details>
       </section>
       <section className="card">
         <h3>Best so far</h3>
@@ -2559,6 +2580,21 @@ export default function App() {
                 )}
               </div>
             )}
+            {following && (
+              <div className="preview-bar" role="status">
+                <span>
+                  <i aria-hidden /> Previewing Jev's plan: {weapon(shownPlan.weapon).short}, {modeOf(shownPlan.weapon, shownPlan.fuze).name.toLowerCase()}, {fmtHour(shownPlan.hour)}
+                </span>
+                <button
+                  onClick={() => {
+                    setPeek(null);
+                    setFollow(false);
+                  }}
+                >
+                  Back to my setup
+                </button>
+              </div>
+            )}
             {note && (
               <div className="map-note" role="status">
                 {note}
@@ -2578,6 +2614,26 @@ export default function App() {
               />
             )}
             {talk && <TalkCard talk={talk} onClose={hush} />}
+            {debrief && outcome && (
+              <div className={`debrief ${debrief.kind}`} role="dialog" aria-label="Debrief">
+                <button
+                  className="talk-x"
+                  aria-label="Close"
+                  onClick={() => {
+                    sound.stopVoice();
+                    setDebrief(null);
+                  }}
+                >
+                  ×
+                </button>
+                <span className="k">Debrief · Warehouse 14 and Cotton Street School</span>
+                <p>{DEBRIEF[debrief.kind]}</p>
+                <div className="debrief-count">
+                  <b>{debrief.count}</b> <span>killed or badly hurt</span>
+                  <b className={debrief.inSchool ? 'bad' : ''}>{debrief.inSchool}</b> <span>of them in the school</span>
+                </div>
+              </div>
+            )}
             {missionEnd && (
               <EndCard
                 {...missionEnd}
@@ -3149,6 +3205,13 @@ export default function App() {
     </div>
   );
 }
+
+/** What the narrator says after a strike that destroys Warehouse 14 or touches the school. */
+const DEBRIEF = {
+  hurt: 'Warehouse 14 is gone. Across Cotton Street, the school was not empty. The report will say the target was destroyed. It will also list the children by name, because someone has to. The estimate said this could happen, and it was signed anyway. That is what collateral damage means: not an accident, but a number someone accepted before it happened.',
+  empty: 'The strike reached Cotton Street School, but the classrooms were empty. The hour was chosen well, or the luck was good. Tomorrow the children come back to broken windows, and a teacher will try to explain. The estimate is only ever about people. Buildings get rebuilt. Most of the time.',
+  spared: "Warehouse 14 is destroyed. Across Cotton Street, the school is still standing, and no one inside it was hurt. This time the choices held: the weapon, the hour, the angle of approach. It isn't only luck. Sometimes it's a planner who asked, before anything else: who else is here, right now?",
+};
 
 const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${modeOf(c.weapon, c.fuze).name.toLowerCase()}, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;
 
