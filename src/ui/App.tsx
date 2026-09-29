@@ -2464,6 +2464,7 @@ export default function App() {
                 <p>
                   Target {outcome.destroyed ? 'destroyed' : 'not destroyed'}. Landed {Math.round(Math.hypot(outcome.ix - plan.aimX, outcome.iy - plan.aimY))} m from the aim.
                   {outcome.secondary.length > 0 && ` Also went off: ${outcome.secondary.join(', ')}.`}
+                  {world.buildings.some((b) => b.name === 'Power Station' && outcome.damaged.includes(b.id)) && ' The power station is down: the city goes dark, water pumps stop, and the hospital runs on its generators while the diesel lasts.'}
                 </p>
                 <p className="muted rings">Every red ring on the map is a person killed or badly hurt. {phone ? 'Tap' : 'Point at'} one to see who.</p>
                 <p>The ruins stay{ruins.length > 1 ? ` (${ruins.length} buildings so far)` : ''}. Pick another target above, or click any building on the map.</p>

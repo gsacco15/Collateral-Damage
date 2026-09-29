@@ -80,3 +80,10 @@ export function brokenLights(w: World, damaged: Set<number>, blast: { x: number;
   });
   return out;
 }
+
+/** The power station is down: the grid is dead. Only the hospital (its own generators) and the odd home with a
+ * generator or a candle still show light. */
+export function powerCut(w: World, damaged: Set<number>) {
+  const ps = w.buildings.find((b) => b.name === 'Power Station');
+  return !!ps && damaged.has(ps.id);
+}

@@ -524,6 +524,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
   const underBridge = (y: number) => c.world.roads.some((r) => r.kind === 'bridge' && Math.abs(r.rect.y + r.rect.h / 2 - y) < r.rect.h / 2 + 4);
   const onBroken = (x: number, y: number) => !!c.brokenBridge && inRect(c.brokenBridge, x, y, 2);
   const alive = (b: Building | null | undefined) => !!b && !c.damaged.has(b.id) && far(b.cx, b.cy);
+  const cut = c.world.buildings.some((b) => b.name === 'Power Station' && c.damaged.has(b.id));
   const glow = (x: number, y: number, r: number, a: number, z = 1.2, col = '255,205,120') => out.push({ t: 'glow', x, y, r, a, col, z });
 
   // ---- on the water
@@ -643,11 +644,11 @@ export function lifeScene(c: SceneCtx): Ent[] {
       out.push({ t: 'person', x: f.x + Math.cos(ang) * 2, y: f.y + Math.sin(ang) * 2, face: ang + Math.PI, id: 200 + Math.round(f.x) + k, sit: true });
     }
   }
-  for (const p of F.posts) if (far(p.x, p.y)) out.push({ t: 'post', x: p.x, y: p.y, lit: c.night > 0.25 });
+  for (const p of F.posts) if (far(p.x, p.y)) out.push({ t: 'post', x: p.x, y: p.y, lit: !cut && c.night > 0.25 });
   for (const a of F.antennas) {
     if (!alive(a.b)) continue;
     out.push({ t: 'antenna', x: a.x, y: a.y, z: a.z, h: a.h });
-    if (Math.sin(t * 2.4 + a.x * 0.3) > 0.1) out.push({ t: 'beacon', x: a.x, y: a.y, z: a.z + a.h, big: a.h > 10 });
+    if (!cut && Math.sin(t * 2.4 + a.x * 0.3) > 0.1) out.push({ t: 'beacon', x: a.x, y: a.y, z: a.z + a.h, big: a.h > 10 });
   }
 
   // ---- cafés and smokers: a hookah circle at the café tables, someone out for a cigarette at a shop door
@@ -904,7 +905,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
   for (const k of F.clutter) if (far(k.x, k.y) && !c.damaged.has(-1)) out.push({ t: 'clutter', kind: k.kind, x: k.x, y: k.y, a: k.a, col: k.col });
   // The fountain on the Circus, running from morning until late.
   const rb = c.world.roundabout;
-  if (far(rb.x, rb.y)) out.push({ t: 'fountain', x: rb.x, y: rb.y, r: h >= 6 && h < 23.5 ? 1 : 0 });
+  if (far(rb.x, rb.y)) out.push({ t: 'fountain', x: rb.x, y: rb.y, r: !cut && h >= 6 && h < 23.5 ? 1 : 0 });
   F.scooters.forEach((s, i) => {
     if (!(h >= 6 && h < 23) && i % 3) return;
     const len = s.h ? s.r.w : s.r.h;
@@ -919,10 +920,10 @@ export function lifeScene(c: SceneCtx): Ent[] {
   // ---- smoke, and the red lights up high
   F.bakeries.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: b.h + 1, seed: i + 1, strength: bell(h, 3.5, 11) + 0.4 * bell(h, 16, 19.5), dark: 0.25, size: 1 }));
   F.tents.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: 1, seed: i + 7, strength: bell(h, 5.5, 8.5) + bell(h, 17, 20.5), dark: 0.55, size: 0.8 }));
-  F.gens.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx + 1.5, y: b.cy, z: b.h + 0.5, seed: i + 13, strength: (h >= 20 || h < 5 ? 1 : 0) * (Math.sin(t * 0.03 + i) > -0.3 ? 0.9 : 0), dark: 0.85, size: 0.6 }));
+  F.gens.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx + 1.5, y: b.cy, z: b.h + 0.5, seed: i + 13, strength: (cut || h >= 20 || h < 5 ? 1 : 0) * (Math.sin(t * 0.03 + i) > -0.3 ? 0.9 : 0), dark: 0.85, size: 0.6 }));
   // The power station's stacks and the kiln chimneys, drawn in 3D (the flat map has its own chimney smoke).
   F.stacks.forEach((b, i) => alive(b) && out.push({ t: 'smoke', x: b.cx, y: b.cy, z: b.h + 0.5, seed: 31 + i, strength: b.name === 'Power station stack' ? 0.8 : h >= 3.5 && h < 20 ? 0.9 : 0.45, dark: b.name === 'Power station stack' ? 0.2 : 0.55, size: 1.4, d3: true }));
   if (alive(F.mill)) out.push({ t: 'smoke', x: F.mill!.cx - 10, y: F.mill!.cy, z: F.mill!.h + 1, seed: 21, strength: bell(h, 6, 18) * 0.8, dark: 0, size: 1.3 });
-  for (const L of F.beacons) if (!c.damaged.has(L.b.id) && Math.sin(t * 3 + L.x * 0.1) > 0.2) out.push({ t: 'beacon', x: L.x, y: L.y, z: L.z, big: L.big });
+  for (const L of F.beacons) if (!cut && !c.damaged.has(L.b.id) && Math.sin(t * 3 + L.x * 0.1) > 0.2) out.push({ t: 'beacon', x: L.x, y: L.y, z: L.z, big: L.big });
   return out;
 }

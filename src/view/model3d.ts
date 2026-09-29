@@ -399,7 +399,7 @@ export class Model3D {
   // A paper moon and paper stars, kept at a fixed bearing in the sky (they move with the camera, like the real ones).
   private moon!: THREE.Sprite;
   private stars!: THREE.Points;
-  private moonDir = new THREE.Vector3(0.93, 0.28, 0.3).normalize(); // east-south-east, about 16 degrees up, clear of the ridge
+  private moonDir = new THREE.Vector3(0.3, 0.3, -0.9).normalize(); // north-north-east, about 17 degrees up: over the mountains ahead in the usual view
   // Lit windows at night, room by room: every window on a windowed wall, and which of them are lit this half hour.
   private winMesh!: THREE.InstancedMesh;
   private winMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
@@ -1364,7 +1364,8 @@ export class Model3D {
     const key = `${bucket}|${this.damageKey}`;
     if (key === this.winKey) return;
     this.winKey = key;
-    const share = hr >= 18 && hr < 23 ? 0.82 : hr >= 23 || hr < 1 ? 0.55 : hr < 5 ? 0.2 : hr < 7 ? 0.38 : 0.55;
+    const cut = this.world.buildings.some((b) => b.name === 'Power Station' && this.winDamaged.has(b.id));
+    const share = cut ? 0.05 : hr >= 18 && hr < 23 ? 0.82 : hr >= 23 || hr < 1 ? 0.55 : hr < 5 ? 0.2 : hr < 7 ? 0.38 : 0.55;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const v = new THREE.Vector3();
@@ -1379,11 +1380,11 @@ export class Model3D {
       const b = w.b;
       if (this.winDamaged.has(b.id)) continue;
       const k = b.kind;
-      const lit = k === 'hospital' || k === 'clinic' ? 0.85 : k === 'office' ? (hr >= 18 && hr < 21 ? 0.3 : 0.06) : k === 'shop' ? (hr >= 18 && hr < 23 ? 0.8 : 0.05) : k === 'school' ? 0.03 : k === 'mosque' ? 0.6 : k === 'warehouse' || k === 'factory' || k === 'workshop' || k === 'hall' ? 0.12 : share;
+      const lit = k === 'hospital' || k === 'clinic' ? 0.85 : cut ? share : k === 'office' ? (hr >= 18 && hr < 21 ? 0.3 : 0.06) : k === 'shop' ? (hr >= 18 && hr < 23 ? 0.8 : 0.05) : k === 'school' ? 0.03 : k === 'mosque' ? 0.6 : k === 'warehouse' || k === 'factory' || k === 'workshop' || k === 'hall' ? 0.12 : share;
       const u = Math.abs(Math.sin(i * 12.9898 + bucket * 78.233) * 43758.5453) % 1;
       if (u >= lit) continue;
       const tone = (u * 997) % 1;
-      c.set(k === 'hospital' || k === 'clinic' ? '#dcecff' : k === 'mosque' ? '#d8f5dc' : tone < 0.12 ? '#a8bcff' : tone < 0.55 ? '#ffc877' : '#ffdca0');
+      c.set(k === 'hospital' || k === 'clinic' ? '#dcecff' : cut ? '#ffaa5a' : k === 'mosque' ? '#d8f5dc' : tone < 0.12 ? '#a8bcff' : tone < 0.55 ? '#ffc877' : '#ffdca0');
       // A shop's ground floor is its shopfront: a wide lit window onto the street in the evening.
       const front = k === 'shop' && w.y < 2;
       this.winMesh.setMatrixAt(n, m.compose(v.set(w.x, front ? 1.3 : w.y, w.z), q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), w.yaw), front ? shopFront : one));

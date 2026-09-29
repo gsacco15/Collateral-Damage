@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type World } from '../jev';
 import { HULLS, type Ent } from './lifeScene';
-import { brokenLights, streetLights } from './streetLights';
+import { brokenLights, powerCut, streetLights } from './streetLights';
 
 const box = (x: number, y: number, z: number, w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed();
 const up = new THREE.Vector3(0, 1, 0);
@@ -84,6 +84,7 @@ export class Life3D {
   private lampParts!: { posts: THREE.InstancedMesh; arms: THREE.InstancedMesh; heads: THREE.InstancedMesh; deadHeads: THREE.InstancedMesh };
   private world: World;
   private brokenKey = '';
+  private cut = false;
   private lampHeadMat!: THREE.MeshStandardMaterial;
 
   constructor(scene: THREE.Scene, world: World) {
@@ -265,6 +266,7 @@ export class Life3D {
     const key = `${[...damaged].join('.')}|${blast ? `${blast.x.toFixed(1)},${blast.y.toFixed(1)},${blast.r}` : ''}`;
     if (key === this.brokenKey) return;
     this.brokenKey = key;
+    this.cut = powerCut(this.world, damaged);
     this.placeLamps(brokenLights(this.world, damaged, blast));
   }
 
@@ -505,9 +507,9 @@ export class Life3D {
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }
     (this.meshes.busglass.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 1.4;
-    this.poolMat.opacity = night * 0.26;
+    this.poolMat.opacity = this.cut ? 0 : night * 0.26;
     this.dpoolMat.opacity = 0.55 * Math.max(0.3, night);
-    this.lampHeadMat.emissiveIntensity = night * 2.4;
+    this.lampHeadMat.emissiveIntensity = this.cut ? 0 : night * 2.4;
     // The fountain is lit from under the water at night.
     (this.meshes.water.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 0.6;
     (this.meshes.drop.material as THREE.MeshStandardMaterial).emissiveIntensity = night * 0.9;
