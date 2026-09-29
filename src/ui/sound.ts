@@ -386,6 +386,49 @@ class SoundEngine {
     void this.start(name, volume, p).then((n) => n?.src.addEventListener('ended', () => p.disconnect()));
   }
 
+  /** The call to prayer heard up close at the mosque: follows how near you are, and fades away as you leave.
+   * (The timed calls across the city are separate one-offs, and don't fade.) */
+  private visit: { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode } | null = null;
+  private visitStarting = false;
+  private visitLevel = 0;
+  async nearCall(level: number, pan: number, begin = false) {
+    this.visitLevel = level;
+    if (!this.enabled || !this.ctx) return;
+    const ctx = this.ctx;
+    const v = this.visit;
+    if (v) {
+      v.gain.gain.setTargetAtTime(level, ctx.currentTime, level > 0 ? 0.3 : 0.5);
+      v.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), ctx.currentTime, 0.3);
+      if (level <= 0.001) {
+        this.visit = null;
+        window.setTimeout(() => {
+          try {
+            v.src.stop();
+          } catch {
+            /* fine */
+          }
+          v.pan.disconnect();
+        }, 2500);
+      }
+      return;
+    }
+    if (!begin || level <= 0.001 || this.visitStarting || this.quiet) return;
+    this.visitStarting = true;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    p.connect(this.buses.ambience!);
+    const r = await this.start('amb-call-to-prayer', 0.0001, p);
+    this.visitStarting = false;
+    if (!r) return p.disconnect();
+    r.gain.gain.setTargetAtTime(this.visitLevel, ctx.currentTime, 0.4);
+    this.visit = { src: r.src, gain: r.gain, pan: p };
+    r.src.addEventListener('ended', () => {
+      if (this.visit?.src === r.src) this.visit = null;
+      p.disconnect();
+    });
+    if (this.visitLevel <= 0.001) void this.nearCall(0, pan);
+  }
+
   /** A soft rush of air when you zoom a long way quickly. Made here, not from a file. */
   whoosh(up: boolean) {
     if (!this.enabled || !this.ctx || this.quiet) return;

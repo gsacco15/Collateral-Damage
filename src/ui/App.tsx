@@ -481,12 +481,18 @@ export default function App() {
       const lClose = look ? Math.max(0, Math.min(1, (900 / look.dist - 1.3) / 4)) : close;
       let dMosque = Infinity;
       for (const q of zones.mosque) dMosque = Math.min(dMosque, Math.hypot(Math.max(q.x, Math.min(q.x + q.w, lx)) - lx, Math.max(q.y, Math.min(q.y + q.h, ly)) - ly));
-      if (dMosque > 280 || lClose < 0.12) heardClose.current = '';
+      // Its level follows how close you are, and it fades away as you zoom out or move off (the timed calls don't).
+      const prox = dMosque >= 280 || lClose < 0.12 ? 0 : (1 - dMosque / 280) * Math.min(1, lClose / 0.5);
+      const minaret = world.buildings.find((b) => b.kind === 'minaret');
+      const callPan = look || !minaret ? 0 : panOf(minaret.cx);
+      let begin = false;
+      if (prox === 0) heardClose.current = '';
       else if (!striking && lClose > 0.25 && dMosque < 180 && !heardClose.current && performance.now() - lastCloseCall > 45_000) {
         heardClose.current = 'here';
         lastCloseCall = performance.now();
-        callToPrayer('visit', look ? { x: lx, y: ly, close: lClose } : undefined);
+        begin = true;
       }
+      void sound.nearCall(striking ? 0 : 0.2 * prox * hush, callPan, begin);
       // Now and then, one small sound that fits where you are and the hour: about every twenty seconds.
       if (!striking && close > 0.15 && Math.random() < 0.02) {
         const at = districtHere(v.cx, v.cy);
@@ -540,14 +546,13 @@ export default function App() {
   // minaret: clear and close when you're near the mosque, faint and far off across the city, placed left or right.
   const prayerKey = useRef('');
   const heardClose = useRef(''); // the prayer already heard from close by, so coming near again doesn't repeat it
-  const callToPrayer = (k: string, at?: { x: number; y: number; close: number }) => {
+  const callToPrayer = (k: string) => {
     const loud = k === 'dawn' || k === 'friday';
     const m = mapRef.current;
     const min = world.buildings.find((b) => b.kind === 'minaret');
     let near = 0.3;
     let pan = 0;
-    if (at && min) near = Math.max(0, 1 - Math.hypot(min.cx - at.x, min.cy - at.y) / 450) * (0.45 + 0.55 * at.close); // in 3D: no left/right
-    else if (m && min) {
+    if (m && min) {
       const v = m.view;
       const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4));
       near = Math.max(0, 1 - Math.hypot(min.cx - v.cx, min.cy - v.cy) / 450) * (0.45 + 0.55 * close);
@@ -555,9 +560,7 @@ export default function App() {
       pan = Math.max(-0.8, Math.min(0.8, ((min.cx - v.cx) * m.cam().s) / half));
     }
     // Soft but clearly there: a far-off voice over the city, clearer near the mosque, never loud.
-    // Coming close outside the timed calls ('visit'), it's lower still: just there in the background.
-    const vol = k === 'visit' ? 0.11 + near * 0.07 : (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1);
-    sound.cue('amb-call-to-prayer', pan, vol);
+    sound.cue('amb-call-to-prayer', pan, (loud ? 0.13 : 0.07) + near * (loud ? 0.15 : 0.1));
   };
   useEffect(() => {
     if (!soundOn) return;
