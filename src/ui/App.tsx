@@ -1524,6 +1524,8 @@ export default function App() {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
       sound.play('impact');
+      // Whatever else goes off, a beat later: quieter, further off.
+      for (const b of o.blasts) sound.play('impact', b.at, 0.3);
       // What you hear afterwards depends on how many were hurt, and is quieter at night (fewer people outside).
       const hurt = o.count;
       const after = hurt === 0 ? 'after-0' : hurt <= 3 ? 'after-few' : hurt <= 15 ? 'after-some' : hurt <= 50 ? 'after-many' : 'after-mass';

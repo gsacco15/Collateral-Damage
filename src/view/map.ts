@@ -49,6 +49,7 @@ export interface Outcome {
   hurtCars: number[];
   count: number;
   secondary: string[]; // what else went off
+  blasts: { x: number; y: number; at: number }[]; // where and when (seconds after impact) each of those goes off
 }
 
 export interface Layers {
@@ -97,6 +98,7 @@ interface StrikeFx {
   impacted: boolean;
   scraps: { x: number; y: number; z: number; vx: number; vy: number; vz: number; rot: number; vr: number; size: number; color: string }[];
   puffs: { x: number; y: number; r: number; grow: number; life: number; seed: number; dark: number }[];
+  fired: number; // how many of the outcome's secondary blasts have gone off
 }
 
 export class MapView {
@@ -193,7 +195,7 @@ export class MapView {
 
   strike(plan: Plan, pop: Population, seed: number) {
     const outcome = resolveStrike(this.world, plan, pop, this.crowd.visible(), this.crowd.cars, seed);
-    this.fx = { plan, outcome, t: 0, impactAt: 2.6, impacted: false, scraps: [], puffs: [] };
+    this.fx = { plan, outcome, t: 0, impactAt: 2.6, impacted: false, scraps: [], puffs: [], fired: 0 };
     return outcome;
   }
   clearStrike() {
@@ -800,6 +802,23 @@ export class MapView {
       }
       this.onImpact?.(o);
     }
+    // Secondary blasts: fuel or stored weapons going off after the bomb, each with its own flash, debris and fire.
+    while (fx.impacted && fx.fired < o.blasts.length && fx.t >= fx.impactAt + o.blasts[fx.fired].at) {
+      const sb = o.blasts[fx.fired++];
+      const r = rng(Math.round(sb.x * 31 + sb.y * 17));
+      this.shake = Math.max(this.shake, 0.7);
+      const cols = ['#6b5a45', '#8f8781', '#3d3935', '#c99f69', '#e7ddcc'];
+      for (let i = 0; i < 60; i++) {
+        const a = r() * Math.PI * 2;
+        const v = 8 + r() * 24;
+        fx.scraps.push({ x: sb.x, y: sb.y, z: 0, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 14 + r() * 26, rot: r() * 6, vr: (r() - 0.5) * 18, size: 0.6 + r() * 1.6, color: cols[Math.floor(r() * cols.length)] });
+      }
+      for (let i = 0; i < 16; i++) {
+        const a = r() * Math.PI * 2;
+        const d = r() * 12;
+        fx.puffs.push({ x: sb.x + Math.cos(a) * d, y: sb.y + Math.sin(a) * d, r: 3, grow: 8 + r() * 6, life: -r() * 0.4, seed: r() * 1000, dark: 0.85 + r() * 0.15 });
+      }
+    }
     for (const p of fx.scraps) {
       p.vz -= 38 * dt;
       p.z = Math.max(0, p.z + p.vz * dt);
@@ -1062,6 +1081,31 @@ export class MapView {
       g.arc(o.ix, o.iy, blast * (0.3 + k * 2.4), 0, Math.PI * 2);
       g.stroke();
     }
+    for (let i = 0; i < fx.fired; i++) {
+      const sb = o.blasts[i];
+      const s2 = since - sb.at;
+      if (s2 < 0.5) {
+        // A fuel flash: orange, not white.
+        const k = s2 / 0.5;
+        const rr = 14 + k * 22;
+        const grd = g.createRadialGradient(sb.x, sb.y, 0, sb.x, sb.y, rr);
+        grd.addColorStop(0, `rgba(255,236,190,${0.95 * (1 - k)})`);
+        grd.addColorStop(0.45, `rgba(250,150,60,${0.75 * (1 - k)})`);
+        grd.addColorStop(1, 'rgba(220,90,40,0)');
+        g.fillStyle = grd;
+        g.beginPath();
+        g.arc(sb.x, sb.y, rr, 0, Math.PI * 2);
+        g.fill();
+      }
+      if (s2 < 1) {
+        const k = s2;
+        g.strokeStyle = `rgba(255,245,230,${0.6 * (1 - k)})`;
+        g.lineWidth = Math.max(0.4, 1.2 * (1 - k));
+        g.beginPath();
+        g.arc(sb.x, sb.y, 6 + k * 34, 0, Math.PI * 2);
+        g.stroke();
+      }
+    }
     for (const p of fx.puffs) {
       if (p.life < 0) continue;
       const k = Math.min(1, p.life / 7);
@@ -1081,6 +1125,27 @@ export class MapView {
       }
       g.closePath();
       g.fill();
+    }
+    for (let i = 0; i < fx.fired; i++) {
+      const sb = o.blasts[i];
+      const s2 = since - sb.at;
+      // Then it burns: flickering paper flames that die down over a minute or so.
+      const burn = Math.max(0, 1 - s2 / 60);
+      if (burn > 0) {
+        const fr = rng(Math.round(sb.x * 13 + sb.y));
+        for (let j = 0; j < 7; j++) {
+          const fx0 = sb.x + (fr() - 0.5) * 14;
+          const fy0 = sb.y + (fr() - 0.5) * 10;
+          const hgt = (3 + fr() * 4) * burn * (0.75 + 0.25 * Math.sin(this.time * (7 + j) + j * 2));
+          g.fillStyle = `rgba(232,${110 + Math.round(fr() * 60)},40,${0.85 * Math.min(1, burn * 2)})`;
+          g.beginPath();
+          g.moveTo(fx0 - 1.6, fy0);
+          g.quadraticCurveTo(fx0 - 1.2, fy0 - hgt * 0.6, fx0, fy0 - hgt);
+          g.quadraticCurveTo(fx0 + 1.2, fy0 - hgt * 0.6, fx0 + 1.6, fy0);
+          g.closePath();
+          g.fill();
+        }
+      }
     }
   }
 }
@@ -1160,7 +1225,9 @@ export function resolveStrike(world: World, plan: Plan, pop: Population, walkers
       count += 1 + (r() < 0.5 ? 1 : 0);
     }
   }
-  return { ix, iy, destroyed, damaged: [...damaged], hurtSlots, hurtWalkers, hurtCars, count, secondary: sec.map((s) => s.name) };
+  // What else goes off does so a beat later, one after another: the heat has to reach it first.
+  const blasts = sec.map((s, i) => ({ x: s.x, y: s.y, at: 0.8 + i * 0.7 + (Math.abs(Math.sin(seed + i * 7.1)) * 0.5) }));
+  return { ix, iy, destroyed, damaged: [...damaged], hurtSlots, hurtWalkers, hurtCars, count, secondary: sec.map((s) => s.name), blasts };
 }
 
 // ---------------------------------------------------------------- helpers
