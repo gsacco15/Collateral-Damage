@@ -279,6 +279,8 @@ export default function App() {
       return closeIntro(true);
     }
     if (!sound.enabled) sound.setEnabled(true);
+    const home = guideHome();
+    focusRef.current = { cx: home.cx, cy: home.cy, zoom: home.zoom, dur: 3 }; // glide back in to the guide's home view
     const iv = introVoice.current;
     const elapsed = iv ? (performance.now() - iv.start) / 1000 : Infinity;
     let left = iv && elapsed < iv.dur - 1 ? iv.dur - elapsed : 0;
@@ -420,10 +422,22 @@ export default function App() {
   const timers = useRef<number[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const focusRef = useRef<{ cx: number; cy: number; zoom: number; dur?: number } | null>(null);
-  // The guide's card opens over the whole city: pull out to it, slowly, so the tour can glide back in.
+  // The guide's home view: Warehouse 14, the school and the depot, with the canal off to the east.
+  const guideHome = () => {
+    const m0 = mapRef.current;
+    const base = m0 ? m0.cam().s / m0.view.zoom : 1;
+    const cw = canvasRef.current?.clientWidth ?? 1000;
+    const ch = canvasRef.current?.clientHeight ?? 700;
+    const zoom = Math.max(1.2, Math.min(cw / 980, ch / 600) / base);
+    // Pulled back: the city around it, but never so far that the desert off to the east shows.
+    const out = Math.max(1, zoom * 0.72);
+    const hw = cw / 2 / (base * out);
+    return { cx: 454, cy: 528, zoom, back: { cx: Math.max(hw - 40, Math.min(470, world.city.w - hw + 10)), cy: 470, zoom: out } };
+  };
+  // The guide's card opens over the city: pull back a little (not so far the desert shows), for a sense of scale.
   useEffect(() => {
     if (!intro) return;
-    focusRef.current = { cx: world.city.w / 2, cy: world.city.h / 2, zoom: 1, dur: 1.8 };
+    focusRef.current = { ...guideHome().back, dur: 1.8 };
   }, [intro]); // eslint-disable-line react-hooks/exhaustive-deps
   const canvas3dRef = useRef<HTMLCanvasElement>(null);
   const down3d = useRef<{ x: number; y: number } | null>(null);
@@ -1592,23 +1606,23 @@ export default function App() {
     const mid = (bs: { cx: number; cy: number }[]) => ({ x: bs.reduce((a, b) => a + b.cx, 0) / bs.length, y: bs.reduce((a, b) => a + b.cy, 0) / bs.length });
     const whB = wh.buildingId != null ? world.buildings[wh.buildingId] : null;
     const stops: [number, () => void][] = [];
-    // The opening: pull right out over the whole city for a sense of scale, then glide slowly in to the district
-    // around Warehouse 14, the school and the depot, with the canal off to the east.
+    // The opening: if we're not already at the guide's home view (the opening card glides there), pull back a
+    // little for a sense of scale, then glide slowly in.
+    const home = guideHome();
     const m0 = mapRef.current;
-    const base = m0 ? m0.cam().s / m0.view.zoom : 1;
-    const cw = canvasRef.current?.clientWidth ?? 1000;
-    const ch = canvasRef.current?.clientHeight ?? 700;
-    const near = Math.max(1, Math.min(cw / 980, ch / 600) / base);
-    focusRef.current = { cx: world.city.w / 2, cy: world.city.h / 2, zoom: 1, dur: 1.1 };
-    if (view === 'model') modelRef.current?.flyTo(world.city.w / 2, world.city.h / 2, 1100, 1.1);
-    if (whB) stops.push([1200, () => setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' })]);
-    stops.push([
-      1200,
-      () => {
-        focusRef.current = { cx: 454, cy: 528, zoom: near, dur: 4.2 };
-        if (view === 'model') modelRef.current?.flyTo(454, 528, 560, 4.2);
-      },
-    ]);
+    const there = !!m0 && Math.hypot(m0.view.cx - home.cx, m0.view.cy - home.cy) < 60 && Math.abs(Math.log(m0.view.zoom / home.zoom)) < 0.25;
+    if (!there) {
+      focusRef.current = { ...home.back, dur: 1.1 };
+      if (view === 'model') modelRef.current?.flyTo(home.back.cx, home.back.cy, 900, 1.1);
+      stops.push([
+        1200,
+        () => {
+          focusRef.current = { cx: home.cx, cy: home.cy, zoom: home.zoom, dur: 3.6 };
+          if (view === 'model') modelRef.current?.flyTo(home.cx, home.cy, 560, 3.6);
+        },
+      ]);
+    }
+    if (whB) stops.push([there ? 300 : 1200, () => setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' })]);
     // First look at the school: in close, the building and its playground filling the view, for a few seconds.
     const yard = world.spaces.find((sp) => sp.name === 'School yard');
     const schoolBox = school && [...school.rects, ...(yard ? [yard.rect] : [])].reduce((u, q) => ({ x0: Math.min(u.x0, q.x), y0: Math.min(u.y0, q.y), x1: Math.max(u.x1, q.x + q.w), y1: Math.max(u.y1, q.y + q.h) }), { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 });
@@ -2087,7 +2101,8 @@ export default function App() {
 
   const estimateDock = est ? (
     <div className="dock-scroll">
-      <section className="card">
+      <section className="card tiles-card">
+        <span className="src corner">{est.runs} replays</span>
         <StatTiles est={est} />
         <div className="approval">
           <div className="approval-head">
@@ -2102,18 +2117,24 @@ export default function App() {
         <JevCard reading={reading} hour={plan.hour} />
       </div>
       <section className="card">
-        <h3>How bad could it be?</h3>
+        <h3>
+          How bad could it be? <span className="src">{est.runs} replays</span>
+        </h3>
         <p className="sub">{est.runs} runs, each with a different landing point and a different count of people.</p>
         <Distribution est={est} rules={rules} />
       </section>
       <section className="card">
-        <h3>Where the harm comes from</h3>
+        <h3>
+          Where the harm comes from <span className="src">{est.runs} replays</span>
+        </h3>
         <p className="sub">Expected people killed or badly hurt. Click a place to see it.</p>
         <Breakdown world={world} est={est} onPick={pickPlace} />
         {est.secondary > 0.01 && <p className="hint warn">Something else went off in {pct(est.secondary)} of runs: stored weapons or fuel.</p>}
       </section>
       <section className="card">
-        <h3>Every weapon, every fuze</h3>
+        <h3>
+          Every weapon, every fuze <span className="src">150 replays each</span>
+        </h3>
         <p className="sub">
           Planning figure at {fmtHour(plan.hour)}, heading {compassName(plan.heading)}, from a quick 150-run check. Below each number: how often the target is destroyed; ✕ misses the {pct(minPk)} requirement. Click a cell to use it.
         </p>
@@ -2155,7 +2176,7 @@ export default function App() {
             <p className="sub">
               Tries every way to strike {target.short} and keeps the one that hurts the fewest people.
             </p>
-            <p className="powered">TypeSafe System One</p>
+            <p className="powered">Runs here, on your computer: the simulator, using Jev's reading of who is inside</p>
           </div>
         </div>
         <div className="row">
@@ -2192,7 +2213,9 @@ export default function App() {
         </p>
       </section>
       <section className="card">
-        <h3>Trade-offs</h3>
+        <h3>
+          Trade-offs <span className="src">plan search</span>
+        </h3>
         <p className="sub">Each dot is a plan. Up is more likely to destroy the target; right is more people hurt. Hover to preview it on the map.</p>
         <Frontier results={results} best={bestNow} minPk={minPk} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} />
         {bestNow && (
@@ -2250,9 +2273,20 @@ export default function App() {
         </label>
       </section>
       <section className="card">
-        <h3>{phase === 'search' ? 'Now testing' : 'Log'}</h3>
-        {testing && (
-          <div className="flip" key={key(testing)}>
+        <h3>Best so far</h3>
+        {bestNow ? (
+          <div className="best-now">
+            <b>{describe(bestNow.c)}</b>
+            <span>
+              Planning figure {bestNow.p90} · destroys the target {pct(bestNow.pk)}
+            </span>
+          </div>
+        ) : (
+          <p className="hint">{phase === 'search' ? 'Nothing meets the requirement yet…' : 'Press Run Jev.'}</p>
+        )}
+        {phase === 'search' && testing && (
+          <div className="flip small" key={key(testing)}>
+            <span className="k">trying</span>
             <Chip k="Weapon" v={weapon(testing.weapon).short} />
             <Chip k="Fuze" v={fuze(testing.fuze).name} />
             <Chip k="Heading" v={HEADING_NAMES[testing.heading]} />
@@ -2260,17 +2294,18 @@ export default function App() {
             <Chip k="Hour" v={fmtHour(testing.hour)} />
           </div>
         )}
-        <div className="log" ref={logRef}>
-          {log.length ? (
-            log.map((l, i) => (
-              <div key={i} className={l.kind}>
-                {l.t}
-              </div>
-            ))
-          ) : (
-            <div className="info">Press Run Jev.</div>
-          )}
-        </div>
+        {log.length > 0 && (
+          <details className="log-fold">
+            <summary>Full log ({log.length})</summary>
+            <div className="log" ref={logRef}>
+              {log.map((l, i) => (
+                <div key={i} className={l.kind}>
+                  {l.t}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
     </div>
   );

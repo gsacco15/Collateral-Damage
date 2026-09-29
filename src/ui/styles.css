@@ -950,3 +950,29 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .jevcard .judgment .role { font-size: 9px; }
 .jevcard .judgment .conf { font-size: 10px; }
 .jevcard .hint, .jevcard details, .jevcard summary { font-size: 11px; }
+
+/* Where each number comes from: a small tag on the card's heading. */
+.card h3 .src, .src.corner { margin-left: auto; float: right; font: 500 9.5px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; font-weight: 500; }
+.tiles-card { position: relative; }
+.src.corner { position: absolute; top: 8px; right: 10px; float: none; background: var(--panel-2); z-index: 1; }
+.jevcard h3 .role-tag { font-weight: 500; color: var(--text-2); }
+.jevcard .src { color: var(--s1); border-color: color-mix(in srgb, var(--s1) 35%, transparent); }
+.jev-fold { margin-top: 2px; }
+.jev-fold summary { font-size: 11px; color: var(--text-3); cursor: pointer; }
+.jev-fold .jev-meta { margin-top: 5px; line-height: 1.5; }
+.jevcard .reports ul { list-style: none; padding: 0; margin: 6px 0 0; gap: 0; }
+.jevcard .reports li { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 6px; align-items: baseline; padding: 5px 0; border-top: 1px solid var(--line); font-size: 11px; line-height: 1.4; }
+.rsrc { font: 500 9px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.rtext { color: var(--text-2); }
+.rfit { font: 500 9.5px var(--mono); padding: 1px 5px; border-radius: 5px; background: var(--sunk); color: var(--text-3); }
+.rfit.fits { color: var(--good); }
+.rfit.fewer, .rfit.more { color: var(--warning); }
+/* Jev's search: the best plan so far, in place; the full log folded away. */
+.best-now { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 9px; background: var(--sunk); }
+.best-now b { font-size: 12.5px; font-weight: 600; }
+.best-now span { font-size: 11.5px; color: var(--text-2); }
+.flip.small { margin-top: 8px; opacity: 0.75; transform: scale(0.92); transform-origin: left center; }
+.flip.small .k { font: 500 9.5px var(--mono); text-transform: uppercase; color: var(--text-3); align-self: center; margin-right: 2px; }
+.log-fold { margin-top: 8px; }
+.log-fold summary { font-size: 11px; color: var(--text-3); cursor: pointer; }
+.log-fold .log { max-height: 180px; }
