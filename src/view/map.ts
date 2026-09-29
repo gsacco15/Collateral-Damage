@@ -15,13 +15,13 @@ import {
   placeName,
   riverX,
   rng,
+  secondaries,
   shownCount,
   structureAt,
   targetOf,
   weapon,
   type Building,
   type DangerField,
-  type Effect,
   type Estimate,
   type Place,
   type Plan,
@@ -49,7 +49,7 @@ export interface Outcome {
   hurtCars: number[];
   count: number;
   secondary: string[]; // what else went off
-  blasts: { x: number; y: number; at: number }[]; // where and when (seconds after impact) each of those goes off
+  blasts: { x: number; y: number; at: number; kind: 'fuel' | 'store' }[]; // where and when (seconds after impact) each of those goes off
 }
 
 export interface Layers {
@@ -800,23 +800,39 @@ export class MapView {
         if (!b.hazard && !(b.id === targetOf(this.world, fx.plan.target).buildingId && o.secondary.length)) continue;
         for (let i = 0; i < 6; i++) fx.puffs.push({ x: b.cx + (r() - 0.5) * 10, y: b.cy + (r() - 0.5) * 10, r: 3, grow: 7, life: -0.5 - r() * 1.2, seed: r() * 1000, dark: 0.9 });
       }
+      // Buildings brought down by the blast: a cloud of dust and a scatter of rubble where each one stood.
+      const tid = targetOf(this.world, fx.plan.target).buildingId;
+      for (const id of o.damaged) {
+        const b = this.world.buildings[id];
+        if (!b || b.hazard) continue;
+        const sz = Math.sqrt(b.area);
+        const n = b.id === tid ? 10 : 7;
+        for (let i = 0; i < n; i++) fx.puffs.push({ x: b.cx + (r() - 0.5) * sz, y: b.cy + (r() - 0.5) * sz, r: 3, grow: 5 + r() * 4, life: -0.05 - r() * 0.5, seed: r() * 1000, dark: 0.05 + r() * 0.2 });
+        for (let i = 0; i < 18; i++) {
+          const a = r() * Math.PI * 2;
+          const v = 3 + r() * 9;
+          fx.scraps.push({ x: b.cx + (r() - 0.5) * sz * 0.8, y: b.cy + (r() - 0.5) * sz * 0.8, z: 2 + r() * 6, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 4 + r() * 8, rot: r() * 6, vr: (r() - 0.5) * 10, size: 0.8 + r() * 1.6, color: cols[Math.floor(r() * cols.length)] });
+        }
+      }
       this.onImpact?.(o);
     }
     // Secondary blasts: fuel or stored weapons going off after the bomb, each with its own flash, debris and fire.
     while (fx.impacted && fx.fired < o.blasts.length && fx.t >= fx.impactAt + o.blasts[fx.fired].at) {
       const sb = o.blasts[fx.fired++];
       const r = rng(Math.round(sb.x * 31 + sb.y * 17));
-      this.shake = Math.max(this.shake, 0.7);
-      const cols = ['#6b5a45', '#8f8781', '#3d3935', '#c99f69', '#e7ddcc'];
-      for (let i = 0; i < 60; i++) {
+      const fuel = sb.kind === 'fuel';
+      this.shake = Math.max(this.shake, fuel ? 1.3 : 0.9);
+      const cols = ['#6b5a45', '#8f8781', '#3d3935', '#c99f69', '#e7ddcc', '#b9b4ac'];
+      for (let i = 0; i < (fuel ? 90 : 70); i++) {
         const a = r() * Math.PI * 2;
-        const v = 8 + r() * 24;
-        fx.scraps.push({ x: sb.x, y: sb.y, z: 0, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 14 + r() * 26, rot: r() * 6, vr: (r() - 0.5) * 18, size: 0.6 + r() * 1.6, color: cols[Math.floor(r() * cols.length)] });
+        const v = 10 + r() * (fuel ? 38 : 28);
+        fx.scraps.push({ x: sb.x, y: sb.y, z: 0, vx: Math.sin(a) * v, vy: -Math.cos(a) * v, vz: 16 + r() * 30, rot: r() * 6, vr: (r() - 0.5) * 18, size: 0.7 + r() * 2, color: cols[Math.floor(r() * cols.length)] });
       }
-      for (let i = 0; i < 16; i++) {
+      // A column of black smoke: burning fuel is darker and heavier than anything else.
+      for (let i = 0; i < (fuel ? 26 : 16); i++) {
         const a = r() * Math.PI * 2;
-        const d = r() * 12;
-        fx.puffs.push({ x: sb.x + Math.cos(a) * d, y: sb.y + Math.sin(a) * d, r: 3, grow: 8 + r() * 6, life: -r() * 0.4, seed: r() * 1000, dark: 0.85 + r() * 0.15 });
+        const d = r() * (fuel ? 20 : 12);
+        fx.puffs.push({ x: sb.x + Math.cos(a) * d, y: sb.y + Math.sin(a) * d, r: 4, grow: (fuel ? 11 : 8) + r() * 7, life: -r() * 0.6, seed: r() * 1000, dark: 0.88 + r() * 0.12 });
       }
     }
     for (const p of fx.scraps) {
@@ -1062,12 +1078,12 @@ export class MapView {
     const since = t - fx.impactAt;
     if (fx.impacted && since < 1.2) {
       const blast = weapon(plan.weapon).blast;
-      if (since < 0.45) {
-        const k = since / 0.45;
-        const rr = blast * (0.5 + k * 0.9);
+      if (since < 0.8) {
+        const k = since / 0.8;
+        const rr = blast * (0.7 + Math.sqrt(k) * 1.3);
         const grd = g.createRadialGradient(o.ix, o.iy, 0, o.ix, o.iy, rr);
-        grd.addColorStop(0, `rgba(255,250,228,${0.95 * (1 - k)})`);
-        grd.addColorStop(0.4, `rgba(255,214,140,${0.6 * (1 - k)})`);
+        grd.addColorStop(0, `rgba(255,250,228,${0.98 * (1 - k) ** 0.6})`);
+        grd.addColorStop(0.4, `rgba(255,200,120,${0.75 * (1 - k) ** 0.8})`);
         grd.addColorStop(1, 'rgba(255,190,110,0)');
         g.fillStyle = grd;
         g.beginPath();
@@ -1084,25 +1100,28 @@ export class MapView {
     for (let i = 0; i < fx.fired; i++) {
       const sb = o.blasts[i];
       const s2 = since - sb.at;
-      if (s2 < 0.5) {
-        // A fuel flash: orange, not white.
-        const k = s2 / 0.5;
-        const rr = 14 + k * 22;
+      const big = sb.kind === 'fuel' ? 1.7 : 1.15;
+      if (s2 < 1.1) {
+        // A fireball, orange, not white: it swells, then rolls up dark.
+        const k = s2 / 1.1;
+        const rr = (16 + Math.sqrt(k) * 30) * big;
         const grd = g.createRadialGradient(sb.x, sb.y, 0, sb.x, sb.y, rr);
-        grd.addColorStop(0, `rgba(255,236,190,${0.95 * (1 - k)})`);
-        grd.addColorStop(0.45, `rgba(250,150,60,${0.75 * (1 - k)})`);
-        grd.addColorStop(1, 'rgba(220,90,40,0)');
+        const a = (1 - k) ** 0.7;
+        grd.addColorStop(0, `rgba(255,240,200,${0.98 * a})`);
+        grd.addColorStop(0.35, `rgba(255,170,70,${0.9 * a})`);
+        grd.addColorStop(0.7, `rgba(215,80,35,${0.6 * a})`);
+        grd.addColorStop(1, 'rgba(120,40,20,0)');
         g.fillStyle = grd;
         g.beginPath();
         g.arc(sb.x, sb.y, rr, 0, Math.PI * 2);
         g.fill();
       }
-      if (s2 < 1) {
-        const k = s2;
-        g.strokeStyle = `rgba(255,245,230,${0.6 * (1 - k)})`;
-        g.lineWidth = Math.max(0.4, 1.2 * (1 - k));
+      if (s2 < 1.2) {
+        const k = s2 / 1.2;
+        g.strokeStyle = `rgba(255,245,230,${0.75 * (1 - k)})`;
+        g.lineWidth = Math.max(0.5, 2 * (1 - k));
         g.beginPath();
-        g.arc(sb.x, sb.y, 6 + k * 34, 0, Math.PI * 2);
+        g.arc(sb.x, sb.y, (8 + k * 50) * big, 0, Math.PI * 2);
         g.stroke();
       }
     }
@@ -1129,19 +1148,22 @@ export class MapView {
     for (let i = 0; i < fx.fired; i++) {
       const sb = o.blasts[i];
       const s2 = since - sb.at;
-      // Then it burns: flickering paper flames that die down over a minute or so.
-      const burn = Math.max(0, 1 - s2 / 60);
+      // Then it burns: flickering paper flames that die down over a minute or two. Fuel burns higher and longer.
+      const fuel = sb.kind === 'fuel';
+      const burn = s2 < 0 ? 0 : Math.max(0, 1 - s2 / (fuel ? 100 : 60));
       if (burn > 0) {
         const fr = rng(Math.round(sb.x * 13 + sb.y));
-        for (let j = 0; j < 7; j++) {
-          const fx0 = sb.x + (fr() - 0.5) * 14;
-          const fy0 = sb.y + (fr() - 0.5) * 10;
-          const hgt = (3 + fr() * 4) * burn * (0.75 + 0.25 * Math.sin(this.time * (7 + j) + j * 2));
+        const n = fuel ? 11 : 7;
+        for (let j = 0; j < n; j++) {
+          const fx0 = sb.x + (fr() - 0.5) * (fuel ? 20 : 14);
+          const fy0 = sb.y + (fr() - 0.5) * (fuel ? 16 : 10);
+          const hgt = (fuel ? 5 + fr() * 7 : 3 + fr() * 4) * burn * (0.75 + 0.25 * Math.sin(this.time * (7 + j) + j * 2));
           g.fillStyle = `rgba(232,${110 + Math.round(fr() * 60)},40,${0.85 * Math.min(1, burn * 2)})`;
           g.beginPath();
-          g.moveTo(fx0 - 1.6, fy0);
-          g.quadraticCurveTo(fx0 - 1.2, fy0 - hgt * 0.6, fx0, fy0 - hgt);
-          g.quadraticCurveTo(fx0 + 1.2, fy0 - hgt * 0.6, fx0 + 1.6, fy0);
+          const wd = fuel ? 2.4 : 1.6;
+          g.moveTo(fx0 - wd, fy0);
+          g.quadraticCurveTo(fx0 - wd * 0.75, fy0 - hgt * 0.6, fx0, fy0 - hgt);
+          g.quadraticCurveTo(fx0 + wd * 0.75, fy0 - hgt * 0.6, fx0 + wd, fy0);
           g.closePath();
           g.fill();
         }
@@ -1167,17 +1189,12 @@ export function resolveStrike(world: World, plan: Plan, pop: Population, walkers
   const destroyed = destroys(world, plan, ix, iy);
   const t = targetOf(world, plan.target);
   const tc = { x: t.rect.x + t.rect.w / 2, y: t.rect.y + t.rect.h / 2 };
-  const sec: { x: number; y: number; e: Effect; name: string }[] = [];
   const reach = Math.max(w.frag * 1.3, w.blast * 1.8, 60) + sigma * 4;
-  if (destroyed && plan.stored) sec.push({ x: tc.x, y: tc.y, e: { blast: 16, frag: 45, fragP: 0.3, shieldPow: 1, z: 2 }, name: 'What was stored inside' });
+  const src0 = hitB?.id ?? -99;
+  const tanks = world.buildings.filter((b) => b.hazard && buildingDist(b, ix, iy) < reach + 40).map((b) => ({ b, occl: occlusion(world, ix, iy, b.cx, b.cy, b.id, src0) }));
+  const sec = secondaries(plan, e, ix, iy, destroyed, tc, tanks, r).map((s) => ({ ...s, name: s.b ? (s.b.name ?? 'Fuel') : 'What was stored inside' }));
   const damaged = new Set<number>();
-  for (const b of world.buildings) {
-    if (!b.hazard || buildingDist(b, ix, iy) > reach) continue;
-    if (buildingDist(b, ix, iy) < b.hazard.ignite + e.blast * 0.8 && r() < 0.8) {
-      sec.push({ x: b.cx, y: b.cy, e: { blast: 16, frag: 50, fragP: 0.35, shieldPow: 1, z: 5 }, name: b.name ?? 'Fuel' });
-      damaged.add(b.id);
-    }
-  }
+  for (const s of sec) if (s.b) damaged.add(s.b.id);
   if (destroyed && t.buildingId != null) damaged.add(t.buildingId);
   if (destroyed && plan.target === 'bridge') damaged.add(BRIDGE_RUIN);
   for (const b of world.buildings) {
@@ -1225,9 +1242,13 @@ export function resolveStrike(world: World, plan: Plan, pop: Population, walkers
       count += 1 + (r() < 0.5 ? 1 : 0);
     }
   }
-  // What else goes off does so a beat later, one after another: the heat has to reach it first.
-  const blasts = sec.map((s, i) => ({ x: s.x, y: s.y, at: 0.8 + i * 0.7 + (Math.abs(Math.sin(seed + i * 7.1)) * 0.5) }));
-  return { ix, iy, destroyed, damaged: [...damaged], hurtSlots, hurtWalkers, hurtCars, count, secondary: sec.map((s) => s.name), blasts };
+  // What else goes off does so a beat after the bomb, and a tank set off by another a beat after that:
+  // a depot goes up in a rolling series of blasts, nearly together.
+  const jit = (i: number) => Math.abs(Math.sin(seed * 0.001 + i * 7.1));
+  const at: number[] = [];
+  sec.forEach((s, i) => at.push(s.by >= 0 ? at[s.by] + 0.18 + jit(i) * 0.3 : 0.55 + jit(i) * 0.45));
+  const blasts = sec.map((s, i) => ({ x: s.x, y: s.y, at: at[i], kind: (s.b ? 'fuel' : 'store') as 'fuel' | 'store' }));
+  return { ix, iy, destroyed, damaged: [...damaged], hurtSlots, hurtWalkers, hurtCars, count, secondary: [...new Set(sec.map((s) => s.name))], blasts };
 }
 
 // ---------------------------------------------------------------- helpers

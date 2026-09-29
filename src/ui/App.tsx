@@ -130,6 +130,9 @@ function glide(y: number, ms: number) {
   requestAnimationFrame(step);
 }
 
+/** Seconds after impact before the verdict stamp: long enough to watch the blast, and anything it sets off, go up. */
+const stampDelay = (o: { blasts: { at: number }[] }) => (o.blasts.length ? Math.max(...o.blasts.map((b) => b.at)) + 1.5 : 1.5);
+
 const loadDiscovered = () => {
   try {
     return new Set<string>(JSON.parse(localStorage.getItem(DISCOVERED_KEY) ?? '[]'));
@@ -1524,17 +1527,20 @@ export default function App() {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
       sound.play('impact');
-      // Whatever else goes off, a beat later: quieter, further off.
-      for (const b of o.blasts) sound.play('impact', b.at, 0.3);
+      // Whatever else goes off, a beat later. Fuel is the loudest; several tanks together share the volume.
+      const each = 1 / Math.sqrt(Math.max(1, o.blasts.length / 2));
+      for (const b of o.blasts) sound.play('impact', b.at, (b.kind === 'fuel' ? 0.6 : 0.45) * each);
+      // The verdict waits until everything has gone off, so you see it happen first.
+      const verdict = stampDelay(o);
       // What you hear afterwards depends on how many were hurt, and is quieter at night (fewer people outside).
       const hurt = o.count;
       const after = hurt === 0 ? 'after-0' : hurt <= 3 ? 'after-few' : hurt <= 15 ? 'after-some' : hurt <= 50 ? 'after-many' : 'after-mass';
       const dark = nightness(plan.hour);
       sound.play(after, 1.1, 0.55 * (1 - dark * 0.35));
-      sound.play('stamp', 0.55);
+      sound.play('stamp', verdict + 0.05);
       // After the blast has settled: one call with the result, then a quiet "stand by".
-      sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', 2.4);
-      sound.radio('radio-08-bda', 3.2);
+      sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', verdict + 1.9);
+      sound.radio('radio-08-bda', verdict + 2.7);
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before), Math.floor(Math.random() * 1e9));
@@ -2331,7 +2337,7 @@ export default function App() {
             )}
 
             {outcome && (
-              <div className={`stamp ${outcome.destroyed ? 'hit' : 'miss'}`} key={`${outcome.ix},${outcome.iy}`} aria-live="assertive">
+              <div className={`stamp ${outcome.destroyed ? 'hit' : 'miss'}`} key={`${outcome.ix},${outcome.iy}`} aria-live="assertive" style={{ animationDelay: `${stampDelay(outcome)}s` }}>
                 <b>{outcome.destroyed ? 'Target destroyed' : 'Target missed'}</b>
                 <span>
                   {outcome.count} {outcome.count === 1 ? 'person' : 'people'} killed or badly hurt
@@ -2339,7 +2345,7 @@ export default function App() {
               </div>
             )}
             {outcome && (
-              <div className="outcome">
+              <div className="outcome" style={{ animationDelay: `${stampDelay(outcome) + 1.9}s` }}>
                 <span className="k">One outcome</span>
                 <div className="big">
                   <b>{outcome.count}</b>

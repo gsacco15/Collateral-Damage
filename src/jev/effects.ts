@@ -1,6 +1,6 @@
 // Weapons, fuzes and what a detonation does to a person at a point.
 // All radii and probabilities are illustrative stand-ins, invented for teaching, not planning data.
-import { buildingAt, inRect, targetOf, type Building, type Material, type TargetId, type World } from './city';
+import { buildingAt, buildingDist, inRect, targetOf, type Building, type Material, type TargetId, type World } from './city';
 import type { Day } from './life';
 
 export type WeaponId = 'large' | 'medium' | 'small' | 'focused';
@@ -136,6 +136,50 @@ export function occlusion(w: World, ax: number, ay: number, bx: number, by: numb
     last = v;
   }
   return f;
+}
+
+// ---------------------------------------------------------------- what else goes off
+
+export const SECONDARY_STORE: Effect = { blast: 16, frag: 45, fragP: 0.3, shieldPow: 1, z: 2 };
+export const SECONDARY_FUEL: Effect = { blast: 16, frag: 50, fragP: 0.35, shieldPow: 1, z: 5 };
+
+/** A marked hazard near the strike, with how clear the line to it is from where the bomb lands. */
+export interface Tank {
+  b: Building;
+  occl: number;
+}
+
+/**
+ * What else goes off: munitions stored in the target, and marked hazards (fuel) close enough for the blast
+ * to set them off, or hit by fragments. Once one tank goes, it sets off its neighbours: a depot goes up together.
+ */
+export function secondaries(plan: Plan, e: Effect, ix: number, iy: number, kill: boolean, tc: { x: number; y: number }, tanks: Tank[], r: () => number) {
+  const out: { x: number; y: number; e: Effect; b: Building | null; by: number }[] = [];
+  if (kill && plan.stored) out.push({ x: tc.x, y: tc.y, e: SECONDARY_STORE, b: null, by: -1 });
+  const lit = new Uint8Array(tanks.length);
+  tanks.forEach((t, i) => {
+    const d = buildingDist(t.b, ix, iy);
+    let p = 0;
+    if (d < t.b.hazard!.ignite + e.blast * 0.8) p = 0.8;
+    else {
+      const reach = e.frag * (0.55 + 0.45 * lobe(plan.heading, t.b.cx - ix, t.b.cy - iy));
+      if (d < reach && t.occl > 0) p = Math.min(0.45, e.fragP * 1.1 * (1 - d / reach) ** 1.2 * t.occl);
+    }
+    if (p > 0 && r() < p) {
+      lit[i] = 1;
+      out.push({ x: t.b.cx, y: t.b.cy, e: SECONDARY_FUEL, b: t.b, by: -1 });
+    }
+  });
+  // The chain: every blast so far can set off the tanks around it.
+  for (let k = 0; k < out.length; k++) {
+    const s = out[k];
+    tanks.forEach((t, i) => {
+      if (lit[i] || buildingDist(t.b, s.x, s.y) > t.b.hazard!.ignite + s.e.blast * 0.8) return;
+      lit[i] = 1;
+      out.push({ x: t.b.cx, y: t.b.cy, e: SECONDARY_FUEL, b: t.b, by: k });
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- buildings coming down

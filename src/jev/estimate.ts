@@ -1,7 +1,7 @@
 // The estimate: run the strike hundreds of times, each with a different landing point and a different
 // count of people, and see how many are killed or badly hurt.
 import { buildingDist, rectDist, targetOf, type Building, type World } from './city';
-import { collapse, destroys, effect, harm, occlusion, structureAt, weapon, type Effect, type Plan } from './effects';
+import { collapse, destroys, effect, harm, occlusion, secondaries, structureAt, weapon, type Plan, type Tank } from './effects';
 import type { Population } from './life';
 import { sampleJudged } from './levels';
 import { binomial, gamma, normal, poisson, rng } from './rng';
@@ -25,8 +25,6 @@ export interface Estimate {
 
 const quantile = (sorted: Uint16Array, q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
 
-const SECONDARY_STORE: Effect = { blast: 16, frag: 45, fragP: 0.3, shieldPow: 1, z: 2 };
-const SECONDARY_FUEL: Effect = { blast: 16, frag: 50, fragP: 0.35, shieldPow: 1, z: 5 };
 const CAR_SHIELD = 0.8;
 
 interface Near {
@@ -46,11 +44,12 @@ export function estimate(world: World, plan: Plan, pop: Population, runs = 400, 
 
   // Everything within reach, with how exposed each point is to fragments from the aim point.
   const near: Near[] = [];
-  const tanks: Building[] = [];
+  const tanks: Tank[] = [];
   for (const b of world.buildings) {
     const d = buildingDist(b, ax, ay);
+    // Hazards a little beyond reach still count: a tank that goes up sets off the next one.
+    if (b.hazard && d < reach + 40) tanks.push({ b, occl: occlusion(world, ax, ay, b.cx, b.cy, b.id, src) });
     if (d > reach) continue;
-    if (b.hazard) tanks.push(b);
     if (!b.capacity) continue;
     const k = b.pts.length / 3;
     const occl = new Float32Array(k);
@@ -117,12 +116,7 @@ export function estimate(world: World, plan: Plan, pop: Population, runs = 400, 
     const kill = destroys(world, plan, ix, iy);
     if (kill) destroyed++;
     // Secondary explosions: what's stored in the target, fuel in the tanks.
-    const sec: { x: number; y: number; e: Effect }[] = [];
-    if (kill && plan.stored) sec.push({ x: tc.x, y: tc.y, e: SECONDARY_STORE });
-    for (const tank of tanks) {
-      const d = buildingDist(tank, ix, iy);
-      if (d < tank.hazard!.ignite + e.blast * 0.8 && r() < 0.8) sec.push({ x: tank.cx, y: tank.cy, e: SECONDARY_FUEL });
-    }
+    const sec = secondaries(plan, e, ix, iy, kill, tc, tanks, r);
     if (sec.length) secondaryRuns++;
     const withSec = (p: number, x: number, y: number, z: number, shield: number, own: boolean) => {
       for (const s of sec) p = 1 - (1 - p) * (1 - harm(0, 'instant', s.e, s.x, s.y, x, y, z, shield, own, 1));
