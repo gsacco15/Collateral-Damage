@@ -41,7 +41,7 @@ export function parseKey(q: URLSearchParams): IntelKey | null {
   const hour = Number(q.get('hour'));
   const day = q.get('day') as Day;
   const watched = Number(q.get('watched'));
-  if (!TARGETS.includes(target) || !Number.isInteger(hour) || hour < 0 || hour > 23 || (day !== 'weekday' && day !== 'friday') || !WATCH_BUCKETS.includes(watched)) return null;
+  if (!(TARGETS.includes(target) || /^b:\d{1,4}$/.test(target)) || !Number.isInteger(hour) || hour < 0 || hour > 23 || (day !== 'weekday' && day !== 'friday') || !WATCH_BUCKETS.includes(watched)) return null;
   return { target, hour, day, watched };
 }
 

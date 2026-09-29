@@ -32,6 +32,8 @@ export default async function handler(req: Request): Promise<Response> {
   if (hit) return new Response(hit, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600, s-maxage=2592000' } });
 
   world ??= buildCity();
+  // A picked building must exist and have people who use it.
+  if (key.target.startsWith('b:') && !(world.buildings[Number(key.target.slice(2))]?.capacity > 0)) return json({ ok: false, reason: 'bad-request' }, 400);
   const { body, sites, reports } = jevRequest(world, key);
   const t0 = Date.now();
   // Retry once on rate limits or overload, as the API asks.

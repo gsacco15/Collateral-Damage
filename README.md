@@ -86,7 +86,11 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 
 ### Playing with it
 
-- **Drag the aim** on the target, and **drag the approach handle** (the dark arrow circling the aim) to choose the direction of attack. `,` and `.` turn it too; `[` and `]` step the hour.
+- **Step in**: the opening scene sets up the story; the guide walks through it in ten steps, pulsing the ring when it asks what's within reach.
+- **Any building can be the target**: click it and choose *Make this the target*. The four briefed targets keep their briefings and quirks; any other building follows the general rules, its toughness coming from its material, floors and size. A picked building starts *not* confirmed as lawful: that's a judgment for people.
+- **The ruins stay**: after a strike, *Next target* keeps the rubble. Nobody is inside a ruin any more, in the estimate and in Jev's search. *Roll again* replaces the last strike; *Rebuild the city* clears everything.
+
+- **Drag the aim** on the target, and **drag the paper plane** circling the aim to choose the direction of attack. `,` and `.` turn it too; `[` and `]` step the hour.
 - **Point anywhere**: the readout says who is inside a building, or how likely someone standing in the open there is to be killed or badly hurt.
 - **Explore**: landmarks and streets are named as you find them; the Explored menu flies you back to anything you've found.
 - **Jev at work**: when Jev runs, the drawer under the map shows its workers spinning up, the queue draining, each worker lane scoring a plan and flashing the grid of its simulated strikes, and each result flying into the trade-off chart, with a running count of simulated strikes. Change the speed, pause it, or change the plan's assumptions and watch it re-score.

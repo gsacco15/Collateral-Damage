@@ -95,7 +95,8 @@ export interface District {
   blurb: string;
 }
 
-export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge';
+/** The four briefed targets, or any building by id (`b:123`). */
+export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | `b:${number}`;
 export interface Target {
   id: TargetId;
   name: string;
@@ -806,7 +807,38 @@ export function buildCity(seed = 7): World {
   return world;
 }
 
-export const targetOf = (w: World, id: TargetId) => w.targets.find((t) => t.id === id)!;
+export const targetOf = (w: World, id: TargetId): Target => (id.startsWith('b:') ? buildingTarget(w, Number(id.slice(2))) : w.targets.find((t) => t.id === id)!);
+
+const HARDNESS: Record<Material, number> = { concrete: 9, steel: 10, brick: 7, mud: 5, tin: 3 };
+const built = new WeakMap<World, Map<number, Target>>();
+
+/** Any building as a target. No briefing and no quirks: how much blast it takes comes from its material and size. */
+export function buildingTarget(w: World, id: number): Target {
+  let m = built.get(w);
+  if (!m) built.set(w, (m = new Map()));
+  let t = m.get(id);
+  if (t) return t;
+  const b = w.buildings[id];
+  if (!b) return w.targets[0];
+  const x0 = Math.min(...b.rects.map((q) => q.x));
+  const y0 = Math.min(...b.rects.map((q) => q.y));
+  const x1 = Math.max(...b.rects.map((q) => q.x + q.w));
+  const y1 = Math.max(...b.rects.map((q) => q.y + q.h));
+  const name = placeName(b);
+  t = {
+    id: `b:${id}`,
+    name,
+    short: name.length > 18 ? `${name.slice(0, 17)}…` : name,
+    note: `A building you picked: ${MATERIAL_NAME[b.material].toLowerCase()}, ${b.floors} floor${b.floors === 1 ? '' : 's'}. No briefing and no special rules: how much it takes to destroy comes from what it's made of and how big it is.`,
+    rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+    buildingId: id,
+    hardness: Math.round(HARDNESS[b.material] + Math.min(4, b.floors * 0.4) + Math.min(3, ((x1 - x0) * (y1 - y0)) / 600)),
+    stored: false,
+    aimHeight: b.h,
+  };
+  m.set(id, t);
+  return t;
+}
 export const targetCentre = (t: Target) => ({ x: t.rect.x + t.rect.w / 2, y: t.rect.y + t.rect.h / 2 });
 
 export function placeName(b: Building): string {

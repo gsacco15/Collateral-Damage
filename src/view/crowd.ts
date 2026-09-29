@@ -30,10 +30,11 @@ export interface Car {
   speed: number;
   color: string;
   hurt: boolean;
+  fled?: boolean; // already turned away from a blast
 }
 
 const CAR_COLORS = ['#e7e2d8', '#6c8aa8', '#b8483a', '#2f2d2b', '#d9c9a3', '#8a9a7a', '#c9b24c'];
-const MAX_SPACE_WALKERS = 140;
+const MAX_SPACE_WALKERS = 80;
 
 export class Crowd {
   walkers: Walker[] = [];
@@ -86,7 +87,7 @@ export class Crowd {
     const s = w.streetPts;
     const nStreet = s.length / 2;
     // Pavements.
-    const want = Math.min(900, Math.round(pop.streetQ * nStreet));
+    const want = Math.min(500, Math.round(pop.streetQ * nStreet * 0.55));
     const street = this.walkers.filter((x) => x.kind === 'street' && !x.gone && !x.hurt);
     if (street.length > want) for (const x of street.slice(want)) x.gone = true;
     else
@@ -96,7 +97,7 @@ export class Crowd {
       }
     // Open spaces: the souk, the square, the stadium, the school yard.
     for (const sp of w.spaces) {
-      const n = Math.min(MAX_SPACE_WALKERS, Math.round(pop.spaceQ[sp.id] * sp.capacity));
+      const n = Math.min(MAX_SPACE_WALKERS, Math.round(pop.spaceQ[sp.id] * sp.capacity * 0.6));
       const mine = this.walkers.filter((x) => x.kind === 'space' && x.zone === sp.rect && !x.gone && !x.hurt);
       if (mine.length > n) for (const x of mine.slice(n)) x.gone = true;
       else for (let i = mine.length; i < n; i++) this.walkers.push(this.spawn('space', sp.rect.x + 1 + r() * (sp.rect.w - 2), sp.rect.y + 1 + r() * (sp.rect.h - 2), sp.rect));
@@ -125,8 +126,9 @@ export class Crowd {
       }
     }
     this.walkers = this.walkers.filter((x) => !x.gone || x.kind === 'transit');
-    // Cars: more on the boulevard, few at night.
-    const wantCars = Math.round(20 + 150 * pop.trafficQ[1]);
+    // Cars: more on the boulevard, a little busier at rush hour, few at night.
+    const t = pop.trafficQ[1];
+    const wantCars = Math.round(20 + 150 * t + 60 * t * t);
     while (this.cars.length < wantCars) this.cars.push(this.newCar());
     if (this.cars.length > wantCars) this.cars.length = wantCars;
   }
@@ -182,13 +184,43 @@ export class Crowd {
     ];
   }
 
-  step(dt: number, blast: { x: number; y: number; t: number } | null) {
+  private blastSeen = '';
+
+  /** Once per blast: people spill out of the buildings around it and hurry away. */
+  private evacuate(blast: { x: number; y: number }, pop: Population | null) {
+    const r = this.r;
+    let n = 0;
+    for (const b of this.world.buildings) {
+      if (n >= 45) break;
+      const d = Math.hypot(b.cx - blast.x, b.cy - blast.y);
+      if (d < 35 || d > 170 || (pop && !shownCount(pop, b)) || r() > 0.55) continue;
+      const k = 1 + Math.floor(r() * 2);
+      for (let i = 0; i < k; i++, n++) {
+        const w = this.spawn('street', b.cx + (r() - 0.5) * 4, b.cy + (r() - 0.5) * 4);
+        const ux = (b.cx - blast.x) / d;
+        const uy = (b.cy - blast.y) / d;
+        w.flee = 1;
+        w.phase = -r() * 1.2;
+        w.path = [{ x: b.cx + ux * (25 + r() * 30) + (r() - 0.5) * 12, y: b.cy + uy * (25 + r() * 30) + (r() - 0.5) * 12 }];
+        this.walkers.push(w);
+      }
+    }
+  }
+
+  step(dt: number, blast: { x: number; y: number; t: number } | null, pop: Population | null = null) {
     const r = this.r;
     const s = this.world.streetPts;
+    if (blast && blast.t > 0.4 && blast.t < 8) {
+      const k = `${blast.x.toFixed(1)},${blast.y.toFixed(1)}`;
+      if (k !== this.blastSeen) {
+        this.blastSeen = k;
+        this.evacuate(blast, pop);
+      }
+    }
     for (const w of this.walkers) {
       if (w.hurt) continue;
       w.phase += dt;
-      if (w.kind === 'transit' && w.phase < 0) continue;
+      if ((w.kind === 'transit' || w.flee) && w.phase < 0) continue;
       if (blast && blast.t < 8) {
         const dx = w.x - blast.x;
         const dy = w.y - blast.y;
@@ -196,6 +228,16 @@ export class Crowd {
         if (d < 130 && !w.flee) {
           w.flee = 1;
           w.path = [{ x: w.x + (dx / d) * 35, y: w.y + (dy / d) * 35 }];
+        }
+      }
+      // Later, some drift back and stand at a distance, looking.
+      if (blast && blast.t > 12 && blast.t < 40 && w.flee === 1 && !w.path.length && r() < 0.004) {
+        const dx = w.x - blast.x;
+        const dy = w.y - blast.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < 160) {
+          w.flee = 2;
+          w.path = [{ x: blast.x + (dx / d) * (38 + r() * 14), y: blast.y + (dy / d) * (38 + r() * 14) }];
         }
       }
       if (!w.path.length) {
@@ -215,7 +257,7 @@ export class Crowd {
       const dx = t.x - w.x;
       const dy = t.y - w.y;
       const d = Math.hypot(dx, dy);
-      const sp = w.speed * (w.flee ? 3.2 : 1) * dt;
+      const sp = w.speed * (w.flee === 1 ? 3.2 : 1) * dt;
       if (d <= sp) {
         w.x = t.x;
         w.y = t.y;
@@ -229,8 +271,19 @@ export class Crowd {
     this.walkers = this.walkers.filter((w) => !(w.kind === 'transit' && w.gone));
     for (const c of this.cars) {
       if (c.hurt) continue;
-      if (blast && blast.t < 10 && Math.hypot(c.x - blast.x, c.y - blast.y) < 80) continue;
-      const v = c.dir * c.speed * dt;
+      let boost = 1;
+      if (blast && blast.t < 14) {
+        const d = Math.hypot(c.x - blast.x, c.y - blast.y);
+        if (d < 80 && blast.t < 10) continue; // stopped dead
+        // Further out: turn round if heading towards it, and hurry.
+        if (d < 240 && !c.fled) {
+          c.fled = true;
+          const toward = c.horizontal ? Math.sign(blast.x - c.x) === c.dir : Math.sign(blast.y - c.y) === c.dir;
+          if (toward) c.dir = c.dir === 1 ? -1 : 1;
+        }
+        if (c.fled) boost = 1.8;
+      } else c.fled = false;
+      const v = c.dir * c.speed * boost * dt;
       if (c.horizontal) {
         c.x += v;
         if (c.x > c.to) c.x = c.from;

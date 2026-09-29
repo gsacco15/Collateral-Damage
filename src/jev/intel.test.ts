@@ -97,3 +97,28 @@ describe('Jev reads the intelligence', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('ruins and picked buildings', () => {
+  it('nobody is inside a ruin', () => {
+    const t = targetOf(world, 'warehouse');
+    const school = world.buildings.find((b) => b.name === 'Cotton Street School')!;
+    const plan = planFor('warehouse', 10.5);
+    const before = estimate(world, plan, population(world, 10.5, 'weekday', 6), 300, 3);
+    const after = estimate(world, plan, population(world, 10.5, 'weekday', 6, {}, {}, [school.id, t.buildingId!]), 300, 3);
+    expect(before.byBuilding[school.id]).toBeGreaterThan(0.5);
+    expect(after.byBuilding[school.id]).toBe(0);
+    expect(after.mean).toBeLessThan(before.mean);
+  });
+
+  it('any building can be a target, with toughness from what it is made of', () => {
+    const home = world.buildings.find((b) => b.kind === 'home' && b.material === 'mud')!;
+    const block = world.buildings.find((b) => b.kind === 'apartment' && b.material === 'concrete')!;
+    const a = targetOf(world, `b:${home.id}`);
+    const b = targetOf(world, `b:${block.id}`);
+    expect(a.buildingId).toBe(home.id);
+    expect(b.hardness).toBeGreaterThan(a.hardness);
+    const e = estimate(world, planFor(`b:${home.id}`, 10), population(world, 10, 'weekday', 6), 200, 3);
+    expect(e.pk).toBeGreaterThan(0.5); // a 2,000-lb bomb destroys a mud house
+    expect(jevRequest(world, intelKey(`b:${home.id}`, 10, 'weekday', 6)).sites[0].id).toBe(home.id);
+  });
+});

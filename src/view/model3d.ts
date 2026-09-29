@@ -10,6 +10,7 @@ import type { Layers, Outcome } from './map';
 import { grade, nightness, sun } from './paper';
 
 export interface Frame3D {
+  ruins: number[]; // destroyed by earlier strikes
   world: World;
   plan: Plan;
   pop: Population;
@@ -340,7 +341,26 @@ export class Model3D {
     this.raf = requestAnimationFrame(loop);
   }
 
+  private fly: { t0: THREE.Vector3; t1: THREE.Vector3; p0: THREE.Vector3; p1: THREE.Vector3; k: number } | null = null;
+
+  /** Glide the camera to look at a spot on the map, keeping the current angle, from a comfortable distance. */
+  flyTo(x: number, y: number, dist = 160) {
+    const t1 = new THREE.Vector3(x, 4, y);
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    if (dir.y < 0.35) dir.y = 0.35;
+    dir.normalize();
+    this.fly = { t0: this.controls.target.clone(), t1, p0: this.camera.position.clone(), p1: t1.clone().add(dir.multiplyScalar(dist)), k: 0 };
+  }
+
+  /** Look at the current target. */
+  toTarget() {
+    const f = this.getFrame();
+    const t = f ? targetOf(this.world, f.plan.target) : this.world.targets[0];
+    this.flyTo(t.rect.x + t.rect.w / 2, t.rect.y + t.rect.h / 2, 150);
+  }
+
   preset(name: 'drone' | 'street' | 'top') {
+    this.fly = null;
     const f = this.getFrame();
     const t = f ? targetOf(this.world, f.plan.target) : this.world.targets[0];
     const target = new THREE.Vector3(t.rect.x + t.rect.w / 2, 4, t.rect.y + t.rect.h / 2 + 18);
@@ -606,6 +626,14 @@ export class Model3D {
     this.last = now;
     const f = this.getFrame();
     if (!f) return;
+    if (this.fly) {
+      const fl = this.fly;
+      fl.k = Math.min(1, fl.k + dt / 1.1);
+      const e = fl.k * fl.k * (3 - 2 * fl.k);
+      this.controls.target.lerpVectors(fl.t0, fl.t1, e);
+      this.camera.position.lerpVectors(fl.p0, fl.p1, e);
+      if (fl.k >= 1) this.fly = null;
+    }
     this.controls.update();
     this.light(f.plan.hour);
     this.overlays(f);
@@ -728,13 +756,14 @@ export class Model3D {
   private damage(f: Frame3D) {
     const striking = f.strike && f.strike.t < IMPACT_AT;
     const o = striking ? null : f.outcome;
-    const key = o ? `${o.ix.toFixed(2)},${o.iy.toFixed(2)}` : '';
+    const ids = new Set([...f.ruins, ...(o?.damaged ?? [])]);
+    const key = `${o ? `${o.ix.toFixed(2)},${o.iy.toFixed(2)}` : ''}|${[...ids].join('.')}`;
     if (key === this.damageKey) return;
     this.damageKey = key;
     for (const c of this.rubble.children) (c as THREE.Mesh).geometry?.dispose();
     this.rubble.clear();
-    this.buildBuildings(new Set(o?.damaged ?? []));
-    if (!o) return;
+    this.buildBuildings(ids);
+    if (!ids.size) return;
     const paper: Record<string, THREE.Material> = {
       white: new THREE.MeshStandardMaterial({ color: '#f1ede4', roughness: 1, side: THREE.DoubleSide }),
       kraft: new THREE.MeshStandardMaterial({ color: '#c9a06b', roughness: 1, side: THREE.DoubleSide }),
@@ -742,7 +771,7 @@ export class Model3D {
       tin: new THREE.MeshStandardMaterial({ color: '#8e9497', roughness: 0.7, metalness: 0.2, side: THREE.DoubleSide }),
       terracotta: new THREE.MeshStandardMaterial({ color: '#b86e50', roughness: 1, side: THREE.DoubleSide }),
     };
-    for (const id of o.damaged) {
+    for (const id of ids) {
       const b = this.world.buildings[id];
       const r = rng(id * 13 + 1);
       const main = paper[b.paper];
@@ -774,6 +803,7 @@ export class Model3D {
         }
       }
     }
+    if (!o) return;
     const crater = new THREE.Mesh(new THREE.CircleGeometry(4.5, 24), new THREE.MeshBasicMaterial({ color: '#3a3029', transparent: true, opacity: 0.8 }));
     crater.rotation.x = -Math.PI / 2;
     crater.position.set(o.ix, 0.1, o.iy);

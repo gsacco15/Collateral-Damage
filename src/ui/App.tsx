@@ -47,6 +47,7 @@ import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
+import { Origami } from './origami';
 import { readIntel } from './jevLive';
 import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
@@ -56,6 +57,7 @@ const WINDOWS: Record<HourWindow, number[]> = { any: [1, 4, 7, 10, 13, 16, 19, 2
 const SPEEDS = [0.5, 1, 2, 4, 8, 16, 32, 64, Infinity];
 const HEADING_NAMES: Record<number, string> = { 0: '↑ N', 45: '↗ NE', 90: '→ E', 135: '↘ SE', 180: '↓ S', 225: '↙ SW', 270: '← W', 315: '↖ NW' };
 const DISCOVERED_KEY = 'cd.discovered';
+const INTRO_KEY = 'cd.intro';
 type StepId = 'target' | 'weapon' | 'approach' | 'intel' | 'rules' | 'decide';
 
 interface GuideStep {
@@ -66,17 +68,21 @@ interface GuideStep {
   focus?: { cx: number; cy: number; zoom: number };
   open?: StepId;
   tab?: 'estimate' | 'jev';
+  pulse?: boolean; // make the reach ring breathe
+  drawer?: 'day' | 'jev';
 }
 
 const GUIDE: GuideStep[] = [
-  { title: 'Pick a target', text: 'Warehouse 14 is said to hold weapons. Whether it is a lawful target is a legal call made by people, before any maths. Everything after is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target' },
-  { title: 'Draw the crude circle', text: 'Everything a weapon could reach. Inside it: a school across the road, a fuel depot round the corner, homes and shops. Protected sites and hazards are outlined.', layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 } },
-  { title: 'See the danger', text: 'The red field is the chance that someone standing in the open would be killed or badly hurt, averaged over hundreds of landings. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true, circle: false }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
-  { title: 'Change the weapon', text: 'Try a smaller warhead and a delay fuze in the options matrix. Watch the field shrink and the planning figure fall. Some choices stop destroying the target.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
-  { title: 'Change the approach', text: 'Fragments lean the way the bomb travels. Turn the dial so it flies west, away from the school.', plan: { heading: 270 }, open: 'approach' },
-  { title: 'Change the hour', text: 'Scrub the timeline. The school fills in the morning and empties at night; homes do the opposite. The line shows what each hour would cost.', plan: { hour: 2 } },
-  { title: 'Who signs off', text: 'The spread is boiled down to one cautious figure. The higher it is, or if a protected site is inside the circle, the more senior the approval.', open: 'rules' },
-  { title: 'Let Jev search', text: 'Jev tries every weapon, fuze, direction, aim point and hour in parallel, and keeps the plan that meets the requirement with the least harm. Throttle it; change things while it runs.', tab: 'jev' },
+  { title: 'The briefing', text: 'Warehouse 14 is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target' },
+  { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
+  { title: "Who's inside right now?", text: "Nobody knows exactly. Overhead images only see people outside, not everyone carries a phone, the census is years old. Jev reads these reports and says how likely each head count is. Its reading is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4 }, open: 'intel', tab: 'estimate' },
+  { title: 'Where it would hurt', text: 'The red wash is the chance that someone standing in the open would be killed or badly hurt, over hundreds of replays of the strike. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
+  { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
+  { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', plan: { heading: 270 }, open: 'approach' },
+  { drawer: 'day', title: 'Change the hour', text: 'Drag through the day below the map. The school fills in the morning and empties at night; homes do the opposite. The line shows what each hour would cost.', plan: { hour: 2 } },
+  { title: 'Who signs off', text: 'Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.', open: 'rules' },
+  { title: 'Let Jev search', text: 'Jev tries every way to do it: every weapon, fuze, direction, aim point and hour, 3,840 plans, each replayed 120 times, in parallel. It keeps the plan that destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev' },
+  { title: 'Your decision', text: "Authorise strike opens the final decision: the numbers, who signs, the protected places in reach. Hold the red button to release. Afterwards the ruins stay. Pick another building and plan again, or rebuild the city.", open: 'decide' },
 ];
 
 const loadDiscovered = () => {
@@ -114,6 +120,22 @@ export default function App() {
   const [hover, setHover] = useState<number | null>(null);
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
   const [guide, setGuide] = useState<number | null>(null);
+  const [intro, setIntro] = useState(() => {
+    try {
+      return !localStorage.getItem(INTRO_KEY) && !location.hash;
+    } catch {
+      return true;
+    }
+  });
+  const closeIntro = (step: boolean) => {
+    setIntro(false);
+    try {
+      localStorage.setItem(INTRO_KEY, '1');
+    } catch {
+      /* fine: it just shows again next time */
+    }
+    if (step) goGuide(0);
+  };
   const [aimDrag, setAimDrag] = useState(false);
   const [dayPlay, setDayPlay] = useState(false);
   const [explored, setExplored] = useState(0);
@@ -148,7 +170,7 @@ export default function App() {
   const [results, setResults] = useState<Scored[]>([]);
   const [testing, setTesting] = useState<Candidate | null>(null);
   const [follow, setFollow] = useState(true);
-  const [speed, setSpeed] = useState(4);
+  const [speed, setSpeed] = useState(SPEEDS.length - 1); // flat out: about 30–60 seconds for a full search
   const [minPk, setMinPk] = useState(0.85);
   const [hours, setHours] = useState<HourWindow>('any');
   const [allowed, setAllowed] = useState<WeaponId[]>(WEAPONS.map((w) => w.id));
@@ -168,7 +190,7 @@ export default function App() {
   const canvas3dRef = useRef<HTMLCanvasElement>(null);
   const labels3dRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<Model3D | null>(null);
-  const strikeRef = useRef<{ plan: Plan; outcome: Outcome } | null>(null);
+  const strikeRef = useRef<{ plan: Plan; outcome: Outcome; before: number[] } | null>(null);
   const theaterCanvas = useRef<HTMLCanvasElement>(null);
   const theaterRef = useRef<JevTheater | null>(null);
   const trailRef = useRef<Plan[]>([]);
@@ -181,6 +203,11 @@ export default function App() {
     setOutcome(null);
   }, []);
   const toggleStep = (s: StepId) => setOpen((o) => new Set(o.has(s) ? [...o].filter((x) => x !== s) : [...o, s]));
+
+  // Buildings destroyed by earlier strikes stay destroyed, and empty, until the city is rebuilt.
+  const [ruins, setRuins] = useState<number[]>([]);
+  const ruinsRef = useRef(ruins);
+  ruinsRef.current = ruins;
 
   // Jev reads the intelligence for this target and hour; the simulator then samples from its answer.
   const [intel, setIntel] = useState<IntelByHour>({});
@@ -220,7 +247,7 @@ export default function App() {
     return { ...intelRef.current, ...add };
   };
 
-  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24]), [world, plan.hour, plan.day, plan.watched, obs, intel]);
+  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
   // Every change reruns the estimate and the danger field.
@@ -256,20 +283,20 @@ export default function App() {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h + 0.5 }));
       jobs.current.hours = Date.now();
-      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, runs: 150, cands };
+      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, ruins, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 250);
     return () => clearTimeout(id);
-  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
       jobs.current.matrix = Date.now() + 1;
-      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, runs: 150, cands };
+      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, ruins, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 350);
     return () => clearTimeout(id);
-  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel, ruins]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dayPlay) return;
@@ -286,6 +313,7 @@ export default function App() {
         setPop(null);
         setPlacesOpen(false);
         setLayersOpen(false);
+        setIntro(false);
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
@@ -371,10 +399,11 @@ export default function App() {
     if (SPEEDS[speed] <= 8) for (const s of fresh.slice(-4)) pushLog(`${describe(s.c)} → ${s.p90}, target ${pct(s.pk)}`, 'try');
     const b = best(results, minPk);
     if (b && (!bestRef.current || key(b.c) !== key(bestRef.current.c))) {
-      pushLog(`New best: ${describe(b.c)} → planning figure ${b.p90}, target destroyed ${pct(b.pk)}`, 'best');
+      pushLog(`Better plan: ${describe(b.c)}. Planning figure ${b.p90} ${b.p90 === 1 ? 'person' : 'people'}; destroys the target ${pct(b.pk)} of the time.`, 'best');
       bestRef.current = b;
     }
   }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One line when the requirement settles, not one per step of the slider.
   const firstPk = useRef(true);
   useEffect(() => {
     if (firstPk.current) {
@@ -382,8 +411,15 @@ export default function App() {
       return;
     }
     const b = best(results, minPk);
+    const was = bestRef.current;
     bestRef.current = b;
-    if (results.length) pushLog(`Requirement now ${pct(minPk)}. ${b ? `Best: ${describe(b.c)} → ${b.p90}` : 'Nothing tried so far meets it.'}`, 'step');
+    if (!results.length) return;
+    const id = window.setTimeout(() => {
+      if (!b) pushLog(`Must now destroy the target ${pct(minPk)} of the time. No plan tried so far does.`, 'step');
+      else if (was && key(was.c) === key(b.c)) pushLog(`Must now destroy the target ${pct(minPk)} of the time. Jev's pick stays the same.`, 'step');
+      else pushLog(`Must now destroy the target ${pct(minPk)} of the time. Jev's pick changes: ${describe(b.c)}, ${b.p90} ${b.p90 === 1 ? 'person' : 'people'}.`, 'best');
+    }, 700);
+    return () => clearTimeout(id);
   }, [minPk]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (phase === 'search' && !status.running && status.done >= status.total && status.total > 0) {
@@ -417,23 +453,23 @@ export default function App() {
     const c = inCircle(world, { ...plan, weapon: big.id, fuze: 'instant' }, popNow);
     const steps = [
       () => pushLog(`Target: ${target.name}. ${lawful ? 'Marked a lawful military objective by people; Jev takes that as given.' : 'Not confirmed as a lawful target: stop.'}`, lawful ? 'step' : 'best'),
-      () => lawful && pushLog(`Circle for the ${big.short}: ${c.radius} m, ${c.buildings} buildings.${c.protectedSites.length ? ` Protected: ${c.protectedSites.join(', ')}.` : ''}${c.hazards.length ? ` Hazards: ${c.hazards.join(', ')}.` : ''}`, 'step'),
-      () => lawful && pushLog(`Sweeping ${n.toLocaleString()} plans on ${pool.workers} workers, ${pool.runs} runs each.`, 'step'),
+      () => lawful && pushLog(`Within reach of the ${big.short}: ${c.radius} m, ${c.buildings} buildings.${c.protectedSites.length ? ` Protected: ${c.protectedSites.join(', ')}.` : ''}${c.hazards.length ? ` Hazards: ${c.hazards.join(', ')}.` : ''}`, 'step'),
+      () => lawful && pushLog(`Trying ${n.toLocaleString()} plans, each replayed ${pool.runs} times, on ${pool.workers} workers at once.`, 'step'),
       () => {
         if (!lawful) return setPhase('idle');
         pushLog(`Asking Jev to read the intelligence for ${sp.hours.length} hours…`, 'step');
         readHours(sp.hours).then((got) => {
           const n = sp.hours.filter((h) => got[Math.floor(h) % 24]).length;
-          pushLog(n ? `Jev read ${n} of ${sp.hours.length} hours. The simulator samples who is inside from its answers.` : 'Jev is not connected here: the simulator uses its built-in guess of who is inside.', 'step');
+          pushLog(n ? `Jev read the intelligence for ${n} of ${sp.hours.length} hours. Every replay draws who is inside from its answers.` : 'Jev could not read the intelligence here, so replays use the built-in guess of who is inside.', 'step');
           setPhase('search');
-          pool.start(plan, obs, sp, SEED, false, got);
+          pool.start(plan, obs, sp, SEED, false, got, ruinsRef.current);
         });
       },
     ];
     const gap = SPEEDS[speed] === Infinity ? 120 : Math.max(180, 1000 / Math.sqrt(SPEEDS[speed]));
     steps.forEach((f, i) => timers.current.push(window.setTimeout(f, i * gap)));
   };
-  const assumptions = `${plan.target}|${plan.day}|${plan.watched}|${plan.hardness}|${plan.stored}|${JSON.stringify(obs)}|${allowed.join()}|${hours}`;
+  const assumptions = `${plan.target}|${plan.day}|${plan.watched}|${plan.hardness}|${plan.stored}|${JSON.stringify(obs)}${ruins.length}|${allowed.join()}|${hours}`;
   const lastAssumptions = useRef(assumptions);
   useEffect(() => {
     if (assumptions === lastAssumptions.current) return;
@@ -443,14 +479,14 @@ export default function App() {
     if (!pool || phase !== 'search') return;
     pushLog(onlySpace ? 'Search space changed: keeping what still fits.' : 'Assumptions changed: re-scoring from scratch.', 'step');
     bestRef.current = undefined;
-    pool.start(plan, obs, space(), SEED, onlySpace, intelRef.current);
+    pool.start(plan, obs, space(), SEED, onlySpace, intelRef.current, ruinsRef.current);
   }, [assumptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const candidateAim = (c: Candidate) => (c.aim === 'custom' ? { x: plan.aimX, y: plan.aimY } : aimPoint(target, c.aim));
   const applyCandidate = (c: Candidate) => {
     const a = candidateAim(c);
     setPlan({ weapon: c.weapon, fuze: c.fuze, heading: c.heading, hour: c.hour, aimX: a.x, aimY: a.y });
-    pushLog(`Applied: ${describe(c)}.`, 'step');
+    pushLog(`You're now using: ${describe(c)}.`, 'step');
   };
 
   // ------------------------------------------------------------ the map
@@ -471,7 +507,7 @@ export default function App() {
   }
   const following = follow && !!ghostPlan && (status.running || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
-  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24]) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel]);
+  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24], ruins) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel, ruins]);
 
   frameRef.current = {
     world,
@@ -481,12 +517,14 @@ export default function App() {
     field: following ? null : field,
     layers,
     circleR: inCircle(world, shownPlan, popShown).radius,
+    pulseCircle: guide != null && !!GUIDE[guide].pulse,
     ghost: following ? null : ghostPlan,
     trail: phase === 'search' || phase === 'done' ? trailRef.current : [],
     spotMode: countMode,
     hover,
     selected: pop?.bid ?? null,
     outcome,
+    ruins,
     aimDrag,
     headingDrag,
   };
@@ -570,7 +608,7 @@ export default function App() {
         if (!f || !m) return null;
         const st = strikeRef.current;
         const t = m.strikeTime();
-        return { world: f.world, plan: f.plan, pop: f.pop, est: f.est, layers: f.layers, circleR: f.circleR, outcome: f.outcome, strike: st && t != null ? { ...st, t } : null, walkers: m.crowd.visible(), cars: m.crowd.cars };
+        return { world: f.world, plan: f.plan, pop: f.pop, est: f.est, layers: f.layers, circleR: f.circleR, outcome: f.outcome, ruins: f.ruins, strike: st && t != null ? { ...st, t } : null, walkers: m.crowd.visible(), cars: m.crowd.cars };
       };
       modelRef.current = new Model3D(canvas3dRef.current, labels3dRef.current, world, getFrame);
       setModelReady(true);
@@ -710,9 +748,10 @@ export default function App() {
   const chooseTarget = (id: TargetId) => {
     const t = targetOf(world, id);
     const a = targetCentre(t);
-    resetCity();
+    endStrike();
     setPop(null);
     setObs({});
+    setLawful(!id.startsWith('b:'));
     setPlan({ target: id, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored });
     focusRef.current = { cx: a.x + 20, cy: a.y + 10, zoom: 3.2 };
     poolRef.current?.stop();
@@ -737,11 +776,21 @@ export default function App() {
     if (g.tab) {
       setTab(g.tab);
       setMobileTab(g.tab);
+      setPanels((p) => ({ ...p, side: true }));
     }
+    if (g.drawer) {
+      setDrawerTab(g.drawer);
+      setPanels((p) => ({ ...p, drawer: true }));
+    }
+    if (g.open) setPanels((p) => ({ ...p, plan: true }));
     setPop(null);
     setOutcome(null);
   };
-  const flyTo = (x: number, y: number, zoom = 4) => (focusRef.current = { cx: x, cy: y, zoom });
+  // On the map, pan and zoom; in 3D, glide the camera there too.
+  const flyTo = (x: number, y: number, zoom = 4) => {
+    focusRef.current = { cx: x, cy: y, zoom };
+    if (view === 'model') modelRef.current?.flyTo(x, y, zoom <= 2.5 ? 320 : zoom <= 4 ? 190 : 130);
+  };
   const pickPlace = (kind: 'b' | 's', id: number) => {
     if (kind === 'b') {
       const b = world.buildings[id];
@@ -768,16 +817,27 @@ export default function App() {
     setPop(null);
     if (poolRef.current?.running) poolRef.current.pause();
     focusRef.current = { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
-    m.onImpact = (o) => setOutcome(o);
+    // Rolling again replaces the last strike; a new strike adds to the ruins.
+    const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
+    setRuins(before);
+    m.onImpact = (o) => {
+      setOutcome(o);
+      setRuins([...new Set([...before, ...o.damaged])]);
+    };
     m.onSettled = () => setStriking(false);
-    const o = m.strike(plan, popNow, Math.floor(Math.random() * 1e9));
-    strikeRef.current = { plan, outcome: o };
+    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before), Math.floor(Math.random() * 1e9));
+    strikeRef.current = { plan, outcome: o, before };
   };
-  function resetCity() {
+  /** Clear the last strike's effects, keeping the ruins. */
+  function endStrike() {
     mapRef.current?.clearStrike();
     strikeRef.current = null;
     setOutcome(null);
     setStriking(false);
+  }
+  function resetCity() {
+    endStrike();
+    setRuins([]);
   }
   const holdForHour = () => {
     if (!profile) return;
@@ -836,9 +896,19 @@ export default function App() {
       </Step>
 
       <Step n={2} title="Weapon and fuze" summary={`${w.short} · ${fuze(plan.fuze).name}${weaponWarn ? ` · destroys it ${pct(est!.pk)}` : ''}`} status={weaponWarn ? 'warn' : 'ok'} open={open.has('weapon')} onToggle={() => toggleStep('weapon')}>
+        <div className="armoury" key={plan.weapon}>
+          <Origami id={plan.weapon} size={1.35} fold />
+          <div>
+            <b>{w.name}</b>
+            <span>{w.note}</span>
+          </div>
+        </div>
         <div className="options">
           {WEAPONS.map((wp) => (
             <button key={wp.id} className={plan.weapon === wp.id ? 'on' : ''} onClick={() => setPlan({ weapon: wp.id })}>
+              <span className="mini-origami" aria-hidden>
+                <Origami id={wp.id} size={0.26} />
+              </span>
               <b>{wp.name}</b>
               <span>
                 blast {wp.blast} m · fragments {wp.frag} m · ±{wp.cep} m
@@ -986,7 +1056,10 @@ export default function App() {
             <h3>
               Jev <span className={`status ${phase}`}>{phase === 'idle' ? 'idle' : phase === 'checklist' ? 'checking' : phase === 'search' ? (status.running ? 'searching' : 'paused') : 'done'}</span>
             </h3>
-            <p className="sub">The engine: typed, seeded, pure. Here it sweeps every weapon, fuze, direction, aim point and hour for {target.short}.</p>
+            <p className="sub">
+              Jev reads the intelligence, replays each plan 120 times with different luck, and tries every way to strike {target.short}: every weapon, fuze, direction, aim point and hour. It keeps the plan that destroys the target and hurts the fewest people.
+            </p>
+            <p className="powered">Powered by TypeSafe&rsquo;s System One model, which reads the intelligence. The replays run here, in your browser.</p>
           </div>
         </div>
         <div className="row">
@@ -1043,7 +1116,7 @@ export default function App() {
         <h3>Controls</h3>
         <div className="slider">
           <span>
-            Throttle <em>{SPEEDS[speed] === Infinity ? 'flat out' : `${SPEEDS[speed]} plans/s`}</em>
+            Pace <em>{SPEEDS[speed] === Infinity ? 'as fast as it can' : `${SPEEDS[speed]} plans/s, slowed to watch`}</em>
           </span>
           <input type="range" min={0} max={SPEEDS.length - 1} step={1} value={speed} onChange={(e) => setSpeed(+e.target.value)} />
         </div>
@@ -1119,12 +1192,17 @@ export default function App() {
               {t.short}
             </button>
           ))}
+          {plan.target.startsWith('b:') && (
+            <button className="on picked" title={target.note}>
+              {target.short}
+            </button>
+          )}
         </nav>
         <div className="top-right">
           <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
             Explored {explored}/{world.places.length} ▾
           </button>
-          <button className="btn small" onClick={() => goGuide(guide == null ? 0 : null)}>
+          <button className="btn small" onClick={() => (guide == null ? setIntro(true) : goGuide(null))}>
             {guide == null ? 'Guide' : 'End guide'}
           </button>
           <Seg small value={view} onChange={setView} options={[['map', 'Map'], ['model', '3D']]} />
@@ -1197,7 +1275,7 @@ export default function App() {
                       ['danger', 'Danger', 'Chance someone in the open is killed or badly hurt'],
                       ['people', 'People', 'Everyone Jev expects at this hour'],
                       ['pattern', 'Fragments', 'Where fragments fly, and the shadows buildings cast'],
-                      ['circle', 'Circle', "The crude circle and what's inside it"],
+                      ['circle', 'Reach', 'Everything this bomb could hurt'],
                       ['impacts', 'Landings', 'Where each simulated bomb landed'],
                       ['protect', 'Protected', 'Hospitals, schools, places of worship'],
                       ['labels', 'Labels', 'Places you have found'],
@@ -1247,6 +1325,7 @@ export default function App() {
                   <button onClick={() => modelRef.current?.preset('drone')}>Drone</button>
                   <button onClick={() => modelRef.current?.preset('street')}>Street</button>
                   <button onClick={() => modelRef.current?.preset('top')}>Top</button>
+                  <button onClick={() => modelRef.current?.toTarget()}>Target</button>
                 </>
               ) : (
                 <>
@@ -1382,6 +1461,14 @@ export default function App() {
             )}
 
             {outcome && (
+              <div className={`stamp ${outcome.destroyed ? 'hit' : 'miss'}`} key={`${outcome.ix},${outcome.iy}`} aria-live="assertive">
+                <b>{outcome.destroyed ? 'Target destroyed' : 'Target missed'}</b>
+                <span>
+                  {outcome.count} {outcome.count === 1 ? 'person' : 'people'} killed or badly hurt
+                </span>
+              </div>
+            )}
+            {outcome && (
               <div className="outcome">
                 <span className="k">One outcome</span>
                 <div className="big">
@@ -1398,8 +1485,12 @@ export default function App() {
                   {outcome.secondary.length > 0 && ` Also went off: ${outcome.secondary.join(', ')}.`}
                 </p>
                 <p className="muted">Every red ring is a person in the model.</p>
+                <p>The ruins stay{ruins.length > 1 ? ` (${ruins.length} buildings so far)` : ''}. Pick another target above, or click any building on the map.</p>
                 <div className="row">
-                  <button className="btn primary small" onClick={resetCity} disabled={striking}>
+                  <button className="btn primary small" onClick={endStrike} disabled={striking}>
+                    Next target
+                  </button>
+                  <button className="btn small" onClick={resetCity} disabled={striking}>
                     Rebuild the city
                   </button>
                   <button className="btn small" onClick={release} disabled={striking}>
@@ -1430,6 +1521,17 @@ export default function App() {
                     ×
                   </button>
                 </div>
+                {ruins.includes(popB.id) ? (
+                  <p className="hint">Destroyed in an earlier strike. Nobody is inside.</p>
+                ) : (
+                  plan.target !== `b:${popB.id}` &&
+                  targetOf(world, plan.target).buildingId !== popB.id && (
+                    <button className="btn small make-target" onClick={() => chooseTarget(`b:${popB.id}`)}>
+                      Make this the target
+                    </button>
+                  )
+                )}
+                {popB.protected && !ruins.includes(popB.id) && <p className="hint warn">A protected site. Striking it is prohibited unless it has lost its protection: a legal judgment for people, not the model.</p>}
                 <span className="k">People inside right now</span>
                 <SourceBars s={sources(world, popNow, popB)} onUse={(n) => setPop({ ...pop, n })} />
                 {est && est.byBuilding[popB.id] > 0.01 && <p className="hint">Expected to be killed or badly hurt here: {est.byBuilding[popB.id].toFixed(1)}</p>}
@@ -1554,21 +1656,18 @@ export default function App() {
                           <div className="theater">
                 <div className="theater-head">
                   <b>{status.running ? 'Working' : phase === 'search' ? 'Paused' : 'Done'}</b>
-                  <span className="mono">
-                    {status.workers} workers · {status.done.toLocaleString()}/{status.total.toLocaleString()} plans · {simulated.toLocaleString()} simulated strikes · {status.rate.toFixed(0)} plans/s
+                  <span className="mono stats">
+                    <abbr title={`${status.workers} copies of Jev running at the same time, one per processor core on your computer.`}>{status.workers} workers</abbr> ·{' '}
+                    <abbr title="Every combination of weapon, fuze, direction of attack, aim point and hour.">
+                      {status.done.toLocaleString()}/{status.total.toLocaleString()} plans
+                    </abbr>{' '}
+                    ·{' '}
+                    <abbr title="Each plan is replayed many times with different luck: where it lands, who is inside, where the fragments go. This is every replay so far.">
+                      {simulated.toLocaleString()} replays
+                    </abbr>{' '}
+                    · <abbr title="How many plans Jev finishes each second.">{status.rate.toFixed(0)} plans/s</abbr>
                   </span>
                   <span className="theater-ctl">
-                    <Seg
-                      small
-                      value={speed}
-                      onChange={setSpeed}
-                      options={[
-                        [2, '1×'],
-                        [4, '4×'],
-                        [6, '16×'],
-                        [8, 'Max'],
-                      ]}
-                    />
                     {phase === 'search' && (
                       <button className="btn small" onClick={() => (status.running ? poolRef.current?.pause() : poolRef.current?.resume())}>
                         {status.running ? 'Pause' : 'Resume'}
@@ -1602,6 +1701,32 @@ export default function App() {
           {tab === 'estimate' ? estimateDock : jevDock}
         </aside>
       </main>
+
+      {intro && (
+        <div className="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+          <div className="intro-card">
+            <span className="k">06:00 · Targeting cell</span>
+            <h1 id="intro-title">Collateral damage</h1>
+            <p className="lede">is the harm a strike does to people and places around its target. Before a strike, planners estimate it, and the higher the number, the more senior the person who has to sign for it.</p>
+            <p>
+              This is a city of 40,000 people, made of paper. Intelligence says one of its buildings holds weapons. Across the street is a school. Whether to strike is a legal judgment made by people. Your job is to estimate what it would cost in civilian lives, and who has to sign
+              for that number.
+            </p>
+            <p>
+              <b>Jev</b> is on your desk. It reads the intelligence, replays the strike thousands of times with different luck, and searches every other way to do it.
+            </p>
+            <p className="powered">Jev is powered by TypeSafe&rsquo;s System One model. The city, the numbers and the people are invented, for teaching; this is an explainer, not a targeting tool.</p>
+            <div className="intro-actions">
+              <button className="btn primary big" onClick={() => closeIntro(true)} autoFocus>
+                Step in →
+              </button>
+              <button className="btn" onClick={() => closeIntro(false)}>
+                Look around first
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="mobile-tabs" aria-label="Panels">
         {(['plan', 'estimate', 'jev'] as const).map((t) => (

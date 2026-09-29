@@ -1,6 +1,6 @@
 // Weapons, fuzes and what a detonation does to a person at a point.
 // All radii and probabilities are illustrative stand-ins, invented for teaching, not planning data.
-import { buildingAt, inRect, type Building, type Material, type TargetId, type World } from './city';
+import { buildingAt, inRect, targetOf, type Building, type Material, type TargetId, type World } from './city';
 import type { Day } from './life';
 
 export type WeaponId = 'large' | 'medium' | 'small' | 'focused';
@@ -170,7 +170,7 @@ export function structureAt(w: World, x: number, y: number): { h: number; buildi
 
 /** Would a detonation here destroy the target? */
 export function destroys(w: World, plan: Plan, ix: number, iy: number) {
-  const t = w.targets.find((q) => q.id === plan.target)!;
+  const t = targetOf(w, plan.target);
   const hit = structureAt(w, ix, iy);
   const inside = inRect(t.rect, ix, iy);
   const e = effect(plan, inside ? hit : null);

@@ -99,7 +99,7 @@ export type Observations = Record<number, number>;
 
 
 /** Who is expected where at this moment. Hours watched narrow the guess; Jev's reading of the reports replaces it; logged sightings are taken as known. */
-export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}): Population {
+export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}, ruins: number[] = []): Population {
   const fri = day === 'friday' ? 1 : 0;
   const expected = new Float32Array(world.buildings.length);
   const observed = new Int16Array(world.buildings.length).fill(-1);
@@ -107,6 +107,11 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     expected[b.id] = b.capacity * curve(BUILDING[b.kind][fri], hour);
     if (intel[b.id]) expected[b.id] = judgedMean(intel[b.id], b.capacity);
     if (obs[b.id] != null) observed[b.id] = obs[b.id];
+  }
+  // Ruins from earlier strikes: nobody is inside any more.
+  for (const id of ruins) {
+    expected[id] = 0;
+    observed[id] = 0;
   }
   const spaceQ = new Float32Array(world.spaces.length);
   for (const s of world.spaces) spaceQ[s.id] = curve(SPACE[s.kind][fri], hour);

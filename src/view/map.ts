@@ -67,12 +67,14 @@ export interface MapFrame {
   field: DangerField | null;
   layers: Layers;
   circleR: number;
+  pulseCircle?: boolean; // the guide is pointing at it
   ghost: Plan | null;
   trail: Plan[]; // the plans Jev tried most recently, newest last
   spotMode: boolean;
   hover: number | null;
   selected: number | null;
   outcome: Outcome | null;
+  ruins: number[]; // destroyed by earlier strikes
   aimDrag: boolean;
   headingDrag: boolean;
 }
@@ -306,11 +308,11 @@ export class MapView {
     }
     const fx = this.fx;
     if (fx) this.stepFx(fx, dt);
-    this.crowd.step(dt, fx && fx.impacted ? { x: fx.outcome.ix, y: fx.outcome.iy, t: fx.t - fx.impactAt } : null);
+    this.crowd.step(dt, fx && fx.impacted ? { x: fx.outcome.ix, y: fx.outcome.iy, t: fx.t - fx.impactAt } : null, f.pop);
     this.explore(f);
 
     const shown = f.outcome;
-    const damaged = new Set(shown ? shown.damaged : []);
+    const damaged = new Set([...f.ruins, ...(shown ? shown.damaged : [])]);
     const sharp = this.ensureCaches(f, damaged);
 
     const g = this.ctx;
@@ -352,6 +354,19 @@ export class MapView {
     }
     if (f.layers.circle && !shown) {
       g.save();
+      if (f.pulseCircle) {
+        // Breathe, so the eye finds it: a soft wash and a ring that swells and fades.
+        const k = (this.time * 0.8) % 1;
+        g.fillStyle = 'rgba(29,27,24,0.06)';
+        g.beginPath();
+        g.arc(plan.aimX, plan.aimY, f.circleR, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = `rgba(228,73,47,${0.55 * (1 - k)})`;
+        g.lineWidth = (2 + 6 * k) * px;
+        g.beginPath();
+        g.arc(plan.aimX, plan.aimY, f.circleR * (1 + 0.04 * k), 0, Math.PI * 2);
+        g.stroke();
+      }
       g.strokeStyle = 'rgba(29,27,24,0.7)';
       g.lineWidth = 1.2 * px;
       g.setLineDash([5 * px, 4 * px]);
@@ -361,7 +376,7 @@ export class MapView {
       g.stroke();
       g.setLineDash([]);
       const a = -Math.PI * 0.78;
-      label(g, plan.aimX + Math.cos(a) * f.circleR, plan.aimY + Math.sin(a) * f.circleR, `${f.circleR} m`, px, { small: true, plain: true });
+      label(g, plan.aimX + Math.cos(a) * f.circleR, plan.aimY + Math.sin(a) * f.circleR, `within reach · ${f.circleR} m`, px, { small: true, plain: true });
       g.restore();
     }
     if (f.layers.impacts && f.est && !shown) {
@@ -377,14 +392,14 @@ export class MapView {
 
     // People inside, seen as if the roofs were glass. Tinted by Jev's expected harm for their building.
     if (f.layers.people && s > 1.1) {
-      const rr = Math.max(0.35, Math.min(0.7, 1.8 * px));
+      const rr = Math.max(0.26, Math.min(0.5, 1.3 * px));
       for (const b of this.world.buildings) {
         if (!inView(view, b.cx, b.cy, 40)) continue;
         const n = shownCount(f.pop, b);
         if (!n) continue;
         const hurt = shown ? new Set(shown.hurtSlots[b.id] ?? []) : null;
         const known = f.pop.observed[b.id] >= 0;
-        const base = known ? '#1b3a5c' : '#2a2622';
+        const base = known ? '#1b3a5c' : '#4a4038';
         let col = base;
         if (!shown && f.est && f.layers.pattern) {
           const exp = f.pop.observed[b.id] >= 0 ? f.pop.observed[b.id] : f.pop.expected[b.id];
@@ -468,22 +483,17 @@ export class MapView {
       g.setLineDash([2 * px, 4 * px]);
       g.stroke();
       g.setLineDash([]);
-      g.fillStyle = f.headingDrag ? C.red : C.ink;
+      // A folded paper plane, floating a little above its shadow. Grab it to turn the approach.
+      g.fillStyle = 'rgba(251,250,246,0.55)';
+      g.strokeStyle = f.headingDrag ? C.red : 'rgba(29,27,24,0.35)';
+      g.lineWidth = (f.headingDrag ? 2 : 1) * px;
       g.beginPath();
-      g.arc(hp.x, hp.y, 11 * px, 0, Math.PI * 2);
+      g.arc(hp.x, hp.y, 15 * px, 0, Math.PI * 2);
       g.fill();
-      g.save();
-      g.translate(hp.x, hp.y);
-      g.rotate(h);
-      g.fillStyle = '#f3efe7';
-      g.beginPath();
-      g.moveTo(0, -6 * px);
-      g.lineTo(5 * px, 5 * px);
-      g.lineTo(0, 2 * px);
-      g.lineTo(-5 * px, 5 * px);
-      g.closePath();
-      g.fill();
-      g.restore();
+      g.stroke();
+      const lift = (f.headingDrag ? 7 : 5) + Math.sin(this.time * 2) * 0.8;
+      paperPlane(g, hp.x + lift * 0.7 * px, hp.y + lift * px, h, 13 * px, true);
+      paperPlane(g, hp.x, hp.y, h, 13 * px, false);
     }
     if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
@@ -750,8 +760,9 @@ export class MapView {
     if (planeT < 2.4) {
       const along = (planeT - 0.72) * fly;
       drawTrack(g, plan, px, this.world, this.time, true);
-      drawPlane(g, o.ix + ux * along + 26, o.iy + uy * along + 26, h, 0.22);
-      drawPlane(g, o.ix + ux * along, o.iy + uy * along, h, 1);
+      // The shadow sweeps across the rooftops ahead of the plane, which flies high above it.
+      paperPlane(g, o.ix + ux * along + 30, o.iy + uy * along + 38, h, 12, true);
+      paperPlane(g, o.ix + ux * along, o.iy + uy * along, h, 12, false);
     }
     if (!fx.impacted && planeT > 0.2) {
       const k = (planeT - 0.2) / 0.8;
@@ -1035,37 +1046,48 @@ function drawAim(g: CanvasRenderingContext2D, x: number, y: number, px: number, 
   g.stroke();
 }
 
-function drawPlane(g: CanvasRenderingContext2D, x: number, y: number, h: number, alpha: number) {
+/** A paper plane seen from above, nose along heading h: two folded wings and a crease down the middle. */
+function paperPlane(g: CanvasRenderingContext2D, x: number, y: number, h: number, size: number, shadow: boolean) {
   g.save();
   g.translate(x, y);
   g.rotate(h);
-  g.globalAlpha = alpha;
-  const s = 5;
-  if (alpha < 0.5) {
-    g.fillStyle = '#2a2018';
+  g.scale(size, size);
+  const left = [0, -1, -0.62, 0.72, -0.1, 0.5, 0, 0.78];
+  const right = [0, -1, 0.62, 0.72, 0.1, 0.5, 0, 0.78];
+  const poly = (p: number[]) => {
     g.beginPath();
-    g.moveTo(0, -s * 2);
-    g.lineTo(s * 1.6, s * 1.4);
-    g.lineTo(0, s * 0.8);
-    g.lineTo(-s * 1.6, s * 1.4);
+    g.moveTo(p[0], p[1]);
+    for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]);
     g.closePath();
+  };
+  if (shadow) {
+    g.fillStyle = 'rgba(40,28,18,0.28)';
+    poly([0, -1, -0.62, 0.72, 0, 0.78, 0.62, 0.72]);
     g.fill();
-  } else {
-    g.fillStyle = '#f7f5f0';
-    g.beginPath();
-    g.moveTo(0, -s * 2);
-    g.lineTo(-s * 1.6, s * 1.4);
-    g.lineTo(0, s * 0.8);
-    g.closePath();
-    g.fill();
-    g.fillStyle = '#d9d4ca';
-    g.beginPath();
-    g.moveTo(0, -s * 2);
-    g.lineTo(s * 1.6, s * 1.4);
-    g.lineTo(0, s * 0.8);
-    g.closePath();
-    g.fill();
+    g.restore();
+    return;
   }
+  g.lineJoin = 'round';
+  g.lineWidth = 0.05;
+  g.strokeStyle = 'rgba(60,50,40,0.45)';
+  g.fillStyle = '#fbfaf6';
+  poly(left);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#ddd6c9';
+  poly(right);
+  g.fill();
+  g.stroke();
+  // The keel: a narrow fold under the crease.
+  g.fillStyle = '#b9b0a0';
+  poly([0, -0.55, 0.07, 0.62, 0, 0.78, -0.02, 0.6]);
+  g.fill();
+  g.strokeStyle = 'rgba(40,30,20,0.6)';
+  g.lineWidth = 0.04;
+  g.beginPath();
+  g.moveTo(0, -1);
+  g.lineTo(0, 0.78);
+  g.stroke();
   g.restore();
 }
 
@@ -1075,15 +1097,37 @@ function drawCar(g: CanvasRenderingContext2D, car: Car, night: number, sh: Sun, 
   g.rotate(car.horizontal ? (car.dir > 0 ? 0 : Math.PI) : car.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
   g.fillStyle = 'rgba(40,30,20,0.25)';
   g.fillRect(-2.2 + sh.dx * 0.7, -1 + sh.dy * 0.7, 4.4, 2);
-  g.fillStyle = wrecked ? '#4a4540' : car.color;
-  roundRect(g, -2.2, -1, 4.4, 2, 0.6);
+  // A folded paper car: the body creased along its length, one side catching the light.
+  const body = wrecked ? '#4a4540' : car.color;
+  g.fillStyle = body;
+  roundRect(g, -2.2, -1, 4.4, 2, 0.55);
   g.fill();
-  g.fillStyle = 'rgba(40,50,60,0.55)';
-  roundRect(g, 0.2, -0.8, 1.1, 1.6, 0.3);
+  g.fillStyle = 'rgba(255,255,255,0.18)';
+  g.fillRect(-2.0, -0.95, 4.0, 0.9);
+  g.fillStyle = 'rgba(40,30,20,0.14)';
+  g.fillRect(-2.0, 0.05, 4.0, 0.9);
+  // The cabin: a lighter folded roof between a windscreen and a rear window.
+  g.fillStyle = 'rgba(40,50,62,0.62)';
+  roundRect(g, 0.55, -0.82, 0.75, 1.64, 0.25); // windscreen
   g.fill();
-  g.fillStyle = 'rgba(255,255,255,0.35)';
-  roundRect(g, -1.5, -0.8, 1.5, 1.6, 0.3);
+  roundRect(g, -1.65, -0.78, 0.45, 1.56, 0.2); // rear window
   g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.42)';
+  roundRect(g, -1.2, -0.8, 1.75, 1.6, 0.3);
+  g.fill();
+  g.strokeStyle = 'rgba(40,30,20,0.25)';
+  g.lineWidth = 0.08;
+  g.beginPath();
+  g.moveTo(-1.2, 0);
+  g.lineTo(0.55, 0);
+  g.stroke();
+  // Lamps: pale at the front, red at the back; they glow at night.
+  g.fillStyle = night > 0.2 ? '#fff4d6' : 'rgba(255,250,235,0.8)';
+  g.fillRect(2.0, -0.85, 0.22, 0.4);
+  g.fillRect(2.0, 0.45, 0.22, 0.4);
+  g.fillStyle = night > 0.2 ? '#ff5a3c' : 'rgba(170,50,35,0.7)';
+  g.fillRect(-2.22, -0.8, 0.2, 0.35);
+  g.fillRect(-2.22, 0.45, 0.2, 0.35);
   if (wrecked) {
     g.strokeStyle = C.red;
     g.lineWidth = 0.35;
@@ -1099,6 +1143,11 @@ function drawCar(g: CanvasRenderingContext2D, car: Car, night: number, sh: Sun, 
     g.lineTo(9, 3);
     g.lineTo(2, 0.8);
     g.fill();
+    const tail = g.createRadialGradient(-2.4, 0, 0, -2.4, 0, 2.2);
+    tail.addColorStop(0, `rgba(255,70,50,${0.35 * night})`);
+    tail.addColorStop(1, 'rgba(255,70,50,0)');
+    g.fillStyle = tail;
+    g.fillRect(-4.6, -2.2, 2.4, 4.4);
   }
   g.restore();
 }

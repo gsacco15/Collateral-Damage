@@ -113,7 +113,9 @@ export function Dial({ value, onChange }: { value: number; onChange: (v: number)
       ))}
       <line x1={-ux * 46} y1={-uy * 46} x2={ux * 18} y2={uy * 18} className="track" />
       <g transform={`translate(${ux * 20},${uy * 20}) rotate(${value})`}>
-        <path d="M0,-9 L7,6 L0,2 L-7,6 Z" className="plane" />
+        <path d="M0,-11 L-7,8 L-1,6 L0,9 Z" className="plane-l" />
+        <path d="M0,-11 L7,8 L1,6 L0,9 Z" className="plane-r" />
+        <path d="M0,-11 L0,9" className="plane-crease" />
       </g>
       <circle r={3} className="hub" />
     </svg>
