@@ -35,6 +35,7 @@ export type Ent =
   | { t: 'tarp'; x: number; y: number; a: number; col: string; size: number; mat: boolean }
   | { t: 'beast'; kind: 'goat' | 'chicken' | 'pigeon' | 'donkey'; x: number; y: number; a: number; col: string; moving: boolean; lying: boolean; cart?: boolean }
   | { t: 'junk'; x: number; y: number; size: number; seed: number }
+  | { t: 'litter'; x: number; y: number; a: number; kind: 0 | 1 | 2; col: string } // 0 a can, 1 a plastic bottle, 2 a bag
   | { t: 'dump'; x: number; y: number; w: number; h: number }
   | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string }
   | { t: 'beacon'; x: number; y: number; z: number; big: boolean }
@@ -74,6 +75,7 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
+  litter: { x: number; y: number; a: number; kind: 0 | 1 | 2; col: string }[];
   tarps: { x: number; y: number; a: number; col: string; size: number; mat: boolean; fire: boolean }[];
   goats: { cx: number; cy: number; n: number; seed: number }[];
   chickens: { x: number; y: number; n: number; seed: number }[];
@@ -436,7 +438,28 @@ function makeFixed(w: World): Fixed {
     const y = b.cy + (r() - 0.5) * 4;
     if (free(x, y)) cats.push({ x, y, a: r() * 6, col: ['#e3d6c0', '#2c2a2a', '#c07a3a', '#8d8d8a', '#f4f2ec'][i % 5], z: 0 });
   }
+  // Litter: cans, plastic bottles and bags blown round every heap, along the waste ground and the landfill track.
+  const litter: Fixed['litter'] = [];
+  const lcol = (k: number) => (k === 0 ? ['#c9c9cc', '#c23b2e', '#2f5f8a', '#e0c64a', '#3f6a4a'] : k === 1 ? ['#9ec4d8', '#d6e6ee', '#3a82c4', '#6fa86a'] : ['#f4f2ec', '#2a2826', '#3a82c4', '#e0cfa8'])[Math.floor(r() * 4)];
+  const drop = (x: number, y: number) => {
+    if (!free(x, y)) return;
+    const kind = Math.floor(r() * 3) as 0 | 1 | 2;
+    litter.push({ x, y, a: r() * Math.PI * 2, kind, col: lcol(kind) });
+  };
+  for (const j of junk) for (let k = 0; k < 4 + j.size * 2; k++) {
+    const a = r() * Math.PI * 2;
+    const d = j.size * (0.9 + r() * 0.9);
+    drop(j.x + Math.cos(a) * d, j.y + Math.sin(a) * d * 0.85);
+  }
+  for (let i = 0; i < 260; i++) {
+    const b = rough[Math.floor(r() * rough.length)];
+    const a = r() * Math.PI * 2;
+    const d = Math.max(b.rects[0].w, b.rects[0].h) / 2 + 1 + r() * 5;
+    drop(b.cx + Math.cos(a) * d, b.cy + Math.sin(a) * d);
+  }
+  for (let x = 1006; x < 1050; x += 2.5) if (r() < 0.5) drop(x, 612 + (r() - 0.5) * 10);
   return {
+    litter,
     tarps,
     goats,
     chickens,
@@ -765,6 +788,7 @@ export function lifeScene(c: SceneCtx): Ent[] {
     if (!far(x, y) || onBroken(x, y)) return;
     out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load, door: s.door, lean: s.lean + Math.sin(t * 5 + i) * 0.012, smoke: (t * 1.3 + i * 0.37) % 1 });
   });
+  for (const l of F.litter) if (far(l.x, l.y)) out.push({ t: 'litter', x: l.x, y: l.y, a: l.a, kind: l.kind, col: l.col });
   // Shelters, and the people living in them: sitting out by day, a small fire by some at night.
   F.tarps.forEach((tp, i) => {
     if (!far(tp.x, tp.y)) return;

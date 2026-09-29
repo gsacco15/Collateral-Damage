@@ -399,7 +399,7 @@ export class Model3D {
   // A paper moon and paper stars, kept at a fixed bearing in the sky (they move with the camera, like the real ones).
   private moon!: THREE.Sprite;
   private stars!: THREE.Points;
-  private moonDir = new THREE.Vector3(0.62, 0.34, -0.7).normalize();
+  private moonDir = new THREE.Vector3(0.93, 0.2, 0.3).normalize(); // east-south-east, about 12 degrees up
   // Lit windows at night, room by room: every window on a windowed wall, and which of them are lit this half hour.
   private winMesh!: THREE.InstancedMesh;
   private winMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
@@ -1451,7 +1451,7 @@ export class Model3D {
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, fog: false, depthWrite: false }));
-    this.moon.scale.set(120, 120, 1);
+    this.moon.scale.set(110, 110, 1);
     this.moon.renderOrder = -1;
     scene.add(this.moon);
     // Stars: little paper four-point stars scattered over the upper sky.
@@ -1485,27 +1485,13 @@ export class Model3D {
   /** Keep the moon and stars far off at their bearing from wherever the camera is, fading in after dusk. */
   private sky(night: number) {
     const cam = this.camera.position;
-    // Ahead and a little to the right of where you face, a little above the horizon: there whenever the sky is in view.
-    const f = new THREE.Vector3();
-    this.camera.getWorldDirection(f);
-    // How high above the horizon the top of the picture reaches; the moon sits in that band of sky, off to the right.
-    const pitch = Math.asin(Math.max(-1, Math.min(1, f.y)));
-    const top = pitch + (this.camera.fov * Math.PI) / 360;
-    const skyShown = top > 0.08;
-    const elev = Math.min(0.42, Math.max(0.045, top - 0.07));
-    f.y = 0;
-    if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
-    const side = Math.atan(Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect) * 0.3;
-    f.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), -side);
-    this.moonDir.set(f.x * Math.cos(elev), Math.sin(elev), f.z * Math.cos(elev));
+    // Fixed in the sky, like the real one: low over the desert to the east, far off, whichever way you look.
     this.moon.position.copy(cam).addScaledVector(this.moonDir, 1800);
-    this.moon.visible = skyShown;
     this.stars.position.copy(cam);
     this.stars.scale.setScalar(1900);
     (this.moon.material as THREE.SpriteMaterial).opacity = Math.max(0, night * 1.3 - 0.3);
     (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, night * 1.4 - 0.5) * 0.8;
-    this.moon.visible = this.moon.visible && night > 0.25;
-    this.stars.visible = night > 0.25;
+    this.moon.visible = this.stars.visible = night > 0.25;
   }
 
   private light(hour: number) {

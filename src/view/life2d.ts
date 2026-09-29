@@ -716,6 +716,26 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       g.quadraticCurveTo(0, 0.18, 1.3, 0.02);
       g.stroke();
       g.restore();
+    } else if (e.t === 'litter' && d.animals) {
+      g.save();
+      g.translate(e.x, e.y);
+      g.rotate(e.a);
+      g.fillStyle = e.col;
+      if (e.kind === 0) {
+        g.fillRect(-0.12, -0.07, 0.24, 0.14);
+        g.fillStyle = 'rgba(255,255,255,0.5)';
+        g.fillRect(0.1, -0.07, 0.03, 0.14);
+      } else if (e.kind === 1) {
+        g.globalAlpha = 0.8;
+        g.fillRect(-0.22, -0.06, 0.36, 0.12);
+        g.fillRect(0.14, -0.035, 0.08, 0.07);
+      } else {
+        g.globalAlpha = 0.85;
+        g.beginPath();
+        g.ellipse(0, 0, 0.3, 0.2, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
     } else if (e.t === 'junk') junk2d(g, e.x, e.y, e.size, e.seed);
     else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
     else if (e.t === 'clutter' && d.traffic) clutter2d(g, e);

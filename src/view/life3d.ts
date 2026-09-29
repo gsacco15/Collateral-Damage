@@ -151,6 +151,10 @@ export class Life3D {
     add('pigeon', new THREE.SphereGeometry(0.09, 5, 4).scale(1, 0.8, 1.5).translate(0, 0.09, 0), std(), 200, false);
     add('donkey', mergeGeometries([box(0, 0.9, 0, 0.42, 0.5, 1.1), box(0, 1.25, -0.7, 0.26, 0.34, 0.46), box(-0.14, 0.4, -0.4, 0.1, 0.8, 0.1), box(0.14, 0.4, -0.4, 0.1, 0.8, 0.1), box(-0.14, 0.4, 0.4, 0.1, 0.8, 0.1), box(0.14, 0.4, 0.4, 0.1, 0.8, 0.1), box(-0.08, 1.55, -0.62, 0.05, 0.25, 0.05), box(0.08, 1.55, -0.62, 0.05, 0.25, 0.05)])!, std(), 8);
     add('cart', mergeGeometries([box(0, 0.75, 1.6, 1.3, 0.12, 1.6), box(0, 0.95, 1.6, 1.2, 0.3, 1.5), new THREE.CylinderGeometry(0.45, 0.45, 0.1, 10).rotateZ(Math.PI / 2).translate(0.7, 0.45, 1.6).toNonIndexed(), new THREE.CylinderGeometry(0.45, 0.45, 0.1, 10).rotateZ(Math.PI / 2).translate(-0.7, 0.45, 1.6).toNonIndexed(), box(-0.25, 0.8, 0.5, 0.05, 0.05, 1), box(0.25, 0.8, 0.5, 0.05, 0.05, 1)])!, std({ color: '#8a6a48' }), 8);
+    // Litter: a crushed can, a plastic bottle, a plastic bag caught on the ground.
+    add('l_can', new THREE.CylinderGeometry(0.07, 0.07, 0.24, 7).rotateZ(Math.PI / 2).translate(0, 0.07, 0), std({ roughness: 0.4, metalness: 0.4 }), 800, false);
+    add('l_bottle', new THREE.CapsuleGeometry(0.07, 0.3, 2, 6).rotateZ(Math.PI / 2).translate(0, 0.07, 0), new THREE.MeshStandardMaterial({ roughness: 0.2, transparent: true, opacity: 0.8 }), 800, false);
+    add('l_bag', new THREE.IcosahedronGeometry(0.28, 0).scale(1.1, 0.35, 0.8).translate(0, 0.08, 0), std({ roughness: 0.7 }), 800, false);
     // Junk heaps: a lumpy mound, and bits sticking out of it (sheets, a tyre, a crate, a bottle).
     add('j_mound', new THREE.IcosahedronGeometry(1, 1).scale(1, 0.45, 0.85).translate(0, 0.2, 0), std(), 80);
     add('j_bit', box(0, 0, 0, 0.9, 0.12, 0.6), std({ roughness: 0.7 }), 1800, false);
@@ -368,6 +372,9 @@ export class Life3D {
           if (night > 0.3) this.put('dpool', e.x, e.y, 0.95, 0, 7, 1, 7, '#cfe6ff');
           break;
         }
+        case 'litter':
+          this.put(e.kind === 0 ? 'l_can' : e.kind === 1 ? 'l_bottle' : 'l_bag', e.x, e.y, 0, e.a, 1.8, 1.8, 1.8, e.col);
+          break;
         case 'tarp':
           if (e.mat) this.put('tarpmat', e.x, e.y, 0, -e.a, e.size, 1, e.size);
           this.put('tarp', e.x, e.y, 0, -e.a, e.size, e.size, e.size, e.col);
