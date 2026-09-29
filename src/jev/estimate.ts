@@ -279,3 +279,124 @@ export function approver(figure: number, rules: Rules, protectedInCircle = false
   const who = ['Strike cell', 'Senior', 'More senior', 'Most senior'][level];
   return { level, who, note };
 }
+
+// ---------------------------------------------------------------- the danger field
+
+export interface DangerField {
+  x0: number;
+  y0: number;
+  cell: number;
+  cols: number;
+  rows: number;
+  p: Float32Array; // chance someone standing in the open here is killed or badly hurt; NaN under roofs
+  max: number;
+}
+
+/** For each patch of open ground near the aim: the chance a person standing there is killed or badly hurt. */
+export function dangerField(world: World, plan: Plan, samples = 40, cell = 3, seed = 5): DangerField {
+  const r = rng(seed);
+  const w = weapon(plan.weapon);
+  const sigma = w.cep / 1.1774;
+  const hit0 = structureAt(world, plan.aimX, plan.aimY);
+  const e0 = effect(plan, hit0);
+  const R = Math.max(e0.frag * 1.05, e0.blast * 1.3, w.frag * 0.6) + sigma * 2;
+  const x0 = plan.aimX - R;
+  const y0 = plan.aimY - R;
+  const cols = Math.ceil((2 * R) / cell);
+  const rows = cols;
+  const n = cols * rows;
+  const p = new Float32Array(n);
+  const occl = new Float32Array(n);
+  const src = hit0?.building?.id ?? -99;
+  for (let j = 0; j < rows; j++)
+    for (let i = 0; i < cols; i++) {
+      const x = x0 + (i + 0.5) * cell;
+      const y = y0 + (j + 0.5) * cell;
+      const k = j * cols + i;
+      const v = x < 0 || y < 0 || x >= world.w || y >= world.h ? 0 : world.grid[Math.floor(y / world.cell) * world.gridW + Math.floor(x / world.cell)];
+      if (v > 0) {
+        p[k] = NaN;
+        continue;
+      }
+      occl[k] = occlusion(world, plan.aimX, plan.aimY, x, y, -99, src);
+    }
+  for (let s = 0; s < samples; s++) {
+    const ix = plan.aimX + normal(r) * sigma;
+    const iy = plan.aimY + normal(r) * sigma;
+    const e = effect(plan, structureAt(world, ix, iy));
+    for (let j = 0; j < rows; j++)
+      for (let i = 0; i < cols; i++) {
+        const k = j * cols + i;
+        if (Number.isNaN(p[k])) continue;
+        p[k] += harm(plan.heading, plan.fuze, e, ix, iy, x0 + (i + 0.5) * cell, y0 + (j + 0.5) * cell, 1, 1, false, occl[k]);
+      }
+  }
+  let max = 0;
+  for (let k = 0; k < n; k++)
+    if (!Number.isNaN(p[k])) {
+      p[k] /= samples;
+      if (p[k] > max) max = p[k];
+    }
+  return { x0, y0, cell, cols, rows, p, max };
+}
+
+/** Contour segments at a level (marching squares), as x1,y1,x2,y2 quadruples in metres. */
+export function contour(f: DangerField, level: number): Float32Array {
+  const out: number[] = [];
+  const at = (i: number, j: number) => {
+    const v = f.p[j * f.cols + i];
+    return Number.isNaN(v) ? 0 : v;
+  };
+  const X = (i: number) => f.x0 + (i + 0.5) * f.cell;
+  const Y = (j: number) => f.y0 + (j + 0.5) * f.cell;
+  const lerp = (a: number, b: number) => (a === b ? 0.5 : (level - a) / (b - a));
+  for (let j = 0; j < f.rows - 1; j++)
+    for (let i = 0; i < f.cols - 1; i++) {
+      const a = at(i, j);
+      const b = at(i + 1, j);
+      const c = at(i + 1, j + 1);
+      const d = at(i, j + 1);
+      const idx = (a >= level ? 8 : 0) | (b >= level ? 4 : 0) | (c >= level ? 2 : 0) | (d >= level ? 1 : 0);
+      if (idx === 0 || idx === 15) continue;
+      const top = [X(i) + lerp(a, b) * f.cell, Y(j)];
+      const right = [X(i + 1), Y(j) + lerp(b, c) * f.cell];
+      const bottom = [X(i) + lerp(d, c) * f.cell, Y(j + 1)];
+      const left = [X(i), Y(j) + lerp(a, d) * f.cell];
+      const seg = (p: number[], q: number[]) => out.push(p[0], p[1], q[0], q[1]);
+      switch (idx) {
+        case 1:
+        case 14:
+          seg(left, bottom);
+          break;
+        case 2:
+        case 13:
+          seg(bottom, right);
+          break;
+        case 3:
+        case 12:
+          seg(left, right);
+          break;
+        case 4:
+        case 11:
+          seg(top, right);
+          break;
+        case 6:
+        case 9:
+          seg(top, bottom);
+          break;
+        case 7:
+        case 8:
+          seg(left, top);
+          break;
+        case 5:
+          seg(left, top);
+          seg(bottom, right);
+          break;
+        case 10:
+          seg(top, right);
+          seg(left, bottom);
+          break;
+      }
+    }
+  return new Float32Array(out);
+}

@@ -214,3 +214,17 @@ describe('sign-off and search', () => {
     }
   });
 });
+
+describe('the danger field', () => {
+  it('is highest near the aim, lower far away, and empty under roofs', async () => {
+    const { dangerField, contour } = await import('./index');
+    const p = plan({ hour: 2 });
+    const f = dangerField(city, p, 20);
+    const at = (x: number, y: number) => f.p[Math.floor((y - f.y0) / f.cell) * f.cols + Math.floor((x - f.x0) / f.cell)];
+    const t = targetOf(city, 'warehouse');
+    expect(Number.isNaN(at(t.rect.x + 5, t.rect.y + 5))).toBe(true);
+    expect(at(t.rect.x - 4, t.rect.y + 10)).toBeGreaterThan(at(t.rect.x - 90, t.rect.y + 10) || 0);
+    expect(f.max).toBeGreaterThan(0.5);
+    expect(contour(f, 0.5).length).toBeGreaterThan(0);
+  });
+});

@@ -1,10 +1,12 @@
-// Collateral Damage: plan a strike on a paper city, and watch Jev, the engine, estimate who would be hurt.
+// Collateral Damage: plan a strike on a paper city and watch Jev, the engine, estimate who would be hurt.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  aimPoint,
   approver,
   best,
   buildCity,
   compassName,
+  dangerField,
   estimate,
   fmtHour,
   FUZES,
@@ -22,8 +24,8 @@ import {
   targetOf,
   WEAPONS,
   weapon,
-  aimPoint,
   type Candidate,
+  type DangerField,
   type Day,
   type Estimate,
   type Job,
@@ -38,88 +40,36 @@ import { JevPool, type PoolStatus } from '../jev/pool';
 import type { JobOut } from '../jev/worker';
 import { MapView, type Layers, type MapFrame, type Outcome } from '../view/map';
 import type { Frame3D, Model3D } from '../view/model3d';
-import { ApproveCard, Checklist, Chip, Dial, Group, Histogram, HourBars, pct, Scatter, Seg, SourceBars, TablesScene, type HistMode } from './parts';
+import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
+import { Chip, Dial, Seg, SourceBars, Step } from './parts';
 
 const SEED = 7;
 type HourWindow = 'any' | 'night' | 'quiet';
-const WINDOWS: Record<HourWindow, number[]> = {
-  any: [1, 4, 7, 10, 13, 16, 19, 22],
-  night: [22, 23, 0, 1, 2, 3, 4],
-  quiet: [0, 2, 4, 5, 20, 22],
-};
+const WINDOWS: Record<HourWindow, number[]> = { any: [1, 4, 7, 10, 13, 16, 19, 22], night: [22, 23, 0, 1, 2, 3, 4], quiet: [0, 2, 4, 5, 20, 22] };
 const SPEEDS = [0.5, 1, 2, 4, 8, 16, 32, 64, Infinity];
 const HEADING_NAMES: Record<number, string> = { 0: '↑ N', 45: '↗ NE', 90: '→ E', 135: '↘ SE', 180: '↓ S', 225: '↙ SW', 270: '← W', 315: '↖ NW' };
 const DISCOVERED_KEY = 'cd.discovered';
+type StepId = 'target' | 'weapon' | 'approach' | 'intel' | 'rules' | 'decide';
 
-interface Chapter {
+interface GuideStep {
   title: string;
   text: string;
   plan?: Partial<Plan>;
   layers?: Partial<Layers>;
   focus?: { cx: number; cy: number; zoom: number };
-  hist?: HistMode;
-  tables?: boolean;
-  count?: boolean;
+  open?: StepId;
+  tab?: 'estimate' | 'jev';
 }
 
-const CHAPTERS: Chapter[] = [
-  {
-    title: 'The target',
-    text: 'Warehouse 14, in the Workshops, said to hold weapons. Whether it is a lawful military objective is a legal judgment, made by people, before any of the maths.',
-    plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 },
-    layers: { circle: false, pattern: false, impacts: false, people: false },
-    focus: { cx: 230, cy: 510, zoom: 5 },
-  },
-  {
-    title: 'The crude circle',
-    text: 'Draw a circle as far as the weapon can reach. Anything inside that must be protected? A school across School Road, the fuel depot round the corner, homes and shops. So: go on.',
-    layers: { circle: true, pattern: false, impacts: false, people: false, protect: true },
-    focus: { cx: 230, cy: 520, zoom: 3 },
-  },
-  {
-    title: 'The tables',
-    text: 'How far each weapon throws blast and fragments comes from thick books of tables, built from tests and past strikes, reportedly reissued at least twice a year. These are made-up stand-ins.',
-    tables: true,
-  },
-  {
-    title: 'The weapon',
-    text: 'Warhead, fuze, direction and aim point change who is in reach. Fragments lean the way the bomb travels, and buildings and walls catch them: see the shadows in the spray.',
-    layers: { circle: false, pattern: true, impacts: false, people: false },
-    focus: { cx: 230, cy: 510, zoom: 4 },
-  },
-  {
-    title: 'Who is there',
-    text: 'Nobody knows exactly. Overhead images, phone signals and an old census disagree. Click any building to see its sources. Every dot is a person Jev expects there at this hour.',
-    layers: { circle: false, pattern: true, impacts: false, people: true },
-    focus: { cx: 250, cy: 500, zoom: 5 },
-    count: true,
-  },
-  {
-    title: 'Managing chance',
-    text: 'Bombs do not land exactly where aimed, and the counts are guesses. So Jev runs the strike hundreds of times. Most runs are low; a few are much worse.',
-    layers: { circle: false, pattern: true, impacts: true, people: true },
-    focus: { cx: 230, cy: 510, zoom: 4 },
-    hist: 'spread',
-  },
-  {
-    title: 'Ways to reduce the harm',
-    text: 'A smaller warhead. A delay fuze, so the walls catch the fragments. An approach that throws them west, away from the school. An hour when fewer people are nearby.',
-    plan: { weapon: 'small', fuze: 'delay', heading: 270, hour: 2 },
-    layers: { circle: false, pattern: true, impacts: true, people: true },
-    focus: { cx: 230, cy: 510, zoom: 4 },
-    hist: 'spread',
-  },
-  {
-    title: 'Who signs off',
-    text: 'The spread is boiled down to one cautious figure: nine in ten runs at or below it. The higher it is, the more senior the approval. A protected site in the circle pushes it up a level.',
-    layers: { circle: true, pattern: true, impacts: false, people: true, protect: true },
-    hist: 'thresholds',
-  },
-  {
-    title: 'One roll of the dice',
-    text: 'The estimate is a spread of possibilities. The strike is a single outcome. Then try the other targets: Tower 7 at night shows why some strikes cannot be made cheaply at all.',
-    layers: { circle: false, pattern: true, impacts: false, people: true },
-  },
+const GUIDE: GuideStep[] = [
+  { title: 'Pick a target', text: 'Warehouse 14 is said to hold weapons. Whether it is a lawful target is a legal call made by people, before any maths. Everything after is about the harm to everyone else.', plan: { target: 'warehouse', hour: 10, day: 'weekday', weapon: 'large', fuze: 'instant', heading: 90 }, layers: { danger: false, pattern: false, circle: false }, focus: { cx: 240, cy: 505, zoom: 4.5 }, open: 'target' },
+  { title: 'Draw the crude circle', text: 'Everything a weapon could reach. Inside it: a school across the road, a fuel depot round the corner, homes and shops. Protected sites and hazards are outlined.', layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 } },
+  { title: 'See the danger', text: 'The red field is the chance that someone standing in the open would be killed or badly hurt, averaged over hundreds of landings. Buildings cast shadows in it: walls stop fragments.', layers: { danger: true, circle: false }, focus: { cx: 240, cy: 505, zoom: 3.6 }, open: 'weapon' },
+  { title: 'Change the weapon', text: 'Try a smaller warhead and a delay fuze in the options matrix. Watch the field shrink and the planning figure fall. Some choices stop destroying the target.', plan: { weapon: 'small', fuze: 'delay' }, tab: 'estimate' },
+  { title: 'Change the approach', text: 'Fragments lean the way the bomb travels. Turn the dial so it flies west, away from the school.', plan: { heading: 270 }, open: 'approach' },
+  { title: 'Change the hour', text: 'Scrub the timeline. The school fills in the morning and empties at night; homes do the opposite. The line shows what each hour would cost.', plan: { hour: 2 } },
+  { title: 'Who signs off', text: 'The spread is boiled down to one cautious figure. The higher it is, or if a protected site is inside the circle, the more senior the approval.', open: 'rules' },
+  { title: 'Let Jev search', text: 'Jev tries every weapon, fuze, direction, aim point and hour in parallel, and keeps the plan that meets the requirement with the least harm. Throttle it; change things while it runs.', tab: 'jev' },
 ];
 
 const loadDiscovered = () => {
@@ -130,10 +80,10 @@ const loadDiscovered = () => {
   }
 };
 
-const planFor = (world: ReturnType<typeof buildCity>, target: TargetId, base?: Partial<Plan>): Plan => {
+const planFor = (world: ReturnType<typeof buildCity>, target: TargetId): Plan => {
   const t = targetOf(world, target);
   const a = targetCentre(t);
-  return { target, weapon: 'large', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored, ...base };
+  return { target, weapon: 'large', fuze: 'instant', heading: 90, aimX: a.x, aimY: a.y, hour: 10, day: 'weekday', watched: 6, hardness: t.hardness, stored: t.stored };
 };
 
 export default function App() {
@@ -142,29 +92,32 @@ export default function App() {
   const target = targetOf(world, plan.target);
   const [obs, setObs] = useState<Observations>({});
   const [lawful, setLawful] = useState(true);
-  const [rulesId, setRulesId] = useState('afg2009');
+  const [rulesId, setRulesId] = useState('iraq2003');
   const [runs, setRuns] = useState(400);
-  const [layers, setLayers] = useState<Layers>({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true });
+  const [layers, setLayers] = useState<Layers>({ people: true, circle: false, pattern: false, impacts: false, labels: true, protect: true, danger: true });
   const [est, setEst] = useState<Estimate | null>(null);
+  const [field, setField] = useState<DangerField | null>(null);
   const [computing, setComputing] = useState(false);
   const [estSeed, setEstSeed] = useState(1);
-  const [hourProfile, setHourProfile] = useState<number[] | null>(null);
+  const [profile, setProfile] = useState<{ mean: number; p90: number }[] | null>(null);
+  const [matrix, setMatrix] = useState<MatrixCell[]>([]);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [striking, setStriking] = useState(false);
-  const [spotMode, setSpotMode] = useState(false);
+  const [countMode, setCountMode] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   const [pop, setPop] = useState<{ bid: number; x: number; y: number; n: number } | null>(null);
-  const [chapter, setChapter] = useState<number | null>(null);
-  const [card, setCard] = useState<number | null>(null);
+  const [guide, setGuide] = useState<number | null>(null);
   const [aimDrag, setAimDrag] = useState(false);
   const [dayPlay, setDayPlay] = useState(false);
-  const [showCards, setShowCards] = useState(true);
-  const [histMode, setHistMode] = useState<HistMode>('figure');
-  const [showTables, setShowTables] = useState(false);
   const [explored, setExplored] = useState(0);
   const [toast, setToast] = useState<Place | null>(null);
   const [view, setView] = useState<'map' | 'model'>('map');
   const [modelReady, setModelReady] = useState(false);
+  const [open, setOpen] = useState<Set<StepId>>(new Set(['target', 'weapon', 'approach']));
+  const [tab, setTab] = useState<'estimate' | 'jev'>('estimate');
+  const [mobileTab, setMobileTab] = useState<'plan' | 'estimate' | 'jev'>('estimate');
+  const [weaponData, setWeaponData] = useState(false);
+  const [about, setAbout] = useState(false);
 
   // Jev's search.
   const [status, setStatus] = useState<PoolStatus>({ running: false, done: 0, total: 0, busy: 0, workers: 0, rate: 0 });
@@ -198,45 +151,62 @@ export default function App() {
     setPlanState((old) => ({ ...old, ...p }));
     setOutcome(null);
   }, []);
+  const toggleStep = (s: StepId) => setOpen((o) => new Set(o.has(s) ? [...o].filter((x) => x !== s) : [...o, s]));
 
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs), [world, plan.hour, plan.day, plan.watched, obs]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
-  // Every change reruns the estimate.
+  // Every change reruns the estimate and the danger field.
   useEffect(() => {
     setComputing(true);
     const id = window.setTimeout(() => {
       setEst(estimate(world, plan, popNow, runs, estSeed));
+      setField(dangerField(world, plan, 40, 3, estSeed));
       setComputing(false);
     }, 90);
     return () => clearTimeout(id);
   }, [world, plan, popNow, runs, estSeed]);
 
-  // Harm by hour for this plan, from a worker so dragging stays smooth.
-  const profileWorker = useRef<Worker | null>(null);
+  // The day and the options, from a worker so dragging stays smooth.
+  const sideWorker = useRef<Worker | null>(null);
+  const jobs = useRef({ hours: 0, matrix: 0 });
   useEffect(() => {
     let w: Worker | null = null;
     try {
       w = new Worker(new URL('../jev/worker.ts', import.meta.url), { type: 'module' });
-      w.onmessage = (e: MessageEvent<JobOut>) => setHourProfile(e.data.out.map((s) => s.p90));
+      w.onmessage = (e: MessageEvent<JobOut>) => {
+        if (e.data.job === jobs.current.hours) setProfile(e.data.out.map((s) => ({ mean: s.mean, p90: s.p90 })));
+        if (e.data.job === jobs.current.matrix)
+          setMatrix(e.data.out.map((s) => ({ weapon: s.c.weapon, fuze: s.c.fuze, label: [weapon(s.c.weapon).short, fuze(s.c.fuze).name], p90: s.p90, pk: s.pk })));
+      };
     } catch {
       w = null;
     }
-    profileWorker.current = w;
+    sideWorker.current = w;
     return () => w?.terminate();
   }, []);
   useEffect(() => {
     const id = window.setTimeout(() => {
-      const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h }));
-      const msg: Job = { job: Date.now(), seed: SEED, base: plan, obs, runs: 150, cands };
-      profileWorker.current?.postMessage(msg);
+      const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h + 0.5 }));
+      jobs.current.hours = Date.now();
+      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, runs: 150, cands };
+      sideWorker.current?.postMessage(msg);
     }, 250);
     return () => clearTimeout(id);
   }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const cands: Candidate[] = WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
+      jobs.current.matrix = Date.now() + 1;
+      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, runs: 150, cands };
+      sideWorker.current?.postMessage(msg);
+    }, 350);
+    return () => clearTimeout(id);
+  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dayPlay) return;
-    const id = window.setInterval(() => setPlanState((p) => ({ ...p, hour: (Math.round(p.hour * 2) / 2 + 0.5) % 24 })), 450);
+    const id = window.setInterval(() => setPlanState((p) => ({ ...p, hour: (Math.round(p.hour * 2) / 2 + 0.5) % 24 })), 500);
     return () => clearInterval(id);
   }, [dayPlay]);
 
@@ -250,7 +220,6 @@ export default function App() {
   const pushLog = useCallback((t: string, kind: 'info' | 'best' | 'try' | 'step' = 'info') => setLog((l) => [...l.slice(-80), { t, kind }]), []);
   const speedRef = useRef(SPEEDS[speed]);
   speedRef.current = SPEEDS[speed];
-
   useEffect(() => {
     const pool = new JevPool({
       onStatus: setStatus,
@@ -279,14 +248,13 @@ export default function App() {
     const fresh = results.slice(seenCount.current);
     seenCount.current = results.length;
     if (!fresh.length) return;
-    if (SPEEDS[speed] <= 8) for (const s of fresh.slice(-4)) pushLog(`${describe(s.c)} → figure ${s.p90}, target ${pct(s.pk)}`, 'try');
+    if (SPEEDS[speed] <= 8) for (const s of fresh.slice(-4)) pushLog(`${describe(s.c)} → ${s.p90}, target ${pct(s.pk)}`, 'try');
     const b = best(results, minPk);
     if (b && (!bestRef.current || key(b.c) !== key(bestRef.current.c))) {
-      pushLog(`New best: ${describe(b.c)} → planning figure ${b.p90}, mean ${b.mean.toFixed(1)}, target destroyed ${pct(b.pk)}`, 'best');
+      pushLog(`New best: ${describe(b.c)} → planning figure ${b.p90}, target destroyed ${pct(b.pk)}`, 'best');
       bestRef.current = b;
     }
   }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const firstPk = useRef(true);
   useEffect(() => {
     if (firstPk.current) {
@@ -295,20 +263,18 @@ export default function App() {
     }
     const b = best(results, minPk);
     bestRef.current = b;
-    pushLog(`Requirement now ≥ ${pct(minPk)} chance of destroying the target. ${b ? `Best: ${describe(b.c)} → ${b.p90}` : 'Nothing tried so far meets it.'}`, 'step');
+    if (results.length) pushLog(`Requirement now ${pct(minPk)}. ${b ? `Best: ${describe(b.c)} → ${b.p90}` : 'Nothing tried so far meets it.'}`, 'step');
   }, [minPk]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (phase === 'search' && !status.running && status.done >= status.total && status.total > 0) {
       setPhase('done');
       const b = best(results, minPk);
       if (b) pushLog(`Done: ${status.done} plans. Best: ${describe(b.c)} → planning figure ${b.p90}. Sign-off: ${approver(b.p90, rules, circle.protectedSites.length > 0).who}.`, 'best');
-      else pushLog(`Done: ${status.done} plans. None destroys the target ${pct(minPk)} of the time. Relax the requirement, or reconsider the strike.`, 'best');
+      else pushLog(`Done: ${status.done} plans. None destroys the target ${pct(minPk)} of the time.`, 'best');
     }
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const space = useCallback(() => ({ weapons: allowed, hours: WINDOWS[hours] }), [allowed, hours]);
-
   const runJev = () => {
     const pool = poolRef.current;
     if (!pool) return;
@@ -318,31 +284,26 @@ export default function App() {
     bestRef.current = undefined;
     seenCount.current = 0;
     setPhase('checklist');
+    setTab('jev');
+    setMobileTab('jev');
     pool.throttle = SPEEDS[speed];
     const sp = space();
     const n = sp.weapons.length * 3 * 8 * 5 * sp.hours.length;
     const big = weapon(sp.weapons.includes('large') ? 'large' : sp.weapons[0]);
     const c = inCircle(world, { ...plan, weapon: big.id, fuze: 'instant' }, popNow);
     const steps = [
-      () => pushLog(`Target: ${target.name}. Is it a lawful target?`, 'step'),
-      () => pushLog(lawful ? 'Marked as a military objective by the targeting cell. That is a legal call made by people; Jev takes it as given.' : 'Not confirmed as a lawful target. Stop here: no estimate can make an unlawful strike lawful.', lawful ? 'info' : 'best'),
-      () =>
-        lawful &&
-        pushLog(
-          `Crude circle for the ${big.short}: ${c.radius} m, ${c.buildings} buildings.${c.protectedSites.length ? ` Protected: ${c.protectedSites.join(', ')}.` : ''}${c.hazards.length ? ` Hazards: ${c.hazards.join(', ')}.` : ''}${c.openSpaces.length ? ` Open ground: ${c.openSpaces.join(', ')}.` : ''} Go on.`,
-          'step',
-        ),
-      () => lawful && pushLog(`Sweeping ${n.toLocaleString()} plans (${sp.weapons.length} weapons × 3 fuzes × 8 directions × 5 aim points × ${sp.hours.length} hours, ${plan.day === 'friday' ? 'Friday' : 'a weekday'}), ${pool.runs} runs each, on ${pool.workers} workers.`, 'step'),
+      () => pushLog(`Target: ${target.name}. ${lawful ? 'Marked a lawful military objective by people; Jev takes that as given.' : 'Not confirmed as a lawful target: stop.'}`, lawful ? 'step' : 'best'),
+      () => lawful && pushLog(`Circle for the ${big.short}: ${c.radius} m, ${c.buildings} buildings.${c.protectedSites.length ? ` Protected: ${c.protectedSites.join(', ')}.` : ''}${c.hazards.length ? ` Hazards: ${c.hazards.join(', ')}.` : ''}`, 'step'),
+      () => lawful && pushLog(`Sweeping ${n.toLocaleString()} plans on ${pool.workers} workers, ${pool.runs} runs each.`, 'step'),
       () => {
         if (!lawful) return setPhase('idle');
         setPhase('search');
         pool.start(plan, obs, sp, SEED);
       },
     ];
-    const gap = SPEEDS[speed] === Infinity ? 150 : Math.max(200, 1300 / Math.sqrt(SPEEDS[speed]));
+    const gap = SPEEDS[speed] === Infinity ? 120 : Math.max(180, 1000 / Math.sqrt(SPEEDS[speed]));
     steps.forEach((f, i) => timers.current.push(window.setTimeout(f, i * gap)));
   };
-
   const assumptions = `${plan.target}|${plan.day}|${plan.watched}|${plan.hardness}|${plan.stored}|${JSON.stringify(obs)}|${allowed.join()}|${hours}`;
   const lastAssumptions = useRef(assumptions);
   useEffect(() => {
@@ -351,7 +312,7 @@ export default function App() {
     lastAssumptions.current = assumptions;
     const pool = poolRef.current;
     if (!pool || phase !== 'search') return;
-    pushLog(onlySpace ? 'Search space changed: keeping what still fits, carrying on.' : 'Assumptions changed (target, day, people seen, hours watched): re-scoring from scratch.', 'step');
+    pushLog(onlySpace ? 'Search space changed: keeping what still fits.' : 'Assumptions changed: re-scoring from scratch.', 'step');
     bestRef.current = undefined;
     pool.start(plan, obs, space(), SEED, onlySpace);
   }, [assumptions]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -360,7 +321,7 @@ export default function App() {
   const applyCandidate = (c: Candidate) => {
     const a = candidateAim(c);
     setPlan({ weapon: c.weapon, fuze: c.fuze, heading: c.heading, hour: c.hour, aimX: a.x, aimY: a.y });
-    pushLog(`Applied to the plan: ${describe(c)}.`, 'step');
+    pushLog(`Applied: ${describe(c)}.`, 'step');
   };
 
   // ------------------------------------------------------------ the map
@@ -380,10 +341,11 @@ export default function App() {
     pop: popShown,
     plan: shownPlan,
     est: following ? null : est,
+    field: following ? null : field,
     layers,
     circleR: inCircle(world, shownPlan, popShown).radius,
     ghost: following ? null : ghostPlan,
-    spotMode,
+    spotMode: countMode,
     hover,
     selected: pop?.bid ?? null,
     outcome,
@@ -399,19 +361,18 @@ export default function App() {
       setExplored(map.discovered.size);
       if (p.kind !== 'street') {
         setToast(p);
-        window.setTimeout(() => setToast((t) => (t === p ? null : t)), 3200);
+        window.setTimeout(() => setToast((t) => (t === p ? null : t)), 3000);
       }
       try {
         localStorage.setItem(DISCOVERED_KEY, JSON.stringify([...map.discovered]));
       } catch {
-        /* private mode: exploring just won't be remembered */
+        /* exploring just won't be remembered */
       }
     };
     mapRef.current = map;
     map.resize();
     const c = targetCentre(targetOf(world, 'warehouse'));
-    map.view = canvas.clientWidth < 600 ? { cx: c.x + 20, cy: c.y + 10, zoom: 5 } : { cx: c.x + 30, cy: c.y + 5, zoom: 3.2 };
-    // A shared view: #at=x,y,zoom (and optionally &h=hour&d=friday).
+    map.view = canvas.clientWidth < 600 ? { cx: c.x + 20, cy: c.y + 10, zoom: 4.5 } : { cx: c.x + 20, cy: c.y + 5, zoom: 3 };
     const at = /at=([\d.]+),([\d.]+),([\d.]+)/.exec(location.hash);
     if (at) map.view = { cx: +at[1], cy: +at[2], zoom: +at[3] };
     const hh = /h=([\d.]+)/.exec(location.hash);
@@ -428,9 +389,10 @@ export default function App() {
       const f = focusRef.current;
       if (f) {
         const v = map.view;
-        v.cx += (f.cx - v.cx) * 0.08;
-        v.cy += (f.cy - v.cy) * 0.08;
-        v.zoom += (f.zoom - v.zoom) * 0.08;
+        const k = 1 - Math.pow(0.001, dt); // frame-rate independent easing
+        v.cx += (f.cx - v.cx) * k;
+        v.cy += (f.cy - v.cy) * k;
+        v.zoom += (f.zoom - v.zoom) * k;
         map.clampView();
         if (Math.abs(f.zoom - v.zoom) < 0.005 && Math.hypot(f.cx - v.cx, f.cy - v.cy) < 0.1) focusRef.current = null;
       }
@@ -444,7 +406,6 @@ export default function App() {
     };
   }, [world]);
 
-  // The 3D model loads only when first opened.
   useEffect(() => {
     if (view !== 'model' || modelRef.current) return;
     let alive = true;
@@ -497,7 +458,7 @@ export default function App() {
     const p = localXY(e);
     const w = m.toWorld(p.x, p.y);
     focusRef.current = null;
-    if (spotMode) return openPeople(w.x, w.y, p.x, p.y);
+    if (countMode) return openPeople(w.x, w.y, p.x, p.y);
     const { s } = m.cam();
     const nearAim = Math.hypot(w.x - plan.aimX, w.y - plan.aimY) * s < 22;
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -557,52 +518,57 @@ export default function App() {
     return () => c.removeEventListener('wheel', wheel);
   }, []);
 
-  // ------------------------------------------------------------ targets, tour, strike
+  // ------------------------------------------------------------ targets, guide, strike
 
   const chooseTarget = (id: TargetId) => {
     const t = targetOf(world, id);
     const a = targetCentre(t);
-    resetTown();
+    resetCity();
     setPop(null);
     setObs({});
     setPlan({ target: id, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored });
-    focusRef.current = { cx: a.x + 20, cy: a.y + 10, zoom: 3.4 };
+    focusRef.current = { cx: a.x + 20, cy: a.y + 10, zoom: 3.2 };
     poolRef.current?.stop();
     setResults([]);
     setPhase('idle');
     setLog([]);
     setTesting(null);
   };
-
-  const goChapter = (i: number | null) => {
-    setChapter(i);
+  const goGuide = (i: number | null) => {
+    setGuide(i);
     if (i == null) return;
-    const ch = CHAPTERS[i];
-    setCard(i);
-    window.setTimeout(() => setCard((c) => (c === i ? null : c)), 1700);
-    if (ch.plan) {
-      const tgt = ch.plan.target ?? plan.target;
+    const g = GUIDE[i];
+    if (g.plan) {
+      const tgt = g.plan.target ?? plan.target;
       const t = targetOf(world, tgt);
       const a = targetCentre(t);
-      setPlan({ ...ch.plan, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored });
+      setPlan(g.plan.target ? { ...g.plan, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored } : g.plan);
     }
-    if (ch.layers) setLayers((l) => ({ ...l, ...ch.layers }));
-    if (ch.focus) window.setTimeout(() => (focusRef.current = ch.focus!), 900);
-    setHistMode(ch.hist ?? 'figure');
-    setShowTables(!!ch.tables);
+    if (g.layers) setLayers((l) => ({ ...l, ...g.layers }));
+    if (g.focus) focusRef.current = g.focus;
+    if (g.open) setOpen((o) => new Set([...o, g.open!]));
+    if (g.tab) {
+      setTab(g.tab);
+      setMobileTab(g.tab);
+    }
     setPop(null);
-    if (ch.count) {
-      const c = targetCentre(target);
-      const flats = world.buildings.filter((b) => (b.kind === 'home' || b.kind === 'apartment') && Math.hypot(b.cx - c.x, b.cy - c.y) < 120).sort((a, b) => b.capacity - a.capacity)[0];
-      if (flats)
-        window.setTimeout(() => {
-          const m = mapRef.current;
-          if (!m) return;
-          const p = m.toScreen(flats.cx, flats.cy);
-          setPop({ bid: flats.id, x: p.x, y: p.y, n: shownCount(popNow, flats) });
-        }, 2600);
-    }
     setOutcome(null);
+  };
+  const flyTo = (x: number, y: number, zoom = 4) => (focusRef.current = { cx: x, cy: y, zoom });
+  const pickPlace = (kind: 'b' | 's', id: number) => {
+    if (kind === 'b') {
+      const b = world.buildings[id];
+      flyTo(b.cx, b.cy, 5);
+      window.setTimeout(() => {
+        const m = mapRef.current;
+        if (!m) return;
+        const p = m.toScreen(b.cx, b.cy);
+        setPop({ bid: b.id, x: p.x, y: p.y, n: obs[b.id] ?? shownCount(popNow, b) });
+      }, 900);
+    } else {
+      const s = world.spaces[id];
+      flyTo(s.rect.x + s.rect.w / 2, s.rect.y + s.rect.h / 2, 5);
+    }
   };
 
   const release = () => {
@@ -614,138 +580,571 @@ export default function App() {
     setDayPlay(false);
     setPop(null);
     if (poolRef.current?.running) poolRef.current.pause();
-    focusRef.current = { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.4, m.view.zoom) };
+    focusRef.current = { cx: plan.aimX, cy: plan.aimY + 10, zoom: Math.max(3.2, m.view.zoom) };
     m.onImpact = (o) => setOutcome(o);
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, popNow, Math.floor(Math.random() * 1e9));
     strikeRef.current = { plan, outcome: o };
   };
-  function resetTown() {
+  function resetCity() {
     mapRef.current?.clearStrike();
     strikeRef.current = null;
     setOutcome(null);
     setStriking(false);
   }
   const holdForHour = () => {
-    if (!hourProfile) return;
-    let h = plan.hour;
-    let bestV = Infinity;
-    hourProfile.forEach((v, i) => {
-      if (v < bestV || (v === bestV && Math.abs(i - plan.hour) < Math.abs(h - plan.hour))) {
-        bestV = v;
-        h = i;
-      }
+    if (!profile) return;
+    let h = 0;
+    profile.forEach((v, i) => {
+      if (v.p90 < profile[h].p90 || (v.p90 === profile[h].p90 && v.mean < profile[h].mean)) h = i;
     });
-    setPlan({ hour: h });
+    setPlan({ hour: h + 0.5 });
   };
 
   // ------------------------------------------------------------ derived
 
-  const fig = est?.p90 ?? 0;
-  const signoff = approver(fig, rules, circle.protectedSites.length > 0);
-  const reduceTip = useMemo(() => {
-    if (!est) return '';
-    if (hourProfile) {
-      const min = Math.min(...hourProfile);
-      const at = hourProfile.indexOf(min);
-      if (min < fig - 1) return `An hour when fewer are nearby (${fmtHour(at)}: ${min})`;
-    }
-    if (plan.weapon === 'large' || plan.weapon === 'medium') return 'A smaller warhead';
-    if (plan.fuze !== 'delay' && target.buildingId != null) return 'A delay fuze';
-    if (circle.protectedSites.length) {
-      const b = world.buildings.find((x) => x.name === circle.protectedSites[0]);
-      if (b) {
-        const toward = (Math.atan2(b.cx - plan.aimX, -(b.cy - plan.aimY)) * 180) / Math.PI;
-        const diff = Math.abs(((plan.heading - toward + 540) % 360) - 180);
-        if (diff < 90) return `An approach that throws fragments away from ${b.name}`;
-      }
-    }
-    return 'Watch longer, to narrow the guess';
-  }, [est, hourProfile, fig, plan, world, target, circle]);
-
-  const circleLine = circle.protectedSites.length
-    ? `${circle.protectedSites[0]}${circle.protectedSites.length > 1 ? ` and ${circle.protectedSites.length - 1} more protected` : ''}: go on`
-    : circle.hazards.length
-      ? `${circle.hazards[0]}: go on`
-      : circle.people > 0.5
-        ? `${Math.round(circle.people)} people: go on`
-        : 'Nothing: no estimate needed';
+  const approval = approver(est?.p90 ?? 0, rules, circle.protectedSites.length > 0);
   const w = weapon(plan.weapon);
   const popB = pop ? world.buildings[pop.bid] : null;
+  const matrixHere = matrix.find((c) => c.weapon === plan.weapon && c.fuze === plan.fuze);
+  const weaponWarn = !!(est && est.pk < minPk);
 
-  return (
-    <div className="cd">
-      <nav className="cd-nav">
-        <a className="cd-logo" href="/">
-          Collateral Damage<span>[ powered by Jev ]</span>
-        </a>
-        <div className="cd-actions">
-          <span className="cd-exp">An explainer, not a targeting tool</span>
-          <button className="cd-pill dark" onClick={() => goChapter(chapter == null ? 0 : null)}>
-            {chapter == null ? 'Take the tour' : 'End tour'}
+  const planDock = (
+    <div className="dock-scroll">
+      <Step n={1} title="Target" summary={`${target.name}${lawful ? '' : ' · not confirmed lawful'}`} status={lawful ? 'ok' : 'stop'} open={open.has('target')} onToggle={() => toggleStep('target')}>
+        <p className="brief">{target.note}</p>
+        <div className="flags">
+          {circle.protectedSites.map((s) => (
+            <span key={s} className="flag protect">
+              Protected · {s}
+            </span>
+          ))}
+          {circle.hazards.map((s) => (
+            <span key={s} className="flag hazard">
+              Hazard · {s}
+            </span>
+          ))}
+          {circle.openSpaces.slice(0, 3).map((s) => (
+            <span key={s} className="flag open">
+              Open ground · {s}
+            </span>
+          ))}
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={lawful} onChange={(e) => setLawful(e.target.checked)} />
+          <span>
+            Confirmed lawful military objective
+            <small>A legal judgment by people. Untick it and nothing else matters.</small>
+          </span>
+        </label>
+        {target.buildingId != null && (
+          <label className="check">
+            <input type="checkbox" checked={plan.stored} onChange={(e) => setPlan({ stored: e.target.checked })} />
+            <span>
+              Weapons stored inside
+              <small>If it's destroyed, what's inside may go off too.</small>
+            </span>
+          </label>
+        )}
+      </Step>
+
+      <Step n={2} title="Weapon and fuze" summary={`${w.short} · ${fuze(plan.fuze).name}${weaponWarn ? ` · destroys it ${pct(est!.pk)}` : ''}`} status={weaponWarn ? 'warn' : 'ok'} open={open.has('weapon')} onToggle={() => toggleStep('weapon')}>
+        <div className="options">
+          {WEAPONS.map((wp) => (
+            <button key={wp.id} className={plan.weapon === wp.id ? 'on' : ''} onClick={() => setPlan({ weapon: wp.id })}>
+              <b>{wp.name}</b>
+              <span>
+                blast {wp.blast} m · fragments {wp.frag} m · ±{wp.cep} m
+              </span>
+            </button>
+          ))}
+        </div>
+        <Seg value={plan.fuze} onChange={(f) => setPlan({ fuze: f })} options={FUZES.map((f) => [f.id, f.name] as [typeof f.id, string])} />
+        <p className="hint">{fuze(plan.fuze).note}</p>
+        <button className="link" onClick={() => setWeaponData(true)}>
+          Weapon data table
+        </button>
+      </Step>
+
+      <Step n={3} title="Approach and aim" summary={`From the ${compassName(plan.heading + 180)}, heading ${compassName(plan.heading)}`} status="ok" open={open.has('approach')} onToggle={() => toggleStep('approach')}>
+        <div className="dir">
+          <Dial value={plan.heading} onChange={(heading) => setPlan({ heading })} />
+          <div>
+            <p className="hint">Fragments lean the way the bomb travels. Aim it so they fly away from people.</p>
+            <p className="hint">Drag the crosshair on the target to move the aim point.</p>
+            <button
+              className="link"
+              onClick={() => {
+                const c = targetCentre(target);
+                setPlan({ aimX: c.x, aimY: c.y });
+              }}
+            >
+              Re-centre the aim
+            </button>
+          </div>
+        </div>
+      </Step>
+
+      <Step n={4} title="Intelligence" summary={`${plan.watched} h watched · ${Object.keys(obs).length} building${Object.keys(obs).length === 1 ? '' : 's'} counted`} open={open.has('intel')} onToggle={() => toggleStep('intel')}>
+        <div className="slider">
+          <span>
+            Hours of watching <em>{plan.watched} h</em>
+          </span>
+          <input type="range" min={0} max={72} step={2} value={plan.watched} onChange={(e) => setPlan({ watched: +e.target.value })} />
+        </div>
+        <p className="hint">More watching narrows Jev's guess of how many people are in each building.</p>
+        <div className="row">
+          <button className={`chip ${countMode ? 'on' : ''}`} onClick={() => setCountMode(!countMode)} aria-pressed={countMode}>
+            {countMode ? 'Done counting' : 'Count people in a building'}
+          </button>
+          {Object.keys(obs).length > 0 && (
+            <button className="link" onClick={() => setObs({})}>
+              Forget counts
+            </button>
+          )}
+        </div>
+        <p className="hint">Or just click any building on the map to compare what overhead images, phones and the census say.</p>
+      </Step>
+
+      <Step n={5} title="Rules and sign-off" summary={`${approval.who} · ${rules.name}`} status={approval.level >= 3 ? 'warn' : 'ok'} open={open.has('rules')} onToggle={() => toggleStep('rules')}>
+        <Seg value={rulesId} onChange={setRulesId} options={RULES.map((r) => [r.id, r.name] as [string, string])} />
+        <p className="hint">
+          Senior sign-off at {rules.senior} or more: {rules.source}.
+        </p>
+        <Seg small value={runs} onChange={setRuns} options={[[100, '100 runs'], [400, '400 runs'], [1000, '1,000 runs']]} />
+        <button className="link" onClick={() => setEstSeed(estSeed + 1)}>
+          Roll new dice for the estimate
+        </button>
+      </Step>
+
+      <Step n={6} title="Decide" summary={lawful ? 'Release, hold, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
+        <div className="decide">
+          <button className="btn primary" onClick={release} disabled={!lawful || striking}>
+            Release
+          </button>
+          <button className="btn" onClick={holdForHour} disabled={!profile || striking}>
+            Hold for the best hour
+          </button>
+          <button className="btn" onClick={resetCity} disabled={striking}>
+            Call it off
           </button>
         </div>
-      </nav>
+        <p className="hint">Whether the harm is excessive against the military advantage is a human judgment. The model can't make it.</p>
+      </Step>
+    </div>
+  );
 
-      <header className="cd-head">
-        <div>
-          <p className="cd-kicker">Collateral damage estimation</p>
-          <h1>How a strike is weighed</h1>
+  const estimateDock = est ? (
+    <div className="dock-scroll">
+      <section className="card">
+        <StatTiles est={est} />
+        <div className="approval">
+          <div className="approval-head">
+            <span className="k">Who must approve</span>
+            <b>{approval.who}</b>
+          </div>
+          <ApprovalLadder a={approval} />
+          <p className="hint">{approval.note}</p>
         </div>
-        <p>
-          A paper city of eight districts and some twenty-four thousand people. Pick a target, then change the weapon, the fuze, the direction of attack, the aim point, the hour and the day, and watch Jev, the engine underneath, rerun the estimate of who would be killed or badly hurt. Or let Jev sweep thousands of plans in parallel.
+      </section>
+      <section className="card">
+        <h3>How bad could it be?</h3>
+        <p className="sub">{est.runs} runs, each with a different landing point and a different count of people.</p>
+        <Distribution est={est} rules={rules} />
+      </section>
+      <section className="card">
+        <h3>Where the harm comes from</h3>
+        <p className="sub">Expected people killed or badly hurt. Click a place to see it.</p>
+        <Breakdown world={world} est={est} onPick={pickPlace} />
+        {est.secondary > 0.01 && <p className="hint warn">Something else went off in {pct(est.secondary)} of runs: stored weapons or fuel.</p>}
+      </section>
+      <section className="card">
+        <h3>Every weapon, every fuze</h3>
+        <p className="sub">
+          Planning figure at {fmtHour(plan.hour)}, heading {compassName(plan.heading)}, from a quick 150-run check. Below each number: how often the target is destroyed; ✕ misses the {pct(minPk)} requirement. Click a cell to use it.
         </p>
+        {matrix.length ? (
+          <OptionsMatrix
+            cells={matrix}
+            weapons={WEAPONS.map((x) => [x.id, x.short])}
+            fuzes={FUZES.map((f) => [f.id, f.name])}
+            current={[plan.weapon, plan.fuze]}
+            minPk={minPk}
+            onPick={(wid, fid) => setPlan({ weapon: wid as WeaponId, fuze: fid as typeof plan.fuze })}
+          />
+        ) : (
+          <p className="hint">Working…</p>
+        )}
+        {matrixHere && <p className="hint">Current plan outlined.</p>}
+      </section>
+      <p className="about-line">
+        Illustrative model, invented numbers.{' '}
+        <button className="link" onClick={() => setAbout(true)}>
+          About
+        </button>
+      </p>
+    </div>
+  ) : (
+    <div className="dock-scroll">
+      <p className="hint">Running the estimate…</p>
+    </div>
+  );
+
+  const jevDock = (
+    <div className="dock-scroll">
+      <section className="card">
+        <div className="jev-head">
+          <div>
+            <h3>
+              Jev <span className={`status ${phase}`}>{phase === 'idle' ? 'idle' : phase === 'checklist' ? 'checking' : phase === 'search' ? (status.running ? 'searching' : 'paused') : 'done'}</span>
+            </h3>
+            <p className="sub">The engine: typed, seeded, pure. Here it sweeps every weapon, fuze, direction, aim point and hour for {target.short}.</p>
+          </div>
+        </div>
+        <div className="row">
+          <button className="btn primary" onClick={runJev}>
+            {phase === 'idle' ? 'Run Jev' : 'Start over'}
+          </button>
+          {phase === 'search' && (
+            <button className="btn" onClick={() => (status.running ? poolRef.current?.pause() : poolRef.current?.resume())}>
+              {status.running ? 'Pause' : 'Resume'}
+            </button>
+          )}
+          {phase === 'search' && !status.running && (
+            <button className="btn" onClick={() => poolRef.current?.step()}>
+              Step
+            </button>
+          )}
+        </div>
+        <div className="progress">
+          <div style={{ width: `${status.total ? (100 * status.done) / status.total : 0}%` }} />
+        </div>
+        <p className="hint mono">
+          {status.done.toLocaleString()} / {status.total.toLocaleString()} plans · {status.rate.toFixed(0)}/s · {status.busy}/{status.workers} workers busy
+        </p>
+      </section>
+      <section className="card">
+        <h3>Trade-offs</h3>
+        <p className="sub">Each dot is a plan. Up is more likely to destroy the target; right is more people hurt. Hover to preview it on the map.</p>
+        <Frontier results={results} best={bestNow} minPk={minPk} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} />
+        {bestNow && (
+          <div className="bestplan">
+            <span className="k">Jev's pick</span>
+            <b>{describe(bestNow.c)}</b>
+            <span>
+              Planning figure {bestNow.p90} · expected {bestNow.mean.toFixed(1)} · target destroyed {pct(bestNow.pk)} · {approver(bestNow.p90, rules, circle.protectedSites.length > 0).who}
+            </span>
+            <button className="btn primary small" onClick={() => applyCandidate(bestNow.c)}>
+              Use this plan
+            </button>
+          </div>
+        )}
+      </section>
+      <section className="card">
+        <h3>Controls</h3>
+        <div className="slider">
+          <span>
+            Throttle <em>{SPEEDS[speed] === Infinity ? 'flat out' : `${SPEEDS[speed]} plans/s`}</em>
+          </span>
+          <input type="range" min={0} max={SPEEDS.length - 1} step={1} value={speed} onChange={(e) => setSpeed(+e.target.value)} />
+        </div>
+        <div className="slider">
+          <span>
+            Workers in parallel <em>{status.workers}</em>
+          </span>
+          <input type="range" min={1} max={Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4))} step={1} value={status.workers || 1} onChange={(e) => poolRef.current?.setWorkers(+e.target.value)} />
+        </div>
+        <div className="slider">
+          <span>
+            Must destroy the target <em>{pct(minPk)} of runs</em>
+          </span>
+          <input type="range" min={0.5} max={0.99} step={0.01} value={minPk} onChange={(e) => setMinPk(+e.target.value)} />
+        </div>
+        <Seg small value={hours} onChange={setHours} options={[['any', 'Any hour'], ['night', 'Night only'], ['quiet', 'Quiet hours']]} />
+        <div className="grid2">
+          {WEAPONS.map((wp) => (
+            <label key={wp.id} className="check small">
+              <input
+                type="checkbox"
+                checked={allowed.includes(wp.id)}
+                onChange={(e) => {
+                  const next = e.target.checked ? [...allowed, wp.id] : allowed.filter((x) => x !== wp.id);
+                  if (next.length) setAllowed(WEAPONS.map((x) => x.id).filter((x) => next.includes(x)));
+                }}
+              />
+              <span>{wp.short}</span>
+            </label>
+          ))}
+        </div>
+        <label className="check small">
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
+          <span>Show each plan on the map as Jev tries it</span>
+        </label>
+      </section>
+      <section className="card">
+        <h3>{phase === 'search' ? 'Now testing' : 'Log'}</h3>
+        {testing && (
+          <div className="flip" key={key(testing)}>
+            <Chip k="Weapon" v={weapon(testing.weapon).short} />
+            <Chip k="Fuze" v={fuze(testing.fuze).name} />
+            <Chip k="Heading" v={HEADING_NAMES[testing.heading]} />
+            <Chip k="Aim" v={testing.aim} />
+            <Chip k="Hour" v={fmtHour(testing.hour)} />
+          </div>
+        )}
+        <div className="log" ref={logRef}>
+          {log.length ? (
+            log.map((l, i) => (
+              <div key={i} className={l.kind}>
+                {l.t}
+              </div>
+            ))
+          ) : (
+            <div className="info">Press Run Jev.</div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+
+  return (
+    <div className={`app m-${mobileTab}`}>
+      <header className="top">
+        <div className="brand">
+          <b>Collateral Damage</b>
+          <span>Jev engine</span>
+        </div>
+        <nav className="targets" aria-label="Targets">
+          {world.targets.map((t) => (
+            <button key={t.id} className={plan.target === t.id ? 'on' : ''} onClick={() => chooseTarget(t.id)} title={t.note}>
+              {t.short}
+            </button>
+          ))}
+        </nav>
+        <div className="top-right">
+          <span className="explored" title="Places found by exploring the map">
+            Explored {explored}/{world.places.length}
+          </span>
+          <button className="btn small" onClick={() => goGuide(guide == null ? 0 : null)}>
+            {guide == null ? 'Guide' : 'End guide'}
+          </button>
+          <Seg small value={view} onChange={setView} options={[['map', 'Map'], ['model', '3D']]} />
+        </div>
       </header>
 
-      <div className="cd-grid">
-        <section className="cd-stage">
-          <div className="cd-map">
+      <main className="main">
+        <aside className="dock left" aria-label="Plan">
+          <div className="dock-title">Plan</div>
+          {planDock}
+        </aside>
+
+        <section className="stage">
+          <div className="map">
             <canvas
               ref={canvasRef}
-              className={`cd-canvas ${spotMode ? 'spot' : ''} ${hover != null && hover === target.buildingId && !spotMode ? 'aim' : ''}`}
+              className={`canvas ${countMode ? 'count' : ''} ${hover != null && hover === target.buildingId && !countMode ? 'aim' : ''}`}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}
               onPointerCancel={onUp}
               onPointerLeave={() => setHover(null)}
-              aria-label="A paper model of a city, seen from above"
+              aria-label="The city, seen from above"
             />
-            <canvas ref={canvas3dRef} className={`cd-canvas3d ${view === 'model' ? 'on' : ''}`} aria-label="The paper city as a tilted model" />
-            <div ref={labels3dRef} className={`cd3-labels ${view === 'model' ? 'on' : ''}`} />
-            {view === 'model' && <div className="cd-tilt" aria-hidden />}
-            {view === 'model' && !modelReady && <div className="cd-loading">Folding the city…</div>}
+            <canvas ref={canvas3dRef} className={`canvas3d ${view === 'model' ? 'on' : ''}`} aria-label="The city as a tilted model" />
+            <div ref={labels3dRef} className={`labels3d ${view === 'model' ? 'on' : ''}`} />
+            {view === 'model' && !modelReady && <div className="loading">Building the model…</div>}
 
-            <div className="cd-when">
+            <div className="hud-time">
               <b>{partOfDay(shownPlan.hour)}</b>
               <span>
-                {plan.day === 'friday' ? 'Fri' : 'Weekday'} {fmtHour(shownPlan.hour)}
+                {plan.day === 'friday' ? 'Friday' : 'Weekday'} {fmtHour(shownPlan.hour)}
               </span>
-              {following && <em>Jev is testing</em>}
+              {following && <em>Jev testing</em>}
             </div>
-            <div className="cd-explored" title="Places you've found by exploring the map">
-              Explored <b>{explored}</b> / {world.places.length}
+
+            <div className="hud-layers" role="group" aria-label="Map layers">
+              {(
+                [
+                  ['danger', 'Danger'],
+                  ['people', 'People'],
+                  ['pattern', 'Fragments'],
+                  ['circle', 'Circle'],
+                  ['impacts', 'Landings'],
+                  ['protect', 'Protected'],
+                  ['labels', 'Labels'],
+                ] as [keyof Layers, string][]
+              ).map(([k, name]) => (
+                <button key={k} className={layers[k] ? 'on' : ''} onClick={() => setLayers({ ...layers, [k]: !layers[k] })} aria-pressed={layers[k]}>
+                  {name}
+                </button>
+              ))}
             </div>
+
+            {layers.danger && view === 'map' && !outcome && (
+              <div className="hud-legend">
+                <span>Chance someone in the open is killed or badly hurt</span>
+                <div className="ramp">
+                  <i />
+                </div>
+                <div className="ramp-ticks">
+                  <span>0</span>
+                  <span>1 in 10</span>
+                  <span>1 in 2</span>
+                  <span>certain</span>
+                </div>
+              </div>
+            )}
+
+            <div className="hud-zoom">
+              {view === 'model' ? (
+                <>
+                  <button onClick={() => modelRef.current?.preset('drone')}>Drone</button>
+                  <button onClick={() => modelRef.current?.preset('street')}>Street</button>
+                  <button onClick={() => modelRef.current?.preset('top')}>Top</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => (focusRef.current = { ...mapRef.current!.view, zoom: mapRef.current!.view.zoom * 1.4 })} aria-label="Zoom in">
+                    +
+                  </button>
+                  <button onClick={() => (focusRef.current = { ...mapRef.current!.view, zoom: mapRef.current!.view.zoom / 1.4 })} aria-label="Zoom out">
+                    −
+                  </button>
+                  <button onClick={() => (focusRef.current = { cx: world.w / 2, cy: world.h / 2, zoom: 1 })}>City</button>
+                  <button
+                    onClick={() => {
+                      const c = targetCentre(target);
+                      focusRef.current = { cx: c.x + 20, cy: c.y + 10, zoom: 3.2 };
+                    }}
+                  >
+                    Target
+                  </button>
+                </>
+              )}
+            </div>
+
             {toast && (
-              <div className="cd-toast" key={toast.id}>
+              <div className="toast" key={toast.id}>
                 <small>Found</small>
                 <b>{toast.name}</b>
                 {toast.note && <span>{toast.note}</span>}
               </div>
             )}
 
-            {showCards && (
-              <div className="cd-cards">
-                <Checklist lawful={lawful} circle={circleLine} weaponLine={`${w.short} · ${fuze(plan.fuze).name.toLowerCase()} · heading ${compassName(plan.heading)}`} reduce={reduceTip} computing={computing} signoff={signoff.who} />
-                {est && histMode !== 'spread' && <ApproveCard a={signoff} figure={est.p90} rules={rules} />}
-                {est && <Histogram est={est} rules={rules} computing={computing} aside={following} mode={histMode} onMode={setHistMode} />}
+            {guide != null && (
+              <div className="guide">
+                <span className="n">
+                  {guide + 1}/{GUIDE.length}
+                </span>
+                <div>
+                  <h4>{GUIDE[guide].title}</h4>
+                  <p>{GUIDE[guide].text}</p>
+                </div>
+                <div className="guide-nav">
+                  <button onClick={() => goGuide(Math.max(0, guide - 1))} disabled={guide === 0}>
+                    Back
+                  </button>
+                  {guide < GUIDE.length - 1 ? (
+                    <button className="primary" onClick={() => goGuide(guide + 1)}>
+                      Next
+                    </button>
+                  ) : (
+                    <button className="primary" onClick={() => goGuide(null)}>
+                      Done
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
-            {showTables && (
-              <div className="cd-tables">
-                <TablesScene />
-                <div className="cd-card cd-table">
-                  <h4>Blast and fragments</h4>
+            {outcome && (
+              <div className="outcome">
+                <span className="k">One outcome</span>
+                <div className="big">
+                  <b>{outcome.count}</b>
+                  <span>{outcome.count === 1 ? 'person' : 'people'} killed or badly hurt</span>
+                </div>
+                {est && (
+                  <p>
+                    The estimate: half the runs at or below {est.p50}, nine in ten at or below {est.p90}. This roll: {outcome.count}.
+                  </p>
+                )}
+                <p>
+                  Target {outcome.destroyed ? 'destroyed' : 'not destroyed'}. Landed {Math.round(Math.hypot(outcome.ix - plan.aimX, outcome.iy - plan.aimY))} m from the aim.
+                  {outcome.secondary.length > 0 && ` Also went off: ${outcome.secondary.join(', ')}.`}
+                </p>
+                <p className="muted">Every red ring is a person in the model.</p>
+                <div className="row">
+                  <button className="btn primary small" onClick={resetCity} disabled={striking}>
+                    Rebuild the city
+                  </button>
+                  <button className="btn small" onClick={release} disabled={striking}>
+                    Roll again
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {pop && popB && (
+              <div
+                className="popcard"
+                style={{
+                  left: Math.max(10, Math.min(pop.x + 24, (canvasRef.current?.clientWidth ?? 400) - 320)),
+                  top: Math.max(56, Math.min(pop.y - 40, (canvasRef.current?.clientHeight ?? 600) - 340)),
+                }}
+              >
+                <div className="pop-head">
+                  <div>
+                    <b>{placeName(popB)}</b>
+                    <span>
+                      {MATERIAL_NAME[popB.material]}
+                      {popB.floors > 1 ? ` · ${popB.floors} floors` : ''}
+                      {popB.protected ? ' · protected' : ''} · {fmtHour(plan.hour)}
+                    </span>
+                  </div>
+                  <button className="x" onClick={() => setPop(null)} aria-label="Close">
+                    ×
+                  </button>
+                </div>
+                <span className="k">People inside right now</span>
+                <SourceBars s={sources(world, popNow, popB)} onUse={(n) => setPop({ ...pop, n })} />
+                {est && est.byBuilding[popB.id] > 0.01 && <p className="hint">Expected to be killed or badly hurt here: {est.byBuilding[popB.id].toFixed(1)}</p>}
+                <div className="row">
+                  <div className="stepper">
+                    <button onClick={() => setPop({ ...pop, n: Math.max(0, pop.n - 1) })}>−</button>
+                    <em>{pop.n}</em>
+                    <button onClick={() => setPop({ ...pop, n: Math.min(popB.slots.length / 2, pop.n + 1) })}>+</button>
+                  </div>
+                  <button
+                    className="btn primary small"
+                    onClick={() => {
+                      setObs({ ...obs, [pop.bid]: pop.n });
+                      setPop(null);
+                    }}
+                  >
+                    Log count
+                  </button>
+                  {obs[pop.bid] != null && (
+                    <button
+                      className="btn small"
+                      onClick={() => {
+                        const o = { ...obs };
+                        delete o[pop.bid];
+                        setObs(o);
+                        setPop(null);
+                      }}
+                    >
+                      Forget
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {weaponData && (
+              <div className="modal" onClick={() => setWeaponData(false)}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <h3>Weapon data</h3>
                   <table>
                     <thead>
                       <tr>
@@ -766,459 +1165,71 @@ export default function App() {
                       ))}
                     </tbody>
                   </table>
-                  <p className="cd-hint">Illustrative numbers, invented for this model. Real tables are classified. Click a row to choose that weapon.</p>
-                  {chapter == null && (
-                    <button className="cd-link" onClick={() => setShowTables(false)}>
-                      Close the tables
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {card != null && (
-              <div className="cd-chapter" key={card}>
-                <div>
-                  <span className="n">{card + 1}</span>
-                  <h2>{CHAPTERS[card].title}</h2>
-                </div>
-              </div>
-            )}
-            {chapter != null && card == null && (
-              <div className="cd-caption">
-                <span className="n">{chapter + 1}</span>
-                <div>
-                  <h3>{CHAPTERS[chapter].title}</h3>
-                  <p>{CHAPTERS[chapter].text}</p>
-                </div>
-                <div className="cd-caption-nav">
-                  <button onClick={() => goChapter(Math.max(0, chapter - 1))} disabled={chapter === 0}>
-                    Back
+                  <p className="hint">Invented, illustrative numbers. Real blast and fragment tables are classified, and reportedly reissued at least twice a year.</p>
+                  <button className="btn small" onClick={() => setWeaponData(false)}>
+                    Close
                   </button>
-                  {chapter < CHAPTERS.length - 1 ? (
-                    <button className="dark" onClick={() => goChapter(chapter + 1)}>
-                      Next
-                    </button>
-                  ) : (
-                    <button
-                      className="dark"
-                      onClick={() => {
-                        goChapter(null);
-                        release();
-                      }}
-                    >
-                      Release
-                    </button>
-                  )}
                 </div>
               </div>
             )}
 
-            {outcome && (
-              <div className="cd-outcome">
-                <p className="cd-kicker">One outcome</p>
-                <div className="big">
-                  {outcome.count}
-                  <span>{outcome.count === 1 ? 'person' : 'people'} killed or badly hurt</span>
-                </div>
-                {est && (
+            {about && (
+              <div className="modal" onClick={() => setAbout(false)}>
+                <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                  <h3>About this model</h3>
                   <p>
-                    The estimate said half the runs at or below <b>{est.p50}</b>, nine in ten at or below <b>{est.p90}</b>. This time it was {outcome.count}.
+                    An illustrative explainer of collateral damage estimation as it has been publicly described. The city, weapon effects, pattern of life, materials, shielding and approval levels are simplified and invented for teaching; the two approval thresholds are as reported in the press.
                   </p>
-                )}
-                <p>
-                  Target {outcome.destroyed ? 'destroyed' : <b>not destroyed</b>}. It landed {Math.round(Math.hypot(outcome.ix - plan.aimX, outcome.iy - plan.aimY))} m from the aim point.
-                  {outcome.secondary.length > 0 && <> Also went off: {outcome.secondary.join(', ')}.</>}
-                </p>
-                <p className="cd-small">Every red ring is a person in the model. Real people have names.</p>
-                <div className="cd-row">
-                  <button className="cd-pill dark" onClick={resetTown} disabled={striking}>
-                    Rebuild the city
-                  </button>
-                  <button className="cd-pill ghost" onClick={release} disabled={striking}>
-                    Roll again
+                  <p>Real estimates rest on classified data, and the decisions that matter, whether a target is lawful and whether the expected harm is excessive, are made by people.</p>
+                  <p>
+                    Inspired by an explainer video by{' '}
+                    <a href="https://x.com/tobiaschneider" target="_blank" rel="noreferrer">
+                      Tobias Schneider
+                    </a>
+                    .
+                  </p>
+                  <button className="btn small" onClick={() => setAbout(false)}>
+                    Close
                   </button>
                 </div>
               </div>
             )}
+          </div>
 
-            {pop && popB && (
-              <div
-                className="cd-card cd-pop"
-                style={{
-                  left: Math.max(10, Math.min(pop.x + 24, (canvasRef.current?.clientWidth ?? 400) - 330)),
-                  top: Math.max(10, Math.min(pop.y - 40, (canvasRef.current?.clientHeight ?? 600) - 360)),
-                }}
-              >
-                <h4>People inside right now</h4>
-                <span>
-                  {placeName(popB)} · {MATERIAL_NAME[popB.material]} · {fmtHour(plan.hour)}
-                  {popB.protected ? ' · protected site' : ''}
-                </span>
-                <SourceBars s={sources(world, popNow, popB)} onUse={(n) => setPop({ ...pop, n })} />
-                <div className="cd-stepper">
-                  <button onClick={() => setPop({ ...pop, n: Math.max(0, pop.n - 1) })}>−</button>
-                  <em>{pop.n} seen</em>
-                  <button onClick={() => setPop({ ...pop, n: Math.min(popB.slots.length / 2, pop.n + 1) })}>+</button>
-                </div>
-                <div className="cd-row">
-                  <button
-                    className="cd-pill dark small"
-                    onClick={() => {
-                      setObs({ ...obs, [pop.bid]: pop.n });
-                      setPop(null);
-                    }}
-                  >
-                    Log it
-                  </button>
-                  {obs[pop.bid] != null && (
-                    <button
-                      className="cd-pill ghost small"
-                      onClick={() => {
-                        const o = { ...obs };
-                        delete o[pop.bid];
-                        setObs(o);
-                        setPop(null);
-                      }}
-                    >
-                      Forget
-                    </button>
-                  )}
-                  <button className="cd-x" onClick={() => setPop(null)} aria-label="Close">
-                    ×
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="cd-bar">
-              <span className="cd-view">
-                <button className={view === 'map' ? 'on' : ''} onClick={() => setView('map')}>
-                  Map
-                </button>
-                <button
-                  className={view === 'model' ? 'on' : ''}
-                  onClick={() => {
-                    if (view !== 'model' && !modelRef.current) setShowCards(false);
-                    setView('model');
-                  }}
-                >
-                  Model
-                </button>
-              </span>
-              {(
-                [
-                  ['people', 'People inside'],
-                  ['pattern', 'Pattern'],
-                  ['circle', 'Circle'],
-                  ['impacts', 'Landings'],
-                  ['protect', 'Protected'],
-                  ['labels', 'Labels'],
-                ] as [keyof Layers, string][]
-              ).map(([k, name]) => (
-                <button key={k} className={`cd-chip ${layers[k] ? 'on' : ''}`} onClick={() => setLayers({ ...layers, [k]: !layers[k] })} aria-pressed={layers[k]}>
-                  {name}
-                </button>
-              ))}
-              <button className={`cd-chip ${showCards ? 'on' : ''}`} onClick={() => setShowCards(!showCards)}>
-                Cards
+          <div className="timebar">
+            <div className="time-controls">
+              <Seg small value={plan.day} onChange={(day: Day) => setPlan({ day })} options={[['weekday', 'Weekday'], ['friday', 'Friday']]} />
+              <button className="btn small" onClick={() => setDayPlay(!dayPlay)} aria-pressed={dayPlay}>
+                {dayPlay ? '❚❚ Pause' : '▶ Play the day'}
               </button>
-              {view === 'model' ? (
-                <span className="cd-zoom">
-                  <button onClick={() => modelRef.current?.preset('drone')}>Drone</button>
-                  <button onClick={() => modelRef.current?.preset('street')}>Street</button>
-                  <button onClick={() => modelRef.current?.preset('top')}>Top</button>
-                </span>
-              ) : (
-                <span className="cd-zoom">
-                  <button onClick={() => (focusRef.current = { ...mapRef.current!.view, zoom: mapRef.current!.view.zoom * 1.4 })} aria-label="Zoom in">
-                    +
-                  </button>
-                  <button onClick={() => (focusRef.current = { ...mapRef.current!.view, zoom: mapRef.current!.view.zoom / 1.4 })} aria-label="Zoom out">
-                    −
-                  </button>
-                  <button onClick={() => (focusRef.current = { cx: world.w / 2, cy: world.h / 2, zoom: 1 })}>City</button>
-                  <button
-                    onClick={() => {
-                      const c = targetCentre(target);
-                      focusRef.current = { cx: c.x + 20, cy: c.y + 10, zoom: 3.4 };
-                    }}
-                  >
-                    Target
-                  </button>
-                </span>
-              )}
             </div>
+            <Timeline profile={profile} hour={plan.hour} onHour={(h) => setPlan({ hour: h })} day={plan.day === 'friday' ? 'Friday' : 'weekday'} />
           </div>
         </section>
 
-        <aside className="cd-panel">
-          <Group n={1} title="The target">
-            <div className="cd-targets">
-              {world.targets.map((t) => (
-                <button key={t.id} className={plan.target === t.id ? 'on' : ''} onClick={() => chooseTarget(t.id)}>
-                  <b>{t.name}</b>
-                  <span>{t.note}</span>
-                </button>
-              ))}
-            </div>
-            <label className="cd-check">
-              <input type="checkbox" checked={lawful} onChange={(e) => setLawful(e.target.checked)} />
-              <span>
-                Confirmed lawful military objective
-                <small>A legal judgment by people, before any estimate. Untick it and nothing else matters.</small>
-              </span>
-            </label>
-            {target.buildingId != null && (
-              <label className="cd-check">
-                <input type="checkbox" checked={plan.stored} onChange={(e) => setPlan({ stored: e.target.checked })} />
-                <span>
-                  Weapons stored inside
-                  <small>If it's destroyed, what's inside may go off too, whatever bomb you choose.</small>
-                </span>
-              </label>
-            )}
-          </Group>
-
-          <Group n={2} title="Weapon">
-            <div className="cd-weapons">
-              {WEAPONS.map((wp) => (
-                <button key={wp.id} className={plan.weapon === wp.id ? 'on' : ''} onClick={() => setPlan({ weapon: wp.id })}>
-                  <b>{wp.name}</b>
-                  <span>{wp.note}</span>
-                  <em>
-                    blast {wp.blast} m · fragments {wp.frag} m · half land within {wp.cep} m
-                  </em>
-                </button>
-              ))}
-            </div>
-            <Seg value={plan.fuze} onChange={(f) => setPlan({ fuze: f })} options={FUZES.map((f) => [f.id, f.name] as [typeof f.id, string])} />
-            <p className="cd-hint">{fuze(plan.fuze).note}</p>
-            <button className="cd-link" onClick={() => setShowTables(!showTables)}>
-              {showTables ? 'Close the tables' : 'Open the blast and fragment tables'}
+        <aside className="dock right" aria-label="Estimate and Jev">
+          <div className="tabs">
+            <button className={tab === 'estimate' ? 'on' : ''} onClick={() => setTab('estimate')}>
+              Estimate {computing && <i className="spin" />}
             </button>
-          </Group>
-
-          <Group n={3} title="Direction and aim">
-            <div className="cd-dir">
-              <Dial value={plan.heading} onChange={(heading) => setPlan({ heading })} />
-              <div>
-                <p className="cd-hint">
-                  Arriving from the {compassName(plan.heading + 180)}, heading {compassName(plan.heading)}. Fragments lean the way it's travelling.
-                </p>
-                <p className="cd-hint">Drag the crosshair on the target to move the aim point.</p>
-                <button
-                  className="cd-link"
-                  onClick={() => {
-                    const c = targetCentre(target);
-                    setPlan({ aimX: c.x, aimY: c.y });
-                  }}
-                >
-                  Re-centre the aim
-                </button>
-              </div>
-            </div>
-          </Group>
-
-          <Group n={4} title="Who is there">
-            <Seg value={plan.day} onChange={(day: Day) => setPlan({ day })} options={[['weekday', 'Weekday'], ['friday', 'Friday']]} />
-            <p className="cd-hint">{plan.day === 'friday' ? 'Friday: prayers at noon, a match at the stadium in the afternoon, schools and most offices shut.' : 'A working day: schools, offices, the souk and the bus station busy.'}</p>
-            <div className="cd-slider">
-              <span>
-                Hour <em>{fmtHour(plan.hour)}</em>
-              </span>
-              <input type="range" min={0} max={23.5} step={0.5} value={plan.hour} onChange={(e) => setPlan({ hour: +e.target.value })} />
-            </div>
-            {hourProfile && <HourBars values={hourProfile} hour={plan.hour} onPick={(hour) => setPlan({ hour })} />}
-            <div className="cd-row">
-              <button className="cd-chip" onClick={() => setDayPlay(!dayPlay)}>
-                {dayPlay ? 'Stop the clock' : 'Play the day'}
-              </button>
-              <span className="cd-hint">~{Math.round(circle.people)} people in the circle</span>
-            </div>
-            <div className="cd-slider">
-              <span>
-                Hours watched <em>{plan.watched} h</em>
-              </span>
-              <input type="range" min={0} max={72} step={2} value={plan.watched} onChange={(e) => setPlan({ watched: +e.target.value })} />
-            </div>
-            <div className="cd-row">
-              <button className={`cd-chip ${spotMode ? 'on' : ''}`} onClick={() => setSpotMode(!spotMode)} aria-pressed={spotMode}>
-                {spotMode ? 'Done counting' : 'Count people in a building'}
-              </button>
-              {Object.keys(obs).length > 0 && (
-                <button className="cd-link" onClick={() => setObs({})}>
-                  Forget {Object.keys(obs).length} count{Object.keys(obs).length > 1 ? 's' : ''}
-                </button>
-              )}
-            </div>
-            <p className="cd-hint">Click any building to compare overhead images, phone signals and the census, and log a count. Logged counts show as blue dots.</p>
-          </Group>
-
-          <Group n={5} title="Who signs off">
-            <Seg value={rulesId} onChange={setRulesId} options={RULES.map((r) => [r.id, r.name] as [string, string])} />
-            <p className="cd-hint">Senior sign-off at {rules.senior} or more: {rules.source}.</p>
-            <div className="cd-sign">
-              {['Strike cell', 'Senior', 'More senior', 'Most senior'].map((name, l) => (
-                <span key={l} className={l === signoff.level ? 'on' : l < signoff.level ? 'past' : ''}>
-                  {name}
-                </span>
-              ))}
-            </div>
-            <p className="cd-hint">{signoff.note}</p>
-            <Seg value={runs} onChange={setRuns} options={[[100, '100 runs'], [400, '400 runs'], [1000, '1,000 runs']]} />
-            <button className="cd-link" onClick={() => setEstSeed(estSeed + 1)}>
-              Run the estimate again with new dice
+            <button className={tab === 'jev' ? 'on' : ''} onClick={() => setTab('jev')}>
+              Jev {phase === 'search' && status.running && <i className="live" />}
             </button>
-          </Group>
-
-          <Group n={6} title="Decide">
-            <div className="cd-decide">
-              <button className="cd-pill dark" onClick={release} disabled={!lawful || striking}>
-                Release
-              </button>
-              <button className="cd-pill ghost" onClick={holdForHour} disabled={!hourProfile || striking}>
-                Hold for a better hour
-              </button>
-              <button className="cd-pill ghost" onClick={resetTown} disabled={striking}>
-                Call it off
-              </button>
-            </div>
-            {!lawful && <p className="cd-hint warn">No lawful target, no strike.</p>}
-            <p className="cd-hint">Whether the expected harm is excessive against the military advantage is a human judgment. The model can't make it.</p>
-          </Group>
+          </div>
+          {tab === 'estimate' ? estimateDock : jevDock}
         </aside>
-      </div>
+      </main>
 
-      <section className="cd-jev">
-        <div className="cd-jev-head">
-          <div>
-            <p className="cd-kicker">The engine</p>
-            <h2>
-              Jev <span className={`cd-status ${phase}`}>{phase === 'idle' ? 'Idle' : phase === 'checklist' ? 'Walking the checklist' : phase === 'search' ? (status.running ? 'Searching' : 'Paused') : 'Done'}</span>
-            </h2>
-            <p className="cd-jev-sub">Typed, seeded and pure: the same code runs the page, the map, the 3D model and every worker, so any plan's numbers can be reproduced exactly.</p>
-          </div>
-          <div className="cd-row">
-            <button className="cd-pill light" onClick={runJev}>
-              {phase === 'idle' ? 'Run Jev' : 'Start over'}
-            </button>
-            {phase === 'search' && (
-              <button className="cd-pill ghost-light" onClick={() => (status.running ? poolRef.current?.pause() : poolRef.current?.resume())}>
-                {status.running ? 'Pause' : 'Resume'}
-              </button>
-            )}
-            {phase === 'search' && !status.running && (
-              <button className="cd-pill ghost-light" onClick={() => poolRef.current?.step()}>
-                Step
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="cd-jev-grid">
-          <div className="cd-jev-controls">
-            <div className="cd-slider">
-              <span>
-                Throttle <em>{SPEEDS[speed] === Infinity ? 'flat out' : `${SPEEDS[speed]} plans/s`}</em>
-              </span>
-              <input type="range" min={0} max={SPEEDS.length - 1} step={1} value={speed} onChange={(e) => setSpeed(+e.target.value)} />
-            </div>
-            <div className="cd-slider">
-              <span>
-                Workers in parallel <em>{status.workers}</em>
-              </span>
-              <input type="range" min={1} max={Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4))} step={1} value={status.workers || 1} onChange={(e) => poolRef.current?.setWorkers(+e.target.value)} />
-            </div>
-            <div className="cd-slider">
-              <span>
-                Must destroy the target <em>{pct(minPk)} of runs</em>
-              </span>
-              <input type="range" min={0.5} max={0.99} step={0.01} value={minPk} onChange={(e) => setMinPk(+e.target.value)} />
-            </div>
-            <Seg small value={hours} onChange={setHours} options={[['any', 'Any hour'], ['night', 'Night only'], ['quiet', 'Quiet hours']]} />
-            <div className="cd-allowed">
-              {WEAPONS.map((wp) => (
-                <label key={wp.id} className="cd-check small">
-                  <input
-                    type="checkbox"
-                    checked={allowed.includes(wp.id)}
-                    onChange={(e) => {
-                      const next = e.target.checked ? [...allowed, wp.id] : allowed.filter((x) => x !== wp.id);
-                      if (next.length) setAllowed(WEAPONS.map((x) => x.id).filter((x) => next.includes(x)));
-                    }}
-                  />
-                  <span>{wp.short}</span>
-                </label>
-              ))}
-            </div>
-            <label className="cd-check small">
-              <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
-              <span>Show each plan on the map as Jev tries it</span>
-            </label>
-            <div className="cd-progress">
-              <div style={{ width: `${status.total ? (100 * status.done) / status.total : 0}%` }} />
-            </div>
-            <p className="cd-hint mono">
-              {status.done.toLocaleString()} / {status.total.toLocaleString()} plans · {status.rate.toFixed(0)}/s · {status.busy} of {status.workers} workers busy
-            </p>
-          </div>
-
-          <div className="cd-jev-mid">
-            <div className="cd-testing" key={testing ? key(testing) : 'none'}>
-              <p className="cd-kicker">{phase === 'search' ? 'Now testing' : 'Next up'}</p>
-              {testing ? (
-                <div className="cd-flip">
-                  <Chip k="Weapon" v={weapon(testing.weapon).short} />
-                  <Chip k="Fuze" v={fuze(testing.fuze).name} />
-                  <Chip k="Heading" v={HEADING_NAMES[testing.heading]} />
-                  <Chip k="Aim" v={testing.aim} />
-                  <Chip k="Hour" v={fmtHour(testing.hour)} />
-                </div>
-              ) : (
-                <p className="cd-hint">Press Run Jev. It walks the checklist, then tries every combination for {target.short}, runs each one {poolRef.current?.runs ?? 120} times, and keeps the plan that meets the requirement with the least harm.</p>
-              )}
-            </div>
-            <div className="cd-log" ref={logRef}>
-              {log.map((l, i) => (
-                <div key={i} className={l.kind}>
-                  {l.t}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="cd-jev-right">
-            <Scatter results={results} best={bestNow} minPk={minPk} onPeek={setPeek} onPick={(s) => applyCandidate(s.c)} />
-            {bestNow ? (
-              <div className="cd-best">
-                <p className="cd-kicker">Best so far</p>
-                <b>{describe(bestNow.c)}</b>
-                <span>
-                  Planning figure {bestNow.p90} · mean {bestNow.mean.toFixed(1)} · target destroyed {pct(bestNow.pk)} · {approver(bestNow.p90, rules, circle.protectedSites.length > 0).who}
-                </span>
-                <button className="cd-pill light small" onClick={() => applyCandidate(bestNow.c)}>
-                  Use this plan
-                </button>
-              </div>
-            ) : (
-              <p className="cd-hint">Each dot is a plan: harm across, chance of destroying the target up. Hover to preview it on the map, click to use it.</p>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <footer className="cd-foot">
-        <p>
-          <b>About this model.</b> An illustrative explainer of the collateral damage estimation process as it has been publicly described. The city, weapon radii, how people move through the day, materials, shielding and approval levels are simplified and invented for teaching; the two approval thresholds are as reported in the press. Real estimates rest on classified data, and the decisions that matter, whether a target is lawful and whether the expected harm is excessive, are made by people. Inspired by an explainer video by{' '}
-          <a href="https://x.com/tobiaschneider" target="_blank" rel="noreferrer">
-            Tobias Schneider
-          </a>
-          .
-        </p>
-      </footer>
+      <nav className="mobile-tabs" aria-label="Panels">
+        {(['plan', 'estimate', 'jev'] as const).map((t) => (
+          <button key={t} className={mobileTab === t ? 'on' : ''} onClick={() => setMobileTab(t)}>
+            {t === 'plan' ? 'Plan' : t === 'estimate' ? 'Estimate' : 'Jev'}
+          </button>
+        ))}
+      </nav>
+      <div className="mobile-panel">{mobileTab === 'plan' ? planDock : mobileTab === 'estimate' ? estimateDock : jevDock}</div>
     </div>
   );
 }
 
-const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${fuze(c.fuze).name.toLowerCase()} fuze, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;
+const describe = (c: Candidate) => `${weapon(c.weapon).short}, ${fuze(c.fuze).name.toLowerCase()}, heading ${compassName(c.heading)}, aim ${c.aim}, ${fmtHour(c.hour)}`;

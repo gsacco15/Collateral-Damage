@@ -4,6 +4,7 @@ import {
   buildingAt,
   buildingDist,
   collapse,
+  contour,
   destroys,
   effect,
   harm,
@@ -17,6 +18,7 @@ import {
   targetOf,
   weapon,
   type Building,
+  type DangerField,
   type Effect,
   type Estimate,
   type Place,
@@ -54,6 +56,7 @@ export interface Layers {
   impacts: boolean;
   labels: boolean;
   protect: boolean;
+  danger: boolean;
 }
 
 export interface MapFrame {
@@ -61,6 +64,7 @@ export interface MapFrame {
   pop: Population;
   plan: Plan;
   est: Estimate | null;
+  field: DangerField | null;
   layers: Layers;
   circleR: number;
   ghost: Plan | null;
@@ -110,6 +114,7 @@ export class MapView {
   private lastPop: Population | null = null;
   private rays: { key: string; full: Float32Array; clear: Float32Array } | null = null;
   private ghostRays: { key: string; full: Float32Array; clear: Float32Array } | null = null;
+  private fieldImg: { f: DangerField; img: HTMLCanvasElement; lines: [number, Float32Array][] } | null = null;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -326,6 +331,7 @@ export class MapView {
     for (const car of this.crowd.cars) if (inView(view, car.x, car.y)) drawCar(g, car, night, sh, damaged.size > 0 && car.hurt);
 
     if (f.layers.protect && !shown) this.drawProtected(g, px, view);
+    if (f.layers.danger && f.field && !shown) this.drawField(g, f.field, px);
     if (f.layers.pattern && !shown) {
       this.rays = rayCache(this.rays, this.world, plan);
       drawPattern(g, plan, this.rays, C.red, 1, px, this.time);
@@ -557,6 +563,48 @@ export class MapView {
         label(g, lx, ly, on ? `Target: ${t.short}` : t.short, px, { tone: 'target', small: !on });
       }
     }
+  }
+
+  /** The danger field: one red hue, stronger where standing in the open is more likely to be fatal. */
+  private drawField(g: CanvasRenderingContext2D, field: DangerField, px: number) {
+    if (this.fieldImg?.f !== field) {
+      const img = document.createElement('canvas');
+      img.width = field.cols;
+      img.height = field.rows;
+      const ig = img.getContext('2d')!;
+      const data = ig.createImageData(field.cols, field.rows);
+      for (let k = 0; k < field.p.length; k++) {
+        const v = field.p[k];
+        if (Number.isNaN(v) || v < 0.01) continue;
+        const t = Math.min(1, v);
+        data.data[k * 4] = Math.round(236 - 60 * t);
+        data.data[k * 4 + 1] = Math.round(120 - 80 * t);
+        data.data[k * 4 + 2] = Math.round(80 - 40 * t);
+        data.data[k * 4 + 3] = Math.round(255 * Math.min(0.8, 0.18 + Math.sqrt(t) * 0.62));
+      }
+      ig.putImageData(data, 0, 0);
+      this.fieldImg = { f: field, img, lines: [0.1, 0.5].map((l) => [l, contour(field, l)] as [number, Float32Array]) };
+    }
+    const { img, lines } = this.fieldImg;
+    g.save();
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, field.x0, field.y0, field.cols * field.cell, field.rows * field.cell);
+    for (const [level, segs] of lines) {
+      g.strokeStyle = level >= 0.5 ? 'rgba(120,20,10,0.9)' : 'rgba(150,50,25,0.75)';
+      g.lineWidth = (level >= 0.5 ? 1.8 : 1.2) * px;
+      g.beginPath();
+      for (let i = 0; i < segs.length; i += 4) {
+        g.moveTo(segs[i], segs[i + 1]);
+        g.lineTo(segs[i + 2], segs[i + 3]);
+      }
+      g.stroke();
+      // Label each ring once, at its northernmost point.
+      let best = -1;
+      for (let i = 0; i < segs.length; i += 4) if (best < 0 || segs[i + 1] < segs[best + 1]) best = i;
+      if (best >= 0) label(g, segs[best], segs[best + 1], level >= 0.5 ? '1 in 2' : '1 in 10', px, { small: true, plain: true });
+    }
+    g.restore();
   }
 
   private drawProtected(g: CanvasRenderingContext2D, px: number, view: Rect) {

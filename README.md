@@ -54,11 +54,17 @@ Typed, seeded and pure: no DOM. The page, the map, the 3D model and every worker
 | Vehicle yard | Trucks in an open yard: easy at night, crowded by day. |
 | Boulevard bridge | A supply route, and the road from Tin Hill to the hospital. Only big weapons drop it. |
 
-## The page (`src/ui/`, `src/view/`)
+## The app (`src/ui/`, `src/view/`)
 
-- **Map** (`view/map.ts`, `view/drawCity.ts`): the paper city from above: sun-driven shadows, day-to-night grading with lit windows, kraft, white, tin and terracotta roofs, a folded warehouse roof, the mosque's dome, fuel tanks, the souk's stalls, the stadium. People walk the pavements, crowd the squares and move between buildings as the hour changes; cars drive the roads. Labels for landmarks and streets appear as you **explore**.
-- **Model** (`view/model3d.ts`, three.js, loaded on demand): the same city, people and strike as a tilted diorama, with Drone, Street and Top cameras.
-- **The estimate** checklist, the histogram three ways (the spread, one cautious figure, the reported thresholds), **Who must approve**, **People inside right now** (click any building), the blast and fragment tables, a nine-chapter **tour**, and the **strike**: one roll of the dice, with the damaged buildings, what else went off, and red rings for the people hurt.
+A planning HUD around the paper city:
+
+- **Top bar**: the four targets as missions, places explored, the guide, Map / 3D.
+- **Plan dock** (left): six steps, each with a one-line summary and a status: target (briefing, protected sites and hazards in range, lawful), weapon and fuze, approach and aim (a heading dial; drag the crosshair on the map), intelligence (hours watched, counting people), rules and sign-off, decide.
+- **Map** (centre): the danger field (the chance someone in the open is killed or badly hurt, with 1-in-10 and 1-in-2 contours, shadowed by buildings), people, fragments, the crude circle, landings, protected sites, labels found by exploring. Click any building for overhead / phone / census counts.
+- **Timeline** (under the map): the expected harm and the nine-in-ten band for every hour of a weekday or a Friday; drag the playhead to change the hour.
+- **Estimate** (right): headline numbers, who must approve, the distribution of runs and the chance of at least N people (two charts on one x-axis, never two y-axes), where the harm comes from (by source and by place), and every weapon against every fuze.
+- **Jev** (right, second tab): the parallel search with throttle, workers, requirement and search space; the trade-off chart with its frontier; Jev's pick; the log.
+- **3D**: the same city, people and strike as a tilted model, loaded on demand.
 
 ## Later
 
