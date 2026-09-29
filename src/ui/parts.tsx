@@ -123,12 +123,13 @@ export function Dial({ value, onChange }: { value: number; onChange: (v: number)
 }
 
 /** Press and hold until the ring fills. Letting go early cancels. */
-export function HoldButton({ label, onDone, ms = 1600 }: { label: string; onDone: () => void; ms?: number }) {
+export function HoldButton({ label, onDone, onStart, onCancel, ms = 1600 }: { label: string; onDone: () => void; onStart?: () => void; onCancel?: () => void; ms?: number }) {
   const [p, setP] = useState(0);
   const raf = useRef(0);
   const start = useRef(0);
   const go = () => {
     start.current = performance.now();
+    onStart?.();
     const tick = () => {
       const k = Math.min(1, (performance.now() - start.current) / ms);
       setP(k);
@@ -143,6 +144,7 @@ export function HoldButton({ label, onDone, ms = 1600 }: { label: string; onDone
   };
   const stop = () => {
     cancelAnimationFrame(raf.current);
+    if (p > 0 && p < 1) onCancel?.();
     setP(0);
   };
   const C = 2 * Math.PI * 44;

@@ -1,5 +1,18 @@
 # Audio brief: Collateral Damage
 
+## Status
+
+- **Generated with ElevenLabs and in `public/audio/`:**
+  - all 21 sound effects and ambience beds;
+  - guide narration 00, 02 and 06 (voice: *Artaius, Calm British Narrator*);
+  - radio lines 02 and 06 (Cell: *Daniel*, Overwatch: *Brian*).
+- **Still to make:**
+  - `voice/guide-01, 03, 04, 05, 07, 08, 09, 10`;
+  - `radio-01, 03, 04, 05, 07, 08`;
+  - `music-bed` (optional).
+
+  ElevenLabs disabled free-tier access partway through, so these weren't made. The nodes are ready on the ElevenLabs canvas *Collateral Damage — sounds and voices*: run them there, or make them anywhere from the scripts below. Drop the files in with these exact names; the app plays whatever is present and skips what isn't.
+
 Hand this whole file to the AI or tools you use to make the sounds and voices. It has the context, the tone, every file needed with its specs, and the scripts.
 
 ---

@@ -49,6 +49,7 @@ import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, 
 import { JevCard } from './jevCard';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
+import { sound } from './sound';
 import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
 const SEED = 7;
@@ -162,6 +163,25 @@ export default function App() {
     });
   const [drawerTab, setDrawerTab] = useState<'day' | 'jev'>('day');
   const [layersOpen, setLayersOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(sound.enabled);
+  useEffect(() => sound.onChange(setSoundOn), []);
+  // Browsers only start audio after a click: if sound was left on, wake it on the first one.
+  useEffect(() => {
+    if (!sound.enabled) return;
+    const wake = () => sound.setEnabled(true);
+    window.addEventListener('pointerdown', wake, { once: true });
+    return () => window.removeEventListener('pointerdown', wake);
+  }, []);
+  // Quiet paper clicks for every button.
+  useEffect(() => {
+    const click = (e: MouseEvent) => {
+      const b = (e.target as HTMLElement).closest('button');
+      if (!b || !sound.enabled) return;
+      sound.play(b.closest('.panel-toggles, .layers-pop, .seg, .drawer-tabs, .tabs') ? 'ui-toggle' : 'ui-click');
+    };
+    window.addEventListener('click', click, true);
+    return () => window.removeEventListener('click', click, true);
+  }, []);
   const [placesOpen, setPlacesOpen] = useState(false);
   const [simulated, setSimulated] = useState(0);
 
@@ -247,6 +267,31 @@ export default function App() {
     return { ...intelRef.current, ...add };
   };
 
+  // Ambience: day or night by the hour, the operations room under it, the market when you look at the souk.
+  const souk = useMemo(() => world.places.find((pl) => /souk/i.test(pl.name)), [world]);
+  useEffect(() => {
+    if (!soundOn) return;
+    const h = plan.hour;
+    const day = h < 5 || h > 20.5 ? 0 : h < 7 ? (h - 5) / 2 : h > 18.5 ? (20.5 - h) / 2 : 1;
+    const tick = () => {
+      const v = mapRef.current?.view;
+      const near = souk && v ? Math.hypot(v.cx - souk.x, v.cy - souk.y) < 160 && v.zoom > 2 : false;
+      void sound.ambience({ 'amb-city-day': day * (striking ? 0.3 : 1), 'amb-city-night': (1 - day) * (striking ? 0.3 : 1), 'amb-cell-room': 0.45, 'amb-market': near ? day * 0.9 : 0 });
+    };
+    tick();
+    const id = window.setInterval(tick, 1500);
+    return () => clearInterval(id);
+  }, [soundOn, plan.hour, striking, souk]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The call to prayer at dawn, and before Friday noon prayers.
+  const prayerKey = useRef('');
+  useEffect(() => {
+    if (!soundOn) return;
+    const h = plan.hour;
+    const k = h >= 5 && h < 6 ? 'dawn' : plan.day === 'friday' && h >= 11.5 && h < 12.5 ? 'friday' : '';
+    if (k && k !== prayerKey.current) sound.play('amb-call-to-prayer');
+    prayerKey.current = k;
+  }, [soundOn, plan.hour, plan.day]);
+
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
@@ -322,6 +367,7 @@ export default function App() {
       if (k === 't') setPanels((p) => ({ ...p, drawer: !p.drawer }));
       if (k === 'f') setPanels(fullMap);
       if (k === 'l') setLayersOpen((o) => !o);
+      if (k === 'm') sound.setEnabled(!sound.enabled);
       if (e.key === '[') setPlanState((p) => ({ ...p, hour: (p.hour + 23.5) % 24 }));
       if (e.key === ']') setPlanState((p) => ({ ...p, hour: (p.hour + 0.5) % 24 }));
       if (e.key === ',') setPlanState((p) => ({ ...p, heading: (p.heading + 345) % 360 }));
@@ -354,6 +400,7 @@ export default function App() {
       onStart: (total, _kept, workers) => theaterRef.current?.start(total, poolRef.current?.results ?? [], workers),
       onDispatch: (wk, cands) => theaterRef.current?.dispatch(wk, cands),
       onJob: (wk, out, runs, ms) => {
+        sound.play('jev-tick');
         theaterRef.current?.job(wk, out, runs, ms);
         setSimulated((n) => n + runs.reduce((a, r) => a + r.length, 0));
       },
@@ -424,6 +471,7 @@ export default function App() {
   useEffect(() => {
     if (phase === 'search' && !status.running && status.done >= status.total && status.total > 0) {
       setPhase('done');
+      sound.play('jev-done');
       const b = best(results, minPk);
       if (b) pushLog(`Done: ${status.done} plans. Best: ${describe(b.c)} → planning figure ${b.p90}. Sign-off: ${approver(b.p90, rules, circle.protectedSites.length > 0).who}.`, 'best');
       else pushLog(`Done: ${status.done} plans. None destroys the target ${pct(minPk)} of the time.`, 'best');
@@ -458,8 +506,11 @@ export default function App() {
       () => {
         if (!lawful) return setPhase('idle');
         pushLog(`Asking Jev to read the intelligence for ${sp.hours.length} hours…`, 'step');
+        sound.play('jev-start');
         readHours(sp.hours).then((got) => {
           const n = sp.hours.filter((h) => got[Math.floor(h) % 24]).length;
+          sound.play('jev-read');
+          if (n) sound.radio('radio-01-pol', 0.7);
           pushLog(n ? `Jev read the intelligence for ${n} of ${sp.hours.length} hours. Every replay draws who is inside from its answers.` : 'Jev could not read the intelligence here, so replays use the built-in guess of who is inside.', 'step');
           setPhase('search');
           pool.start(plan, obs, sp, SEED, false, got, ruinsRef.current);
@@ -535,6 +586,7 @@ export default function App() {
     map.discovered = loadDiscovered();
     setExplored(map.discovered.size);
     map.onDiscover = (p) => {
+      if (p.kind !== 'street') sound.play('ui-discover');
       setExplored(map.discovered.size);
       if (p.kind !== 'street') {
         setToast(p);
@@ -762,7 +814,8 @@ export default function App() {
   };
   const goGuide = (i: number | null) => {
     setGuide(i);
-    if (i == null) return;
+    if (i == null) return sound.stopVoice();
+    sound.voice(i + 1);
     const g = GUIDE[i];
     if (g.plan) {
       const tgt = g.plan.target ?? plan.target;
@@ -820,9 +873,19 @@ export default function App() {
     // Rolling again replaces the last strike; a new strike adds to the ruins.
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     setRuins(before);
+    // The sound of it: the aircraft, the call, the impact, the stamp, then what the radio says.
+    sound.play('aircraft-approach');
+    sound.radio('radio-04-away', 0.9);
+    sound.play('bomb-whistle', 1.5);
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
+      sound.play('impact');
+      sound.play('aftermath', 1.1);
+      sound.play('stamp', 0.55);
+      sound.radio('radio-05-splash', 1.3);
+      sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', 2.6);
+      sound.radio('radio-08-bda', 4.8);
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before), Math.floor(Math.random() * 1e9));
@@ -905,7 +968,14 @@ export default function App() {
         </div>
         <div className="options">
           {WEAPONS.map((wp) => (
-            <button key={wp.id} className={plan.weapon === wp.id ? 'on' : ''} onClick={() => setPlan({ weapon: wp.id })}>
+            <button
+              key={wp.id}
+              className={plan.weapon === wp.id ? 'on' : ''}
+              onClick={() => {
+                setPlan({ weapon: wp.id });
+                sound.play('ui-weapon');
+              }}
+            >
               <span className="mini-origami" aria-hidden>
                 <Origami id={wp.id} size={0.26} />
               </span>
@@ -976,7 +1046,14 @@ export default function App() {
 
       <Step n={6} title="Decide" summary={lawful ? 'Release, hold, or call it off' : 'No lawful target, no strike'} status={lawful ? undefined : 'stop'} open={open.has('decide') || true} onToggle={() => toggleStep('decide')}>
         <div className="decide">
-          <button className="btn danger big" onClick={() => setConfirm(true)} disabled={!lawful || striking || !est}>
+          <button
+            className="btn danger big"
+            onClick={() => {
+              setConfirm(true);
+              sound.radio('radio-02-estimate', 0.3);
+            }}
+            disabled={!lawful || striking || !est}
+          >
             Authorise strike…
           </button>
           <button className="btn" onClick={holdForHour} disabled={!profile || striking}>
@@ -1222,6 +1299,9 @@ export default function App() {
             <button className={`full ${!panels.plan && !panels.side && !panels.drawer ? 'on' : ''}`} onClick={() => setPanels(fullMap)} title="Full map (F)" aria-label="Full map">
               ⛶
             </button>
+            <button className={`full ${soundOn ? 'on' : ''}`} onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound on (M)' : 'Sound off (M)'} aria-label="Sound">
+              {soundOn ? '🔈' : '🔇'}
+            </button>
           </div>
         </div>
       </header>
@@ -1413,7 +1493,11 @@ export default function App() {
                   <div className="sheet-actions">
                     <HoldButton
                       label="Hold to release"
+                      onStart={() => sound.chargeStart()}
+                      onCancel={() => sound.chargeStop()}
                       onDone={() => {
+                        sound.chargeStop();
+                        sound.radio('radio-03-cleared');
                         setConfirm(false);
                         release();
                       }}
@@ -1722,6 +1806,15 @@ export default function App() {
               </button>
               <button className="btn" onClick={() => closeIntro(false)}>
                 Look around first
+              </button>
+              <button
+                className="btn listen"
+                onClick={() => {
+                  sound.setEnabled(true);
+                  sound.voice(0);
+                }}
+              >
+                🔈 Listen
               </button>
             </div>
           </div>

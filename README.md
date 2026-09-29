@@ -96,6 +96,16 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 - **Jev at work**: when Jev runs, the drawer under the map shows its workers spinning up, the queue draining, each worker lane scoring a plan and flashing the grid of its simulated strikes, and each result flying into the trade-off chart, with a running count of simulated strikes. Change the speed, pause it, or change the plan's assumptions and watch it re-score.
 - **The decision is yours**: Authorise strike opens a final-decision screen with the numbers, who must approve and any protected sites in range. Press and hold the red button until the ring fills; let go early and nothing happens. Then: weapon away, a countdown, impact, one outcome.
 
+### Sound (`src/ui/sound.ts`, `public/audio/`)
+
+Off until you turn it on: the speaker button in the top bar, `M`, or *Listen* on the opening card.
+- **Ambience:** day or night beds follow the hour; the operations room hums underneath; the market is heard when you look at the souk; the call to prayer plays at dawn and before Friday noon.
+- **The interface:** soft paper clicks, a fold when you pick a weapon, a chime when you find a place, and Jev's spin-up, ticks and finish.
+- **The strike:** the hold tone; the aircraft; the impact, the stamp and the aftermath. Radio lines play through a band-pass "radio" filter with squelch.
+- **The guide:** narrated.
+
+Sounds were generated with ElevenLabs; see `docs/audio-brief.md` for the list, the scripts and which files are still to come. Missing files are simply skipped.
+
 ### The paper look (`src/view/textures.ts`, `drawCity.ts`)
 
 Every surface is a sheet of generated paper, laid in metres and turned per building so no two roofs match. The papers are crumpled white paper, grey card, kraft cardboard, tin, tile, sand, ground, road and grass, each made from soft facets, creases with a lit edge, fibres and grain. Roofs have slightly torn edges, a bright edge on the sun's side and a soft contact shadow. Trees are crumpled paper balls. A collapsed building becomes a heap of torn sheets and broken card in grey dust.
