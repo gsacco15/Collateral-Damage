@@ -339,6 +339,10 @@ export class Model3D {
   private bomb: THREE.Mesh;
   private last = performance.now();
   private life!: Life3D;
+  // A paper moon and paper stars, kept at a fixed bearing in the sky (they move with the camera, like the real ones).
+  private moon!: THREE.Sprite;
+  private stars!: THREE.Points;
+  private moonDir = new THREE.Vector3(0.62, 0.34, -0.7).normalize();
   // Lit windows at night, room by room: every window on a windowed wall, and which of them are lit this half hour.
   private winMesh!: THREE.InstancedMesh;
   private winMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
@@ -375,6 +379,7 @@ export class Model3D {
 
     this.buildStatic();
     this.life = new Life3D(s, world);
+    this.buildSky(s);
     this.buildWindows(s);
 
     const bodyGeo = new THREE.CylinderGeometry(0.34, 0.42, 1.25, 7);
@@ -440,7 +445,7 @@ export class Model3D {
     this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 30;
     this.controls.maxDistance = 1300;
-    this.controls.maxPolarAngle = 1.38;
+    this.controls.maxPolarAngle = 1.47; // low enough, from the street, to see the sky
     this.controls.minPolarAngle = 0.1;
     // Pan across the ground like a map, never down through it.
     this.controls.screenSpacePanning = false;
@@ -1232,6 +1237,7 @@ export class Model3D {
     }
     this.strike(f, now, dt);
     this.drift(now, nightness(f.plan.hour));
+    this.sky(nightness(f.plan.hour));
     this.renderer.render(this.scene, this.camera);
     this.placeLabels(f);
   }
@@ -1301,6 +1307,119 @@ export class Model3D {
     this.winMesh.count = n;
     this.winMesh.instanceMatrix.needsUpdate = true;
     if (this.winMesh.instanceColor) this.winMesh.instanceColor.needsUpdate = true;
+  }
+
+  private buildSky(scene: THREE.Scene) {
+    // The moon: a disc of off-white paper, torn round the edge, folded into facets, a few grey craters pressed in.
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d')!;
+    const r = rng(3131);
+    const R = 104;
+    g.translate(128, 128);
+    g.beginPath();
+    for (let i = 0; i <= 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      const rr = R * (0.985 + r() * 0.03);
+      if (i === 0) g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      else g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    g.closePath();
+    g.fillStyle = '#f4efe2';
+    g.fill();
+    g.save();
+    g.clip();
+    for (let i = 0; i < 7; i++) {
+      // Folded facets: some catch the light, some sit in shade.
+      const a0 = r() * Math.PI * 2;
+      const a1 = a0 + 0.6 + r() * 1.2;
+      g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.35)' : 'rgba(120,110,95,0.10)';
+      g.beginPath();
+      g.moveTo((r() - 0.5) * 40, (r() - 0.5) * 40);
+      g.lineTo(Math.cos(a0) * 140, Math.sin(a0) * 140);
+      g.lineTo(Math.cos(a1) * 140, Math.sin(a1) * 140);
+      g.closePath();
+      g.fill();
+    }
+    for (let i = 0; i < 9; i++) {
+      const x = (r() - 0.5) * 150;
+      const y = (r() - 0.5) * 150;
+      const cr = 6 + r() * 16;
+      g.fillStyle = 'rgba(150,140,125,0.22)';
+      g.beginPath();
+      g.arc(x, y, cr, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(x - 1, y - 1, cr, Math.PI * 0.9, Math.PI * 1.7);
+      g.stroke();
+    }
+    // A soft shadow on one side, so it reads as a round thing.
+    const sh = g.createRadialGradient(-40, -40, 20, 0, 0, R * 1.1);
+    sh.addColorStop(0, 'rgba(0,0,0,0)');
+    sh.addColorStop(1, 'rgba(70,60,50,0.28)');
+    g.fillStyle = sh;
+    g.fillRect(-128, -128, 256, 256);
+    g.restore();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+    this.moon.scale.set(120, 120, 1);
+    this.moon.renderOrder = -1;
+    scene.add(this.moon);
+    // Stars: little paper four-point stars scattered over the upper sky.
+    const sc = document.createElement('canvas');
+    sc.width = sc.height = 32;
+    const sg = sc.getContext('2d')!;
+    sg.fillStyle = '#fbf6e6';
+    sg.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+      const rr = i % 2 ? 4 : 15;
+      if (i === 0) sg.moveTo(16 + Math.cos(a) * rr, 16 + Math.sin(a) * rr);
+      else sg.lineTo(16 + Math.cos(a) * rr, 16 + Math.sin(a) * rr);
+    }
+    sg.closePath();
+    sg.fill();
+    const pos: number[] = [];
+    for (let i = 0; i < 140; i++) {
+      const az = r() * Math.PI * 2;
+      const el = 0.12 + r() * 1.1;
+      pos.push(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.stars = new THREE.Points(geo, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(sc), size: 14, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+    this.stars.renderOrder = -1;
+    this.stars.frustumCulled = false;
+    scene.add(this.stars);
+  }
+
+  /** Keep the moon and stars far off at their bearing from wherever the camera is, fading in after dusk. */
+  private sky(night: number) {
+    const cam = this.camera.position;
+    // Ahead and a little to the right of where you face, a little above the horizon: there whenever the sky is in view.
+    const f = new THREE.Vector3();
+    this.camera.getWorldDirection(f);
+    // How high above the horizon the top of the picture reaches; the moon sits in that band of sky, off to the right.
+    const pitch = Math.asin(Math.max(-1, Math.min(1, f.y)));
+    const top = pitch + (this.camera.fov * Math.PI) / 360;
+    const skyShown = top > 0.08;
+    const elev = Math.min(0.42, Math.max(0.045, top - 0.07));
+    f.y = 0;
+    if (f.lengthSq() < 1e-6) f.set(0, 0, -1);
+    const side = Math.atan(Math.tan((this.camera.fov * Math.PI) / 360) * this.camera.aspect) * 0.3;
+    f.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), -side);
+    this.moonDir.set(f.x * Math.cos(elev), Math.sin(elev), f.z * Math.cos(elev));
+    this.moon.position.copy(cam).addScaledVector(this.moonDir, 1800);
+    this.moon.visible = skyShown;
+    this.stars.position.copy(cam);
+    this.stars.scale.setScalar(1900);
+    (this.moon.material as THREE.SpriteMaterial).opacity = Math.max(0, night * 1.3 - 0.3);
+    (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, night * 1.4 - 0.5) * 0.8;
+    this.moon.visible = this.moon.visible && night > 0.25;
+    this.stars.visible = night > 0.25;
   }
 
   private light(hour: number) {

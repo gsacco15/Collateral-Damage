@@ -38,6 +38,7 @@ export type Ent =
   | { t: 'post'; x: number; y: number; lit: boolean }
   | { t: 'antenna'; x: number; y: number; z: number; h: number }
   | { t: 'chair'; x: number; y: number; a: number }
+  | { t: 'moon'; x: number; y: number; a: number }
   | { t: 'awning'; x: number; y: number; a: number; w: number; col: string };
 
 export const HULLS: [string, string, string][] = [
@@ -322,6 +323,9 @@ export function lifeScene(c: SceneCtx): Ent[] {
     out.push({ t: 'boat', x, y, a, len: 7, hull: (i + 1) % HULLS.length, kind: 'motor', side: 0, stroke: 0 });
     if (!day) glow(x, y, 3.5, 0.5 * c.night, 1.3);
   }
+
+  // The moon on the water: its reflection, trembling in the canal, after dusk.
+  if (c.night > 0.4 && !underBridge(430)) out.push({ t: 'moon', x: riverX(430) + 3, y: 430, a: Math.min(1, (c.night - 0.4) * 2.5) });
 
   // ---- by the water
   const r = rng(424242);

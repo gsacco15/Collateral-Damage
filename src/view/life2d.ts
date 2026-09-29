@@ -540,6 +540,21 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       case 'bus':
         if (d.traffic) bus(g, e.x, e.y, e.dir, n, e.col, e.v);
         break;
+      case 'moon': {
+        // A pale disc broken into ripples, the way the moon sits in moving water.
+        const grd = g.createRadialGradient(e.x, e.y, 0, e.x, e.y, 9);
+        grd.addColorStop(0, `rgba(250,244,225,${0.35 * e.a})`);
+        grd.addColorStop(1, 'rgba(250,244,225,0)');
+        g.fillStyle = grd;
+        g.fillRect(e.x - 9, e.y - 9, 18, 18);
+        g.fillStyle = `rgba(252,248,235,${0.85 * e.a})`;
+        for (let k = -3; k <= 3; k++) {
+          const w = Math.sqrt(1 - (k / 3.6) ** 2) * 4.2;
+          const dx = Math.sin(t * 1.4 + k * 1.7) * 0.5;
+          g.fillRect(e.x - w + dx, e.y + k * 0.9 - 0.25, w * 2 * (0.75 + 0.25 * Math.sin(t * 2 + k)), 0.5);
+        }
+        break;
+      }
       case 'fire':
         fire(g, e.x, e.y, e.size, e.flicker, n);
         break;
