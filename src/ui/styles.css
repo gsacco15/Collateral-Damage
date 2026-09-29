@@ -1060,3 +1060,31 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .map-note .note-act:hover { background: var(--critical); color: #fff; }
 .debrief p { margin: 0; padding-right: 18px; }
 .theme-btn.people-btn.on { color: var(--text-1); border-color: var(--text-3); }
+
+/* Settings and diagnostics: one card, centred on a desk, a sheet from the bottom on a phone. */
+.settings-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(20, 16, 12, 0.35); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fade 0.2s ease; }
+.settings { width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 16px 18px 14px; border-radius: 14px; background: var(--panel); color: var(--text-1); border: 1px solid var(--line); box-shadow: var(--float); display: flex; flex-direction: column; gap: 4px; animation: up 0.25s ease; }
+.settings .set-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.settings .set-head b { font-size: 16px; }
+.settings .x { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--text-2); cursor: pointer; padding: 2px 6px; }
+.settings .set-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.settings .set-row b, .settings .set-check b { display: block; font-size: 13.5px; }
+.settings .set-row span { display: block; font-size: 12.5px; color: var(--text-2); margin-top: 2px; line-height: 1.4; }
+.set-switch { flex: none; width: 42px; height: 24px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--panel-2); position: relative; cursor: pointer; transition: background 0.2s; }
+.set-switch i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--text-3); transition: left 0.2s, background 0.2s; }
+.set-switch.on { background: var(--text-1); border-color: var(--text-1); }
+.set-switch.on i { left: 20px; background: var(--panel); }
+.settings .set-sec { padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.settings .set-check-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.settings .set-check { padding: 8px 10px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--line); }
+.settings .set-check p { margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-2); }
+.set-state { font: 500 11px var(--mono); padding: 2px 7px; border-radius: 99px; background: var(--line); color: var(--text-2); white-space: nowrap; }
+.set-state.ok { background: rgba(77, 122, 74, 0.18); color: #3f6e3c; }
+.set-state.nokey, .set-state.offline { background: rgba(201, 138, 30, 0.2); color: #8a5d12; }
+.set-state.error { background: rgba(200, 55, 43, 0.16); color: var(--critical); }
+.set-state.running { background: rgba(79, 114, 145, 0.18); color: #3f5f7a; }
+.settings .set-foot { margin: 2px 0 0; font-size: 11.5px; color: var(--text-3); }
+@media (max-width: 760px) {
+  .settings-scrim { align-items: flex-end; padding: 0; }
+  .settings { width: 100%; border-radius: 16px 16px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}

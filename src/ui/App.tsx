@@ -67,6 +67,7 @@ import { personIn, personInCar, personLine, personOut } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
+import { SettingsPanel } from './Settings';
 import { readIntel } from './jevLive';
 import { addSceneExtra } from '../view/lifeScene';
 import { bakerLine, current, DONE, EARLY, ENDINGS, FIGURES, figureAt, HANDLER_BRIEF, inHours, loadMission, MEETS, missionEnts, newMission, SAMIR, saveMission, scatterLetters, setLive, STRANGER, type FigureId, type MissionState } from '../mission/mission';
@@ -224,6 +225,7 @@ export default function App() {
       return false;
     }
   });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const aliveRef = useRef(alive);
   aliveRef.current = alive;
   useEffect(() => {
@@ -1964,6 +1966,15 @@ export default function App() {
     void sound.narrate(ENDINGS[result].voice);
   };
   // The way in: tucked away at the very bottom of the page (the plan panel's foot on a desktop).
+  // Switching the people model: Jev's last search was on the other model, so clear it rather than show numbers from
+  // a different city.
+  const switchPeople = (next: boolean) => {
+    setAlive(next);
+    poolRef.current?.stop();
+    setResults([]);
+    setPhase('idle');
+    flash(next ? 'Living people: they go from home to places nearby, react to strikes, and Jev steers how districts behave.' : 'Classic people: every place of a kind at the same share of its capacity.');
+  };
   const secretBtn = (where: string) => (
     <div className={`secret-foot ${where}`}>
       <button
@@ -1979,24 +1990,8 @@ export default function App() {
       >
         <span aria-hidden>✦</span> {mission.on ? 'Put the secret file away' : mission.step >= 1 && mission.step < 6 ? 'Back to the secret file' : 'Secret file'}
       </button>
-      <button className="theme-btn" onClick={() => setDark(!dark)} aria-pressed={dark} title="Switch between light and dark">
-        {dark ? '☀ Light mode' : '☾ Dark mode'}
-      </button>
-      <button
-        className={`theme-btn people-btn ${alive ? 'on' : ''}`}
-        onClick={() => {
-          const next = !alive;
-          setAlive(next);
-          // Jev's last search was on the other model: clear it rather than show numbers from a different city.
-          poolRef.current?.stop();
-          setResults([]);
-          setPhase('idle');
-          flash(next ? 'Living people: they go from home to places nearby, each household its own size, each district its own hours.' : 'Classic people: every place of a kind at the same share of its capacity.');
-        }}
-        aria-pressed={alive}
-        title="Which people model the estimates, Jev and the map use (try both)"
-      >
-        {alive ? '◉ People: Living' : '○ People: Classic'}
+      <button className="theme-btn" onClick={() => setSettingsOpen(true)} title="Dark mode, the people model, and a check that Jev is working">
+        ⚙ Settings
       </button>
     </div>
   );
@@ -3395,6 +3390,7 @@ export default function App() {
       </nav>
       <div className="mobile-panel">{mobileTab === 'plan' ? planDock : mobileTab === 'estimate' ? estimateDock : jevDock}</div>
       {secretBtn('phone')}
+      {settingsOpen && <SettingsPanel dark={dark} setDark={setDark} alive={alive} setAlive={switchPeople} onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
