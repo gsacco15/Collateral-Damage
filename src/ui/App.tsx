@@ -818,6 +818,9 @@ export default function App() {
   const behaveRef = useRef(behave);
   behaveRef.current = behave;
   const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], ruins, alive, marks, behave), [world, plan.hour, plan.day, plan.watched, obs, intel, ruins, alive, marks, behave]);
+  // What is really there: the people model alone, whatever the target, Jev's reading or the counts you logged. The
+  // estimate is built on what you know (popNow); the strike lands on this, and the census counts this.
+  const popTrue = useMemo(() => population(world, plan.hour, plan.day, plan.watched, {}, {}, ruins, alive, marks, behave), [world, plan.hour, plan.day, plan.watched, ruins, alive, marks, behave]);
   crowdRef.current = (() => {
     const cs = (popNow.crowds ?? []).filter((c) => c.kind === 'help' || c.kind === 'gate' || c.kind === 'hospital');
     return { zones: cs.map((c) => ({ x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 })), size: cs.reduce((t, c) => t + c.n, 0) };
@@ -2004,16 +2007,16 @@ export default function App() {
   const census = () => {
     const HOMES = new Set(['home', 'apartment', 'villa', 'shack', 'tent', 'barracks']);
     const groups = new Map<string, number>();
-    for (const c of popNow.crowds ?? []) groups.set(GROUP_NAME[c.kind] ?? c.kind, (groups.get(GROUP_NAME[c.kind] ?? c.kind) ?? 0) + c.n);
+    for (const c of popTrue.crowds ?? []) groups.set(GROUP_NAME[c.kind] ?? c.kind, (groups.get(GROUP_NAME[c.kind] ?? c.kind) ?? 0) + c.n);
     return {
       hour: `${plan.day === 'friday' ? 'Friday' : 'weekday'} ${fmtHour(plan.hour)}`,
       residents: Math.round(world.buildings.filter((b) => HOMES.has(b.kind)).reduce((t, b) => t + b.capacity, 0)),
-      inside: Math.round(popNow.expected.reduce((t, x) => t + x, 0)),
-      outdoors: Math.round(world.spaces.reduce((t, sp) => t + popNow.spaceQ[sp.id] * sp.capacity, 0)),
-      streets: Math.round(popNow.streetQ * (world.streetPts.length / 2)),
+      inside: Math.round(popTrue.expected.reduce((t, x) => t + x, 0)),
+      outdoors: Math.round(world.spaces.reduce((t, sp) => t + popTrue.spaceQ[sp.id] * sp.capacity, 0)),
+      streets: Math.round(popTrue.streetQ * (world.streetPts.length / 2)),
       groups: [...groups].sort((a, b) => b[1] - a[1]),
       drawn: mapRef.current?.crowd.visible().length ?? 0,
-      dots: world.buildings.reduce((t, b) => t + shownCount(popNow, b), 0),
+      dots: world.buildings.reduce((t, b) => t + shownCount(popTrue, b), 0),
     };
   };
   // Switching the people model: Jev's last search was on the other model, so clear it rather than show numbers from
@@ -2162,7 +2165,7 @@ export default function App() {
       if (aliveRef.current) sound.play('siren-far', verdict + 1.2, 0.32);
     };
     m.onSettled = () => setStriking(false);
-    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));
+    const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, {}, {}, before, aliveRef.current, marksBefore, behaveRef.current), Math.floor(Math.random() * 1e9));
     strikeRef.current = { plan, outcome: o, before, marksBefore, ledgerBefore };
   };
   /** Clear the last strike's effects, keeping the ruins. */
