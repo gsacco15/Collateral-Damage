@@ -26,7 +26,7 @@ import {
   targetOf,
   BRIDGE_RUIN,
   riverX,
-  buildingDist,
+  groundId,
   type Rect,
   WEAPONS,
   weapon,
@@ -55,7 +55,7 @@ import { JevCard } from './jevCard';
 import { placeAt, storyFor, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readIntel } from './jevLive';
-import { sound, type Bed } from './sound';
+import { sound, type Bed, type CityCue } from './sound';
 import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
 const SEED = 7;
@@ -317,49 +317,74 @@ export default function App() {
     const h = plan.hour;
     const day = h < 5 || h > 20.5 ? 0 : h < 7 ? (h - 5) / 2 : h > 18.5 ? (20.5 - h) / 2 : 1;
     const busy = h >= 7 && h < 20 ? 1 : 0.35;
+    let lastZoom = 0;
     const tick = () => {
-      const v = mapRef.current?.view;
-      if (!v) return;
+      const m = mapRef.current;
+      const v = m?.view;
+      if (!m || !v) return;
       const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4)); // 0 high above, 1 down at the roofs
       const hush = striking ? 0.3 : 1;
+      sound.setAltitude(view === 'model' ? 0.6 : close);
+      // A soft rush of air when you zoom a long way quickly.
+      if (lastZoom && Math.abs(Math.log(v.zoom / lastZoom)) > 0.45) sound.whoosh(v.zoom < lastZoom);
+      lastZoom = v.zoom;
+      // Left or right: where a place sits on screen.
+      const { s: px } = m.cam();
+      const half = (canvasRef.current?.clientWidth ?? 800) / 2;
+      const panOf = (x: number) => Math.max(-0.8, Math.min(0.8, ((x - v.cx) * px) / half));
       // One place at a time, and only up close: the nearest place you're looking at, within a short distance.
       const reach = 25 + close * 35; // metres
-      const dist = (qs: Rect[]) => {
+      const near = (qs: Rect[]): [number, number] => {
         let d = Infinity;
-        for (const q of qs) d = Math.min(d, Math.hypot(Math.max(q.x - v.cx, 0, v.cx - q.x - q.w), Math.max(q.y - v.cy, 0, v.cy - q.y - q.h)));
-        return d;
+        let nx = v.cx;
+        for (const q of qs) {
+          const x = Math.max(q.x, Math.min(q.x + q.w, v.cx));
+          const y = Math.max(q.y, Math.min(q.y + q.h, v.cy));
+          const dd = Math.hypot(x - v.cx, y - v.cy);
+          if (dd < d) [d, nx] = [dd, x];
+        }
+        return [d, nx];
       };
       const school = plan.day !== 'friday' && h >= 7.5 && h < 14;
-      const candidates: [Bed, number, number][] = [
-        ['amb-market', dist(zones.market), day * 0.8],
-        ['amb-park', dist(zones.park), (0.3 + 0.7 * day) * 0.7],
-        ['amb-pitch', dist(zones.pitch), day * 0.6],
-        ['amb-school', dist(zones.school), school ? 0.6 : 0],
-        ['amb-traffic', dist(zones.traffic), busy * 0.45],
-        ['amb-water', Math.max(0, Math.abs(v.cx - riverX(v.cy)) - world.river.width / 2), 0.55],
+      const rx = riverX(v.cy);
+      const candidates: [Bed, [number, number], number][] = [
+        ['amb-market', near(zones.market), day * 0.7],
+        ['amb-park', near(zones.park), (0.3 + 0.7 * day) * 0.6],
+        ['amb-pitch', near(zones.pitch), day * 0.5],
+        ['amb-school', near(zones.school), school ? 0.5 : 0],
+        ['amb-traffic', near(zones.traffic), busy * 0.35],
+        ['amb-water', [Math.max(0, Math.abs(v.cx - rx) - world.river.width / 2), rx], 0.5],
       ];
-      let pick: [Bed, number] | null = null;
+      let pick: [Bed, number, number] | null = null;
       if (close > 0.3)
-        for (const [bed, d, loud] of candidates) {
+        for (const [bed, [d, x], loud] of candidates) {
           if (loud <= 0 || d > reach) continue;
           const lvl = loud * (1 - d / reach) * Math.min(1, (close - 0.3) / 0.3);
-          if (!pick || lvl > pick[1]) pick = [bed, lvl];
+          if (!pick || lvl > pick[1]) pick = [bed, lvl, panOf(x)];
         }
       const local = pick?.[1] ?? 0;
-      const base = (1 - Math.min(0.65, local * 1.2)) * 0.8; // the city dips under the place you're at
+      const base = (1 - Math.min(0.6, local * 1.2)) * 0.7; // the city dips under the place you're at
       const levels: Partial<Record<Bed, number>> = {
         'amb-city-day': day * base * hush,
         'amb-city-night': (1 - day) * base * hush,
-        'amb-cell-room': 0.22,
-        'amb-wind': close < 0.12 ? (1 - close / 0.12) * 0.3 * hush : 0,
+        'amb-cell-room': 0.18,
+        'amb-wind': close < 0.15 ? (1 - close / 0.15) * 0.35 * hush : 0,
       };
+      const pans: Partial<Record<Bed, number>> = {};
       for (const [bed] of candidates) levels[bed] = pick && pick[0] === bed ? pick[1] * hush : 0;
-      void sound.ambience(levels);
+      if (pick) pans[pick[0]] = pick[2];
+      void sound.ambience(levels, pans);
+      // Now and then, one small sound of the city that fits the hour: about every twenty seconds.
+      if (!striking && close > 0.15 && Math.random() < 0.02) {
+        const dawn = h >= 5 && h < 7.5;
+        const pool: CityCue[] = day < 0.3 ? ['cue-dog'] : dawn ? ['cue-rooster', 'cue-shutter', 'cue-pigeons'] : ['cue-pigeons', 'cue-child', 'cue-moped'];
+        sound.cue(pool[Math.floor(Math.random() * pool.length)], (Math.random() - 0.5) * 1.4, 0.16 + 0.12 * close);
+      }
     };
     tick();
-    const id = window.setInterval(tick, 700);
+    const id = window.setInterval(tick, 400);
     return () => clearInterval(id);
-  }, [soundOn, plan.hour, plan.day, striking, zones]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [soundOn, plan.hour, plan.day, striking, zones, view]); // eslint-disable-line react-hooks/exhaustive-deps
   // The call to prayer at dawn, and before Friday noon prayers.
   const prayerKey = useRef('');
   useEffect(() => {
@@ -830,21 +855,18 @@ export default function App() {
   };
   // Can this building be made the target? Not a ruin, not the current target, and someone must use it.
   const targetable = (b: ReturnType<MapView['buildingAt']>) => !!b && !ruins.includes(b.id) && b.id !== target.buildingId;
-  // Target mode is forgiving: the building under the pointer, or failing that the nearest one within 40 m.
+  // Target mode aims wherever you click: the building under the pointer, or else that very spot on the ground.
   const pickAt = (x: number, y: number) => {
     const under = mapRef.current?.buildingAt(x, y) ?? null;
-    if (targetable(under)) return under;
-    let bestB: (typeof world.buildings)[number] | null = null;
-    let bestD = 40;
-    for (const b of world.buildings) {
-      if (Math.abs(b.cx - x) > 80 || Math.abs(b.cy - y) > 80 || !targetable(b)) continue;
-      const d = buildingDist(b, x, y);
-      if (d < bestD) {
-        bestD = d;
-        bestB = b;
-      }
-    }
-    return bestB;
+    return targetable(under) ? under : null;
+  };
+  const aimAt = (x: number, y: number) => {
+    if (onBridge(x, y)) return chooseTarget('bridge');
+    const b = mapRef.current?.buildingAt(x, y) ?? null;
+    if (b && ruins.includes(b.id)) return; // a ruin can't be the target again
+    if (b && b.id === target.buildingId) return;
+    if (b) return retargetTo(b.id);
+    chooseTarget(groundId(x, y));
   };
   // The bridge isn't a building, so Target mode checks for it by position.
   const onBridge = (x: number, y: number) => {
@@ -854,7 +876,6 @@ export default function App() {
   const retargetTo = (bid: number) => {
     const briefed = world.targets.find((t) => t.buildingId === bid);
     chooseTarget(briefed ? briefed.id : `b:${bid}`);
-    sound.play('ui-weapon');
   };
   const onDown = (e: React.PointerEvent) => {
     const m = mapRef.current;
@@ -914,8 +935,8 @@ export default function App() {
     if (b && mapMode === 'target') {
       const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
-    } else if (!b && mapMode === 'target' && onBridge(wx, wy)) {
-      text = '<b>Boulevard bridge</b><span>Click to make this the target</span>';
+    } else if (!b && mapMode === 'target') {
+      text = onBridge(wx, wy) ? '<b>Boulevard bridge</b><span>Click to make this the target</span>' : '<b>Open ground</b><span>Click to target this spot</span>';
     } else if (b) {
       const n = obs[b.id] ?? shownCount(popNow, b);
       const hurt = est && est.byBuilding[b.id] > 0.05 ? ` · ${est.byBuilding[b.id].toFixed(1)} expected hurt` : '';
@@ -942,22 +963,14 @@ export default function App() {
     if (d?.mode === 'retarget' && m && e.type === 'pointerup') {
       const p = localXY(e);
       const w = m.toWorld(p.x, p.y);
-      if (onBridge(w.x, w.y)) chooseTarget('bridge');
-      else {
-        const b = pickAt(w.x, w.y);
-        if (b) retargetTo(b.id);
-      }
+      aimAt(w.x, w.y);
       return;
     }
     if (d?.mode === 'pan' && m && e.type === 'pointerup' && mapMode === 'target') {
       const p = localXY(e);
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
         const w = m.toWorld(p.x, p.y);
-        if (onBridge(w.x, w.y)) chooseTarget('bridge');
-        else {
-          const b = pickAt(w.x, w.y);
-          if (b) retargetTo(b.id);
-        }
+        aimAt(w.x, w.y);
       }
       return;
     }
@@ -997,7 +1010,7 @@ export default function App() {
     endStrike();
     setPop(null);
     setObs({});
-    setLawful(!id.startsWith('b:'));
+    setLawful(!id.startsWith('b:') && !id.startsWith('g:'));
     setPlan({ target: id, aimX: a.x, aimY: a.y, hardness: t.hardness, stored: t.stored });
     focusRef.current = { cx: a.x + 20, cy: a.y + 10, zoom: 3.2 };
     poolRef.current?.stop();
@@ -1513,7 +1526,7 @@ export default function App() {
               {t.short}
             </button>
           ))}
-          {plan.target.startsWith('b:') && (
+          {(plan.target.startsWith('b:') || plan.target.startsWith('g:')) && (
             <button className="on picked" title={target.note}>
               {target.short}
             </button>

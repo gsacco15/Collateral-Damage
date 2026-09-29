@@ -141,7 +141,7 @@ export interface JevReading {
   usage: { input_tokens: number; output_tokens: number };
   ms: number;
 }
-export type JevReply = JevReading | { ok: false; reason: 'no-key' | 'bad-request' | 'upstream' | 'offline'; status?: number };
+export type JevReply = JevReading | { ok: false; reason: 'no-key' | 'bad-request' | 'upstream' | 'offline' | 'open-ground'; status?: number };
 
 interface ScoreAnswer {
   score: number;

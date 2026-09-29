@@ -5,6 +5,8 @@ import { intelId, type IntelKey, type JevReply } from '../jev';
 const cache = new Map<string, Promise<JevReply>>();
 
 export function readIntel(key: IntelKey): Promise<JevReply> {
+  // A spot on open ground has no building for Jev to read, and could be any of thousands of points: no call.
+  if (key.target.startsWith('g:')) return Promise.resolve({ ok: false, reason: 'open-ground' });
   const id = intelId(key);
   let p = cache.get(id);
   if (!p) {

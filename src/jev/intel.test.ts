@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import handler from '../../api/jev';
-import { buildCity, targetCentre, targetOf } from './city';
+import { buildCity, groundId, targetCentre, targetOf } from './city';
 import { estimate } from './estimate';
 import { intelKey, jevRequest, LEVELS, readAnswers, sampleJudged, sitesFor, type JevReading } from './intel';
 import { population } from './life';
@@ -120,5 +120,17 @@ describe('ruins and picked buildings', () => {
     const e = estimate(world, planFor(`b:${home.id}`, 10), population(world, 10, 'weekday', 6), 200, 3);
     expect(e.pk).toBeGreaterThan(0.5); // a 2,000-lb bomb destroys a mud house
     expect(jevRequest(world, intelKey(`b:${home.id}`, 10, 'weekday', 6)).sites[0].id).toBe(home.id);
+  });
+
+  it('can aim at a spot on open ground', () => {
+    const world = buildCity();
+    const id = groundId(360.4, 250.6);
+    expect(id).toBe('g:360_251');
+    const t = targetOf(world, id);
+    expect(t.buildingId).toBeNull();
+    expect(targetCentre(t)).toEqual({ x: 360, y: 251 });
+    const e = estimate(world, planFor(id, 12), population(world, 12, 'weekday', 6), 200, 3);
+    expect(e.pk).toBeGreaterThan(0.9); // nothing to bring down
+    expect(e.mean).toBeGreaterThanOrEqual(0);
   });
 });

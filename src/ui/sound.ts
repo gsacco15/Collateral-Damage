@@ -38,20 +38,23 @@ export type Cue =
   | 'radio-static'
   | 'amb-call-to-prayer';
 
+/** Small one-off sounds of the city, played now and then, placed left or right by where they are on screen. */
+export type CityCue = 'cue-dog' | 'cue-moped' | 'cue-pigeons' | 'cue-shutter' | 'cue-rooster' | 'cue-child';
+
 export type RadioLine = 'radio-01-pol' | 'radio-02-estimate' | 'radio-03-cleared' | 'radio-04-away' | 'radio-05-splash' | 'radio-06-destroyed' | 'radio-07-intact' | 'radio-08-bda' | 'radio-09-jev-run' | 'radio-10-jev-done' | 'radio-11-abort' | 'radio-12-calloff';
 
 const VOLUME: Partial<Record<Cue, number>> = {
   'ui-hover': 0.12,
-  'ui-click': 0.25,
-  'ui-toggle': 0.3,
+  'ui-click': 0.15,
+  'ui-toggle': 0.18,
   'ui-discover': 0.35,
-  'ui-weapon': 0.45,
-  'ui-building': 0.3,
-  'hold-abort': 0.4,
-  'jev-start': 0.4,
-  'jev-tick': 0.08,
-  'jev-read': 0.4,
-  'jev-done': 0.4,
+  'ui-weapon': 0.3,
+  'ui-building': 0.2,
+  'hold-abort': 0.3,
+  'jev-start': 0.28,
+  'jev-tick': 0.045,
+  'jev-read': 0.28,
+  'jev-done': 0.3,
   'hold-charge': 0.5,
   'aircraft-approach': 0.8,
   'bomb-whistle': 0.25,
@@ -59,7 +62,7 @@ const VOLUME: Partial<Record<Cue, number>> = {
   aftermath: 0.6,
   stamp: 0.7,
   'radio-static': 0.16,
-  'amb-call-to-prayer': 0.35,
+  'amb-call-to-prayer': 0.3,
 };
 
 class SoundEngine {
@@ -71,7 +74,10 @@ class SoundEngine {
   /** During the guide: the narrator leads. No radio, no Jev noises, the city turned right down. */
   quiet = false;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
-  private beds = new Map<Bed, { src: AudioBufferSourceNode; gain: GainNode }>();
+  private beds = new Map<Bed, { src: AudioBufferSourceNode; gain: GainNode; pan: StereoPannerNode }>();
+  private starting = new Set<Bed>(); // beds being loaded, so a bed is never started twice
+  private distance: BiquadFilterNode | null = null; // the city muffled from high up
+  private lastWhoosh = 0;
   private voiceNode: AudioBufferSourceNode | null = null;
   private charge: AudioBufferSourceNode | null = null;
   private lastTick = 0;
@@ -172,10 +178,16 @@ class SoundEngine {
     this.master = this.ctx.createGain();
     this.master.gain.value = 0;
     this.master.connect(this.ctx.destination);
+    // The city goes through a low-pass filter: high above it is soft and far away, close to the roofs it's clear.
+    this.distance = this.ctx.createBiquadFilter();
+    this.distance.type = 'lowpass';
+    this.distance.frequency.value = 2000;
+    this.distance.Q.value = 0.4;
+    this.distance.connect(this.master);
     for (const b of ['ambience', 'effects', 'voices'] as Bus[]) {
       const g = this.ctx.createGain();
       g.gain.value = this.mix[b] * (this.quiet && b === 'ambience' ? 0.25 : 1);
-      g.connect(this.master);
+      g.connect(b === 'ambience' ? this.distance : this.master);
       this.buses[b] = g;
     }
   }
@@ -286,23 +298,75 @@ class SoundEngine {
   }
 
   /** Crossfade the ambient beds to these levels (0–1). */
-  async ambience(levels: Partial<Record<Bed, number>>) {
+  async ambience(levels: Partial<Record<Bed, number>>, pans: Partial<Record<Bed, number>> = {}) {
     if (!this.enabled) return;
     this.ensure();
     const ctx = this.ctx!;
     for (const bed of BEDS) {
-      const want = (levels[bed] ?? 0) * 0.5;
-      if (!this.enabled) return;
-      let b = this.beds.get(bed);
-      if (!b && want > 0.001) {
-        const n = await this.start(bed, 0, undefined, 0, true);
-        if (!n) continue;
-        b = n;
-        this.beds.set(bed, b);
+      const want = (levels[bed] ?? 0) * 0.4;
+      const b = this.beds.get(bed);
+      if (b) {
+        b.gain.gain.setTargetAtTime(want, ctx.currentTime, 1.2);
+        b.pan.pan.setTargetAtTime(pans[bed] ?? 0, ctx.currentTime, 0.6);
+        continue;
       }
-      b?.gain.gain.setTargetAtTime(want, ctx.currentTime, 1.2);
+      if (want <= 0.001 || this.starting.has(bed)) continue;
+      this.starting.add(bed);
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = pans[bed] ?? 0;
+      pan.connect(this.buses.ambience!);
+      void this.start(bed, 0, pan, 0, true).then((n) => {
+        this.starting.delete(bed);
+        if (!n) return pan.disconnect();
+        this.beds.set(bed, { ...n, pan });
+        n.gain.gain.setTargetAtTime(want, ctx.currentTime, 1.2);
+      });
     }
   }
+
+  /** How close to the roofs you are, 0 (high above) to 1 (down among them): the city gets clearer as you come down. */
+  setAltitude(close: number) {
+    if (!this.ctx || !this.distance) return;
+    const hz = 650 * Math.pow(16000 / 650, Math.max(0, Math.min(1, close)));
+    this.distance.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.35);
+  }
+
+  /** A small sound of the city, somewhere to the left or right. Goes through the same distance as the rest. */
+  cue(name: CityCue, pan = 0, volume = 0.25) {
+    if (!this.enabled || this.quiet) return;
+    this.ensure();
+    const ctx = this.ctx!;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    p.connect(this.buses.ambience!);
+    void this.start(name, volume, p).then((n) => n?.src.addEventListener('ended', () => p.disconnect()));
+  }
+
+  /** A soft rush of air when you zoom a long way quickly. Made here, not from a file. */
+  whoosh(up: boolean) {
+    if (!this.enabled || !this.ctx || this.quiet) return;
+    const now = performance.now();
+    if (now - this.lastWhoosh < 900) return;
+    this.lastWhoosh = now;
+    const ctx = this.ctx;
+    const len = 0.55;
+    const buf = ctx.createBuffer(1, Math.round(ctx.sampleRate * len), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.sin((Math.PI * i) / d.length);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 0.8;
+    const t = ctx.currentTime;
+    bp.frequency.setValueAtTime(up ? 500 : 1400, t);
+    bp.frequency.exponentialRampToValueAtTime(up ? 1400 : 450, t + len);
+    const g = ctx.createGain();
+    g.gain.value = 0.05;
+    src.connect(bp).connect(g).connect(this.buses.effects!);
+    src.start(t);
+  }
+
 }
 
 export const sound = new SoundEngine();

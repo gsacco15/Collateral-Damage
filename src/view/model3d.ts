@@ -331,7 +331,7 @@ export class Model3D {
     this.controls.maxDistance = 1300;
     this.controls.maxPolarAngle = 1.38;
     this.controls.minPolarAngle = 0.1;
-    this.preset('drone');
+    this.preset('drone', true);
 
     this.resize();
     const loop = () => {
@@ -359,16 +359,24 @@ export class Model3D {
     this.flyTo(t.rect.x + t.rect.w / 2, t.rect.y + t.rect.h / 2, 150);
   }
 
-  preset(name: 'drone' | 'street' | 'top') {
-    this.fly = null;
-    const f = this.getFrame();
-    const t = f ? targetOf(this.world, f.plan.target) : this.world.targets[0];
-    const target = new THREE.Vector3(t.rect.x + t.rect.w / 2, 4, t.rect.y + t.rect.h / 2 + 18);
+  /** A camera angle over the spot you're looking at now. Only the Target button (or the first view) goes to the target. */
+  preset(name: 'drone' | 'street' | 'top', atTarget = false) {
     const off = name === 'drone' ? new THREE.Vector3(-80, 110, 200) : name === 'street' ? new THREE.Vector3(-10, 14, 110) : new THREE.Vector3(0, 380, 2);
-    this.controls.target.copy(target);
-    this.camera.position.copy(target).add(off);
-    this.controls.update();
+    if (atTarget) {
+      this.fly = null;
+      const f = this.getFrame();
+      const t = f ? targetOf(this.world, f.plan.target) : this.world.targets[0];
+      const target = new THREE.Vector3(t.rect.x + t.rect.w / 2, 4, t.rect.y + t.rect.h / 2 + 18);
+      this.controls.target.copy(target);
+      this.camera.position.copy(target).add(off);
+      this.controls.update();
+      return;
+    }
+    const here = this.controls.target.clone();
+    here.y = 4;
+    this.fly = { t0: this.controls.target.clone(), t1: here, p0: this.camera.position.clone(), p1: here.clone().add(off), k: 0 };
   }
+
 
   resize() {
     const r = this.canvas.getBoundingClientRect();

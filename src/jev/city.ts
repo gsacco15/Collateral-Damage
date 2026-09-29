@@ -96,7 +96,7 @@ export interface District {
 }
 
 /** The four briefed targets, or any building by id (`b:123`). */
-export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | `b:${number}`;
+export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | `b:${number}` | `g:${number}_${number}`;
 /** In the list of ruins, the boulevard bridge (which isn't a building) once it has been dropped. */
 export const BRIDGE_RUIN = -1;
 export interface Target {
@@ -809,7 +809,29 @@ export function buildCity(seed = 7): World {
   return world;
 }
 
-export const targetOf = (w: World, id: TargetId): Target => (id.startsWith('b:') ? buildingTarget(w, Number(id.slice(2))) : w.targets.find((t) => t.id === id)!);
+export const targetOf = (w: World, id: TargetId): Target => (id.startsWith('b:') ? buildingTarget(w, Number(id.slice(2))) : id.startsWith('g:') ? groundTarget(id) : w.targets.find((t) => t.id === id)!);
+
+/** A spot on the ground as the target: a street, a yard, a square. Metres, to the nearest metre. */
+export const groundId = (x: number, y: number): TargetId => `g:${Math.round(x)}_${Math.round(y)}`;
+const grounds = new Map<string, Target>();
+function groundTarget(id: TargetId): Target {
+  let t = grounds.get(id);
+  if (t) return t;
+  const [x, y] = id.slice(2).split('_').map(Number);
+  t = {
+    id,
+    name: 'A spot on open ground',
+    short: 'Open ground',
+    note: 'A spot you picked on open ground: a vehicle, a checkpoint, a gathering. There is nothing to bring down, so a small blast is enough; but in the open, nothing shields anyone nearby either.',
+    rect: { x: x - 3, y: y - 3, w: 6, h: 6 },
+    buildingId: null,
+    hardness: 3,
+    stored: false,
+    aimHeight: 0,
+  };
+  grounds.set(id, t);
+  return t;
+}
 
 const HARDNESS: Record<Material, number> = { concrete: 9, steel: 10, brick: 7, mud: 5, tin: 3 };
 const built = new WeakMap<World, Map<number, Target>>();

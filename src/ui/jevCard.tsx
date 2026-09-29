@@ -16,7 +16,9 @@ export function JevCard({ reading, hour }: { reading: JevReply | null; hour: num
         <p className="hint">
           {reading.reason === 'no-key'
             ? 'Jev is not connected: the server has no TYPESAFE_API_KEY. The simulator is using its built-in guess of who is inside.'
-            : reading.reason === 'offline'
+            : reading.reason === 'open-ground'
+              ? 'The target is a spot on open ground, not a building, so there are no reports for Jev to read. The simulator is using its built-in guess of who is around.'
+              : reading.reason === 'offline'
               ? 'Jev is offline here (no server). The simulator is using its built-in guess of who is inside.'
               : `Jev didn't answer${reading.status ? ` (${reading.status})` : ''}. The simulator is using its built-in guess of who is inside.`}
         </p>
