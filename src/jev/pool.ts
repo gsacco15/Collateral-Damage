@@ -1,6 +1,7 @@
 // A pool of Jev workers, fed at a throttled rate you can change while it runs.
 import { buildCity } from './city';
 import type { Plan } from './effects';
+import type { IntelByHour } from './intel';
 import type { Observations } from './life';
 import { candidates, key, scoreDetailed, type Candidate, type Job, type Scored, type SearchSpace } from './search';
 import type { JobOut } from './worker';
@@ -43,6 +44,7 @@ export class JevPool {
   private doneTimes: number[] = [];
   private base: Plan | null = null;
   private obs: Observations = {};
+  private intel: IntelByHour = {};
   private seed = 7;
   results: Scored[] = [];
   total = 0;
@@ -79,10 +81,11 @@ export class JevPool {
   }
 
   /** Start or restart a search. With keep, results scored on the same assumptions are kept. */
-  start(base: Plan, obs: Observations, space: SearchSpace, seed: number, keep = false) {
+  start(base: Plan, obs: Observations, space: SearchSpace, seed: number, keep = false, intel: IntelByHour = {}) {
     this.generation++;
     this.base = base;
     this.obs = obs;
+    this.intel = intel;
     this.seed = seed;
     const all = candidates(space);
     if (!keep) this.results = [];
@@ -150,7 +153,7 @@ export class JevPool {
       if (slot.pending) continue;
       const size = n === Infinity ? 6 : Math.min(n - sent, Math.max(1, Math.ceil((n - sent) / this.slots.length)));
       const cands = this.queue.splice(0, size);
-      const msg: Job = { job: ++this.job, seed: this.seed, base: this.base!, obs: this.obs, runs: this.runs, cands };
+      const msg: Job = { job: ++this.job, seed: this.seed, base: this.base!, obs: this.obs, intel: this.intel, runs: this.runs, cands };
       slot.pending++;
       sent += cands.length;
       this.jobGen.set(msg.job, this.generation);

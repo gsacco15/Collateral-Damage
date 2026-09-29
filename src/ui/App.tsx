@@ -12,6 +12,8 @@ import {
   FUZES,
   fuze,
   inCircle,
+  intelKey,
+  intelOf,
   key,
   MATERIAL_NAME,
   partOfDay,
@@ -28,6 +30,8 @@ import {
   type DangerField,
   type Day,
   type Estimate,
+  type IntelByHour,
+  type JevReply,
   type Job,
   type Observations,
   type Place,
@@ -42,6 +46,8 @@ import { MapView, type Layers, type MapFrame, type Outcome } from '../view/map';
 import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
+import { JevCard } from './jevCard';
+import { readIntel } from './jevLive';
 import { Chip, Dial, HoldButton, Seg, SourceBars, Step } from './parts';
 
 const SEED = 7;
@@ -176,7 +182,45 @@ export default function App() {
   }, []);
   const toggleStep = (s: StepId) => setOpen((o) => new Set(o.has(s) ? [...o].filter((x) => x !== s) : [...o, s]));
 
-  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs), [world, plan.hour, plan.day, plan.watched, obs]);
+  // Jev reads the intelligence for this target and hour; the simulator then samples from its answer.
+  const [intel, setIntel] = useState<IntelByHour>({});
+  const [reading, setReading] = useState<JevReply | null>(null);
+  const intelRef = useRef(intel);
+  intelRef.current = intel;
+  const scopeKey = intelKey(plan.target, plan.hour, plan.day, plan.watched);
+  const scope = `${scopeKey.target}|${scopeKey.day}|${scopeKey.watched}`;
+  const scopeRef = useRef(scope);
+  useEffect(() => {
+    if (scopeRef.current === scope) return;
+    scopeRef.current = scope;
+    setIntel({});
+  }, [scope]);
+  useEffect(() => {
+    let alive = true;
+    const k = scopeKey;
+    setReading((r) => (r && r.ok && r.key.target === k.target && r.key.hour === k.hour && r.key.day === k.day && r.key.watched === k.watched ? r : null));
+    const id = window.setTimeout(() => {
+      readIntel(k).then((r) => {
+        if (!alive) return;
+        setReading(r);
+        if (r.ok) setIntel((m) => ({ ...m, [r.key.hour]: intelOf(r) }));
+      });
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
+  }, [scope, scopeKey.hour]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Jev's readings for a set of hours, fetched together; whatever doesn't come back is left to the built-in guess. */
+  const readHours = async (hs: number[]) => {
+    const got = await Promise.all([...new Set(hs.map((h) => Math.floor(h) % 24))].map((h) => readIntel(intelKey(plan.target, h, plan.day, plan.watched))));
+    const add: IntelByHour = {};
+    for (const r of got) if (r.ok) add[r.key.hour] = intelOf(r);
+    setIntel((m) => ({ ...m, ...add }));
+    return { ...intelRef.current, ...add };
+  };
+
+  const popNow = useMemo(() => population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24]), [world, plan.hour, plan.day, plan.watched, obs, intel]);
   const circle = useMemo(() => inCircle(world, plan, popNow), [world, plan, popNow]);
 
   // Every change reruns the estimate and the danger field.
@@ -212,20 +256,20 @@ export default function App() {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = Array.from({ length: 24 }, (_, h) => ({ weapon: plan.weapon, fuze: plan.fuze, heading: plan.heading, aim: 'custom', hour: h + 0.5 }));
       jobs.current.hours = Date.now();
-      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, runs: 150, cands };
+      const msg: Job = { job: jobs.current.hours, seed: SEED, base: plan, obs, intel, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 250);
     return () => clearTimeout(id);
-  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.weapon, plan.fuze, plan.heading, plan.aimX, plan.aimY, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const id = window.setTimeout(() => {
       const cands: Candidate[] = WEAPONS.flatMap((w) => FUZES.map((f) => ({ weapon: w.id, fuze: f.id, heading: plan.heading, aim: 'custom' as const, hour: plan.hour })));
       jobs.current.matrix = Date.now() + 1;
-      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, runs: 150, cands };
+      const msg: Job = { job: jobs.current.matrix, seed: SEED, base: plan, obs, intel, runs: 150, cands };
       sideWorker.current?.postMessage(msg);
     }, 350);
     return () => clearTimeout(id);
-  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [plan.target, plan.heading, plan.aimX, plan.aimY, plan.hour, plan.day, plan.watched, plan.hardness, plan.stored, obs, intel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!dayPlay) return;
@@ -377,8 +421,13 @@ export default function App() {
       () => lawful && pushLog(`Sweeping ${n.toLocaleString()} plans on ${pool.workers} workers, ${pool.runs} runs each.`, 'step'),
       () => {
         if (!lawful) return setPhase('idle');
-        setPhase('search');
-        pool.start(plan, obs, sp, SEED);
+        pushLog(`Asking Jev to read the intelligence for ${sp.hours.length} hours…`, 'step');
+        readHours(sp.hours).then((got) => {
+          const n = sp.hours.filter((h) => got[Math.floor(h) % 24]).length;
+          pushLog(n ? `Jev read ${n} of ${sp.hours.length} hours. The simulator samples who is inside from its answers.` : 'Jev is not connected here: the simulator uses its built-in guess of who is inside.', 'step');
+          setPhase('search');
+          pool.start(plan, obs, sp, SEED, false, got);
+        });
       },
     ];
     const gap = SPEEDS[speed] === Infinity ? 120 : Math.max(180, 1000 / Math.sqrt(SPEEDS[speed]));
@@ -394,7 +443,7 @@ export default function App() {
     if (!pool || phase !== 'search') return;
     pushLog(onlySpace ? 'Search space changed: keeping what still fits.' : 'Assumptions changed: re-scoring from scratch.', 'step');
     bestRef.current = undefined;
-    pool.start(plan, obs, space(), SEED, onlySpace);
+    pool.start(plan, obs, space(), SEED, onlySpace, intelRef.current);
   }, [assumptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const candidateAim = (c: Candidate) => (c.aim === 'custom' ? { x: plan.aimX, y: plan.aimY } : aimPoint(target, c.aim));
@@ -422,7 +471,7 @@ export default function App() {
   }
   const following = follow && !!ghostPlan && (status.running || !!peek) && !outcome && !striking;
   const shownPlan = following ? ghostPlan! : plan;
-  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow]);
+  const popShown = useMemo(() => (following ? population(world, shownPlan.hour, plan.day, plan.watched, obs, intel[Math.floor(shownPlan.hour) % 24]) : popNow), [following, shownPlan.hour, world, plan.day, plan.watched, obs, popNow, intel]);
 
   frameRef.current = {
     world,
@@ -885,6 +934,7 @@ export default function App() {
           <p className="hint">{approval.note}</p>
         </div>
       </section>
+      <JevCard reading={reading} hour={plan.hour} />
       <section className="card">
         <h3>How bad could it be?</h3>
         <p className="sub">{est.runs} runs, each with a different landing point and a different count of people.</p>

@@ -2,6 +2,7 @@
 // Time is continuous (hours as a float), so a live clock can drive it as easily as a slider.
 import { rng } from './rng';
 import type { Building, Kind, SpaceKind, World } from './city';
+import { judgedMean, type Intel } from './levels';
 
 export type Day = 'weekday' | 'friday';
 
@@ -88,6 +89,7 @@ export interface Population {
   expected: Float32Array; // people per building
   observed: Int16Array; // per building, -1 = nothing logged
   cv: number; // how uncertain the building counts are
+  judged: Intel; // Jev's reading of the reports, where it has one: the chance of each head-count level
   spaceQ: Float32Array; // share of each open space's capacity present
   streetQ: number; // chance a pavement point has someone on it
   trafficQ: [number, number]; // chance a lane point has a car: quiet streets, the boulevard
@@ -95,13 +97,15 @@ export interface Population {
 
 export type Observations = Record<number, number>;
 
-/** Who Jev expects where at this moment. Hours watched narrow the guess; logged sightings are taken as known. */
-export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}): Population {
+
+/** Who is expected where at this moment. Hours watched narrow the guess; Jev's reading of the reports replaces it; logged sightings are taken as known. */
+export function population(world: World, hour: number, day: Day, watchedHours: number, obs: Observations = {}, intel: Intel = {}): Population {
   const fri = day === 'friday' ? 1 : 0;
   const expected = new Float32Array(world.buildings.length);
   const observed = new Int16Array(world.buildings.length).fill(-1);
   for (const b of world.buildings) {
     expected[b.id] = b.capacity * curve(BUILDING[b.kind][fri], hour);
+    if (intel[b.id]) expected[b.id] = judgedMean(intel[b.id], b.capacity);
     if (obs[b.id] != null) observed[b.id] = obs[b.id];
   }
   const spaceQ = new Float32Array(world.spaces.length);
@@ -113,6 +117,7 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     expected,
     observed,
     cv: 0.75 / Math.sqrt(1 + watchedHours / 8),
+    judged: intel,
     spaceQ,
     streetQ: curve(fri ? STREET_FRI : STREET, hour),
     trafficQ: [t * 0.35, t],

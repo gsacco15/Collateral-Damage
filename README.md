@@ -17,6 +17,17 @@ npm test           # Jev's tests
 npm run build      # static site in dist/
 ```
 
+### Jev, the live model (TypeSafe)
+
+[Jev](https://docs.typesafe.ai) reads the intelligence. For the current target and hour, the page asks `/api/jev` (an edge function in `api/jev.ts`). That function builds field reports: overhead images, phone signals, an old census and, if you've watched, an observer's count. The reports disagree. It sends them to Jev with one typed **Score** question per site ("how many people are inside?") and one **Choice** ("do the sources agree?"). Jev answers with a probability for each head count. The simulator then draws from that distribution every time it replays the strike, instead of from its own built-in guess. The Estimate tab shows the reading: each judgment, its confidence, the reports and the tokens used.
+
+- **Key:** set `TYPESAFE_API_KEY` (or `JEV_API_KEY`) in Vercel → Project → Settings → Environment Variables. It never reaches the browser. Without it, the page says so and uses the built-in guess.
+- **Cost:**
+  - One call is about 600–2,200 input tokens: at the reported $0.042 per million input tokens, about $0.0001.
+  - Jev is called once per target and hour, never per simulated strike; a search asks for its 8 hours.
+  - The function only accepts a known target, hour, day and amount of watching, so there are at most 1,152 distinct readings, about $0.11 even if every one were asked. Answers are cached by Vercel's CDN for 30 days, so repeat visits are free.
+- **Code:** the request, questions and levels are in `src/jev/intel.ts` and `src/jev/levels.ts`; tests in `src/jev/intel.test.ts`.
+
 ### Deploy (Vercel)
 
 A static site: Jev runs entirely in the browser, in web workers, so there is no server to set up. In Vercel, **Add New → Project**, import this repository, and deploy; `vercel.json` sets the build (Jev's tests, then `vite build`) and the output folder. Every push then gets its own preview URL.

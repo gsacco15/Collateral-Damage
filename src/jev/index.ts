@@ -6,3 +6,4 @@ export * from './life';
 export * from './effects';
 export * from './estimate';
 export * from './search';
+export * from './intel';

@@ -3,6 +3,7 @@
 import { buildingDist, rectDist, targetOf, type Building, type World } from './city';
 import { collapse, destroys, effect, harm, occlusion, structureAt, weapon, type Effect, type Plan } from './effects';
 import type { Population } from './life';
+import { sampleJudged } from './levels';
 import { binomial, gamma, normal, poisson, rng } from './rng';
 
 export interface Estimate {
@@ -133,7 +134,9 @@ export function estimate(world: World, plan: Plan, pop: Population, runs = 400, 
       const o = pop.observed[b.id];
       const mean = pop.expected[b.id];
       let n: number;
+      const judged = pop.judged[b.id];
       if (o >= 0) n = o + poisson(r, mean * 0.08);
+      else if (judged) n = sampleJudged(r, judged, b.capacity);
       else n = mean <= 0 ? 0 : poisson(r, (mean * gamma(r, k)) / k);
       if (!n) continue;
       const same = hitB === b;
