@@ -204,6 +204,12 @@ export class Crowd {
           const rr = c.r * Math.sqrt(r());
           const wk = this.spawn('space', c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr, zone);
           wk.crowd = key;
+          // Uniforms: the police in dark blue with a cap, medics in white with a red band. Those sleeping rough
+          // in faded, dusty clothes. Everyone else as they are.
+          if (c.kind === 'security') (wk.cloth = '#2c3a55'), (wk.tint = '#2c3a55'), (wk.wear = 'cap');
+          else if (c.kind === 'medic') (wk.cloth = '#f4f2ec'), (wk.tint = '#c0392b'), (wk.wear = 'cap');
+          else if (c.kind === 'unhoused') wk.cloth = ['#8a7f70', '#6f665a', '#9a8f7a'][i % 3];
+          if (c.kind === 'unhoused' || c.kind === 'vendor' || c.kind === 'security') wk.speed *= 0.3; // mostly staying put
           this.walkers.push(wk);
         }
     }

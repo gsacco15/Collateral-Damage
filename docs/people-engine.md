@@ -46,3 +46,16 @@ questions per district and after strikes, never individuals, never the physics.
    - keyed by hour, day and bucketed events, cached by the server and CDN: each question paid for once;
    - never waited on: rules act at once, Jev's answer nudges them on arrival, with a short note on the map;
    - offline (no key, local preview): rules only.
+
+## Groups outside the usual pattern (built, Living only; `groupsOf()` in `life.ts`)
+Small counted groups with their own hours, drawn in the scene and counted by the estimate like anyone else:
+- **Sleeping rough:** under the canal bridges and in the park and square at night; round the souk and bus station by day.
+- **Street vendors:** round the souk, at the bus station, along the boulevard; a sweets seller at the school gate
+  at the start and end of the school day. Fewer at Friday prayers.
+- **Police:** checkpoints at the main bridges, officers outside the station (dark blue, caps).
+- **After a strike:** medics at the ruin for the first hours (white, red band); police hold a cordon for longer.
+  Vendors and people sleeping rough nearby move off.
+
+## Still to come
+- Armed presence as hidden truth vs Jev's reports (a design decision; not started).
+- Named characters for the new groups (a first responder, an officer, an operative) once the groups settle.

@@ -52,11 +52,13 @@ describe('After a strike (Living)', () => {
     expect(kinds).toContain('help');
     expect(kinds).toContain('gate');
     expect(kinds).toContain('hospital');
+    expect(kinds).toContain('medic');
+    expect(kinds).toContain('security');
     const school = city.buildings.find((b) => b.name === 'Cotton Street School')!;
     const before = population(city, 10.5, 'weekday', 6, {}, {}, [], true).expected[school.id];
     expect(p.expected[school.id]).toBeLessThan(before * 0.3);
     const late = population(city, 19, 'weekday', 6, {}, {}, [], true, [mark]);
-    expect(late.crowds?.length ?? 0).toBe(0);
+    expect((late.crowds ?? []).filter((x) => x.kind === 'help' || x.kind === 'gate').length).toBe(0);
   });
   it('counts the crowd at the ruin in a second strike', () => {
     const p = population(city, 10.5, 'weekday', 6, {}, {}, [], true, [mark]);
@@ -95,5 +97,16 @@ describe('Jev behaviour director', () => {
     expect(parseCity(new URLSearchParams('hour=10&day=weekday&events=drop table'))).toBeNull();
     expect((await handler(new Request('https://x.test/api/behave?kind=city&hour=99&day=weekday'))).status).toBe(400);
     expect((await handler(new Request('https://x.test/api/behave?kind=nope'))).status).toBe(400);
+  });
+});
+
+describe('Groups outside the usual pattern (Living)', () => {
+  it('sleep rough by the canal at night and sell on the street by day', () => {
+    const night = population(city, 2, 'weekday', 6, {}, {}, [], true).crowds ?? [];
+    const day = population(city, 10, 'weekday', 6, {}, {}, [], true).crowds ?? [];
+    expect(night.filter((c) => c.kind === 'unhoused').length).toBeGreaterThan(4);
+    expect(day.filter((c) => c.kind === 'vendor').length).toBeGreaterThan(3);
+    expect(night.some((c) => c.kind === 'vendor')).toBe(false);
+    expect(day.some((c) => c.kind === 'security')).toBe(true);
   });
 });

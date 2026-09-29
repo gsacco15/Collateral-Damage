@@ -1,7 +1,7 @@
 // Pattern of life: who is where, hour by hour, on a weekday or a Friday.
 // Time is continuous (hours as a float), so a live clock can drive it as easily as a slider.
 import { rng } from './rng';
-import type { Building, Kind, SpaceKind, World } from './city';
+import { riverX, type Building, type Kind, type SpaceKind, type World } from './city';
 import { judgedMean, type Intel } from './levels';
 import { living as livingOf } from './people';
 import { markKey, type AfterMood, type Behaviour, type DistrictMood } from './behave';
@@ -140,7 +140,7 @@ export interface Crowd {
   y: number;
   r: number;
   n: number;
-  kind: 'help' | 'gate' | 'hospital';
+  kind: 'help' | 'gate' | 'hospital' | 'unhoused' | 'vendor' | 'security' | 'medic';
 }
 
 
@@ -195,10 +195,13 @@ export function population(world: World, hour: number, day: Day, watchedHours: n
     if (behave) world.districts.forEach((d, i) => (streetD![i] *= behave.districts[d.id]?.street ?? 1));
   }
   const after = L && marks.length ? aftermath(world, hour, day, marks, expected, spaceQ, ruins, behave) : null;
+  // Living: the people outside the usual pattern (sleeping rough, selling on the street, on duty), in small groups.
+  const extra = L ? groupsNow(world, hour, day, after?.quiet ?? []) : [];
+  const crowds = [...(after?.crowds ?? []), ...extra];
   return {
     living: !!L,
     streetD,
-    crowds: after?.crowds,
+    crowds: L ? crowds : undefined,
     quiet: after?.quiet,
     hush: after?.hush,
     hour,
@@ -252,6 +255,13 @@ function aftermath(w: World, hour: number, day: Day, marks: Mark[], expected: Fl
     // Jev's reading of how this place responds, where it has one; otherwise the rules as they are.
     const J: AfterMood = behave?.after[markKey(w, m)] ?? { help: 1, close: 1, pickup: 1, hospital: 1, quiet: 1 };
     crowds.push({ x: m.x, y: m.y, r: 12 + 8 * m.sev, n: Math.round((10 + 45 * m.sev) * help * dayk * J.help), kind: 'help' });
+    // Those whose job it is: medics at the ruin for the first hours, police holding a cordon round it a while longer.
+    if (e >= 0.2 && e < 3) crowds.push({ x: m.x, y: m.y, r: 6, n: Math.round(4 + 6 * m.sev), kind: 'medic' });
+    if (e >= 0.2 && e < 5) for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      const rr = 30 + 12 * m.sev;
+      crowds.push({ x: m.x + Math.cos(a) * rr, y: m.y + Math.sin(a) * rr, r: 2.5, n: 2, kind: 'security' });
+    }
     quiet.push({ x: m.x, y: m.y, r: 250, k: Math.max(0.1, 1 - 0.75 * help * J.quiet) });
     hush.push({ x: m.x, y: m.y, r: 120 + 260 * help });
     const openLate = e < Math.max(1, 21 - m.hour);
@@ -339,6 +349,74 @@ function applyMoods(w: World, moods: Behaviour['districts'], expected: Float32Ar
     const a = SPACE_ACT[sp.kind];
     if (m && a) spaceQ[sp.id] = Math.min(1, spaceQ[sp.id] * m[a]);
   }
+}
+
+// ---------------------------------------------------------------- groups outside the usual pattern (Living)
+
+interface Group {
+  x: number;
+  y: number;
+  r: number;
+  kind: Crowd['kind'];
+  n: (h: number, fri: boolean) => number; // how many there at this hour
+}
+const groupCache = new WeakMap<World, Group[]>();
+const hours = (h: number, a: number, b: number) => (a <= b ? h >= a && h < b : h >= a || h < b);
+/** Where the city's fringe and its uniforms are: fixed spots with their own hours. */
+function groupsOf(w: World): Group[] {
+  const hit = groupCache.get(w);
+  if (hit) return hit;
+  const g: Group[] = [];
+  const half = w.river.width / 2;
+  // Sleeping rough: on the canal banks under the bridges at night.
+  for (const rd of w.roads) {
+    if (rd.kind !== 'bridge' || rd.name === 'Camp footbridge') continue;
+    const y = rd.rect.y + rd.rect.h / 2;
+    for (const side of [-1, 1]) g.push({ x: riverX(y) + side * (half + 3), y: y + side * 7, r: 2.5, kind: 'unhoused', n: (h) => (hours(h, 20, 7) ? 3 : 0) });
+  }
+  // By day at the edge of the souk and the bus station; at night some sleep in the park and on the square.
+  for (const sp of w.spaces) {
+    const q = sp.rect;
+    if (sp.kind === 'market') {
+      g.push({ x: q.x + 2, y: q.y + q.h + 2, r: 2, kind: 'unhoused', n: (h) => (hours(h, 8, 18) ? 2 : 0) });
+      g.push({ x: q.x + q.w - 2, y: q.y - 2, r: 2, kind: 'unhoused', n: (h) => (hours(h, 22, 6) ? 2 : 0) });
+      // Street vendors round the souk: barrows and blankets, busiest mid-morning and late afternoon.
+      for (let i = 0; i < 3; i++) g.push({ x: q.x + q.w * (0.25 + i * 0.25), y: q.y + q.h + 3, r: 1.5, kind: 'vendor', n: (h, fri) => (hours(h, 7, 19) && !(fri && hours(h, 11, 14)) ? 2 : 0) });
+    }
+    if (sp.kind === 'busstation') {
+      g.push({ x: q.x + q.w / 2, y: q.y - 2.5, r: 2, kind: 'vendor', n: (h) => (hours(h, 6, 20) ? 2 : 0) });
+      g.push({ x: q.x + 3, y: q.y + q.h + 2, r: 2, kind: 'unhoused', n: (h) => (hours(h, 7, 21) ? 2 : 1) });
+    }
+    if (sp.kind === 'park' || sp.kind === 'plaza') g.push({ x: q.x + q.w - 3, y: q.y + q.h - 3, r: 2.5, kind: 'unhoused', n: (h) => (hours(h, 21, 7) ? 2 : 0) });
+    // A sweets seller at the school gate, at the start and end of the day.
+    if (sp.kind === 'playground') g.push({ x: q.x + 4, y: q.y - 20, r: 1.2, kind: 'vendor', n: (h, fri) => (!fri && (hours(h, 7, 8.5) || hours(h, 13, 14.5)) ? 1 : 0) });
+  }
+  // Along the boulevard: a vendor every so often, by day.
+  for (const rd of w.roads) {
+    if (rd.kind !== 'boulevard') continue;
+    for (let x = rd.rect.x + 60; x < rd.rect.x + rd.rect.w - 60; x += 140) g.push({ x, y: rd.rect.y - 1.5, r: 1.2, kind: 'vendor', n: (h) => (hours(h, 7, 21) ? 1 : 0) });
+  }
+  // Police: a checkpoint at each end of the main bridges, and officers in front of the station.
+  for (const rd of w.roads) {
+    if (rd.kind !== 'bridge' || rd.name === 'Camp footbridge') continue;
+    g.push({ x: rd.rect.x - 3, y: rd.rect.y + rd.rect.h / 2, r: 2, kind: 'security', n: (h) => (hours(h, 6, 23) ? 2 : 1) });
+  }
+  const ps = w.buildings.find((b) => b.name === 'Police Station');
+  if (ps) g.push({ x: ps.cx, y: ps.rects[0].y + ps.rects[0].h + 2.5, r: 2.5, kind: 'security', n: () => 3 });
+  groupCache.set(w, g);
+  return g;
+}
+/** The groups present now. After a strike, the fringe nearby (sleeping rough, selling) moves off; the police stay. */
+function groupsNow(w: World, hour: number, day: Day, quiet: { x: number; y: number; r: number; k: number }[]): Crowd[] {
+  const h = ((hour % 24) + 24) % 24;
+  const out: Crowd[] = [];
+  for (const q of groupsOf(w)) {
+    const n = q.n(h, day === 'friday');
+    if (!n) continue;
+    if (q.kind !== 'security' && quiet.some((z) => Math.hypot(q.x - z.x, q.y - z.y) < z.r && z.k < 0.6)) continue;
+    out.push({ x: q.x, y: q.y, r: q.r, n, kind: q.kind });
+  }
+  return out;
 }
 
 /** How busy a pavement point is next to normal, given the quiet after strikes (1 = normal). */
