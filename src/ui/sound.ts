@@ -255,6 +255,13 @@ class SoundEngine {
     return { src, gain: g };
   }
 
+  /** Fetch and decode these now, so they play the moment they're asked for. */
+  preload(names: string[]) {
+    if (!this.enabled) return;
+    this.ensure();
+    for (const n of names) void this.load(n);
+  }
+
   play(cue: Cue, delay = 0, volume = VOLUME[cue] ?? 0.5) {
     if (this.quiet && cue.startsWith('jev-')) return;
     if (cue === 'jev-tick') {

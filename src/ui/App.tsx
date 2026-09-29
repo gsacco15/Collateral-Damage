@@ -273,6 +273,10 @@ export default function App() {
   // Explore: click a building to see who's inside. Target: click or drag the target onto any building.
   const [mapMode, setMapMode] = useState<'explore' | 'target'>('explore');
   const [strikeOpen, setStrikeOpen] = useState(false);
+  // Ready the strike's sounds while the decision is still open, so they land with the plane, not after it.
+  useEffect(() => {
+    if (strikeOpen) sound.preload(['aircraft-approach', 'bomb-whistle', 'impact', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
+  }, [strikeOpen]);
   // A briefed target's story, shown (and narrated) when you pick it from the top bar.
   const [story, setStory] = useState<keyof typeof TARGET_STORIES | null>(null);
   const storyTimer = useRef(0);
@@ -1512,7 +1516,8 @@ export default function App() {
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     setRuins(before);
     // The sound of it: the aircraft, the call, the impact, the stamp, then what the radio says.
-    sound.play('aircraft-approach');
+    // Timed to the plane: the aircraft is loudest as it passes over the target (~1.9 s), the whistle falls into the impact (2.6 s).
+    sound.play('aircraft-approach', 0.35);
     sound.radio('radio-04-away', 0.9);
     sound.play('bomb-whistle', 1.5);
     m.onImpact = (o) => {
