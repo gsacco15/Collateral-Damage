@@ -898,7 +898,11 @@ export class Model3D {
         const cz = q.y + q.h / 2;
         put(M.kraftWall, new THREE.CylinderGeometry(q.w * 0.42, q.w * 0.5, b.h, 12).translate(cx, b.h / 2, cz));
         put(M.kraftWall, new THREE.CylinderGeometry(q.w * 0.75, q.w * 0.75, 1, 12).translate(cx, b.h * 0.78, cz));
+        put(M.kraftWall, new THREE.CylinderGeometry(q.w * 0.62, q.w * 0.62, 0.7, 12).translate(cx, b.h * 0.5, cz));
         put(M.kraftRoof, new THREE.ConeGeometry(q.w * 0.45, 5, 12).translate(cx, b.h + 2.5, cz));
+        // A gilded finial with a crescent.
+        put(M.door5, new THREE.CylinderGeometry(0.06, 0.08, 1.6, 6).translate(cx, b.h + 5.6, cz));
+        put(M.door5, new THREE.TorusGeometry(0.4, 0.07, 5, 12, Math.PI * 1.3).rotateZ(-Math.PI * 0.15).translate(cx, b.h + 6.7, cz));
         continue;
       }
       for (const q of b.rects) {
@@ -932,7 +936,70 @@ export class Model3D {
       if (b.kind === 'mosque') {
         const q = b.rects[0];
         const rad = Math.min(q.w, q.h) * 0.36;
-        put(M.dome, new THREE.SphereGeometry(rad, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2).translate(q.x + q.w * 0.42, b.h, q.y + q.h / 2));
+        const dx = q.x + q.w * 0.42;
+        const dz = q.y + q.h / 2;
+        // The great dome on a drum with small windows, a gilded finial, and a small dome at each corner.
+        put(wallOf[p], new THREE.CylinderGeometry(rad * 1.02, rad * 1.02, 2.2, 24).translate(dx, b.h + 1.1, dz));
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          put(M.soot, boxGeo(0, 0, 0, 0.12, 1.1, 0.6).rotateY(-a).translate(dx + Math.cos(a) * rad * 1.03, b.h + 1.1, dz + Math.sin(a) * rad * 1.03));
+        }
+        put(M.dome, new THREE.SphereGeometry(rad, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2).translate(dx, b.h + 2.2, dz));
+        put(M.door5, new THREE.CylinderGeometry(0.08, 0.1, 2.4, 6).translate(dx, b.h + 2.2 + rad + 1.1, dz));
+        put(M.door5, new THREE.SphereGeometry(0.35, 10, 8).translate(dx, b.h + 2.2 + rad + 0.5, dz));
+        for (const [cx, cz] of [
+          [q.x + 3, q.y + 3],
+          [q.x + q.w - 3, q.y + 3],
+          [q.x + 3, q.y + q.h - 3],
+          [q.x + q.w - 3, q.y + q.h - 3],
+        ])
+          put(M.dome, new THREE.SphereGeometry(2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).translate(cx, b.h, cz));
+        // A green door in the middle of the courtyard side.
+        put(M.door2, boxGeo(q.x + q.w / 2, 1.6, q.y + q.h + 0.06, 2.4, 3.2, 0.12));
+        put(M.door2, new THREE.CylinderGeometry(1.2, 1.2, 0.12, 12, 1, false, 0, Math.PI).rotateX(Math.PI / 2).translate(q.x + q.w / 2, 3.2, q.y + q.h + 0.06));
+        // The arcade round the courtyard: columns and arches.
+        const court = this.world.spaces.find((s) => s.name === 'Mosque courtyard');
+        if (court) {
+          const c = court.rect;
+          const edges: [number, number, number, number][] = [
+            [c.x, c.y + c.h, c.x + c.w, c.y + c.h],
+            [c.x, c.y, c.x, c.y + c.h],
+            [c.x + c.w, c.y, c.x + c.w, c.y + c.h],
+          ];
+          for (const [x0, z0, x1, z1] of edges) {
+            const len = Math.hypot(x1 - x0, z1 - z0);
+            const n = Math.round(len / 3.2);
+            const alongX = z0 === z1;
+            for (let i = 0; i <= n; i++) {
+              const x = x0 + ((x1 - x0) * i) / n;
+              const z = z0 + ((z1 - z0) * i) / n;
+              put(M.whiteWall, new THREE.CylinderGeometry(0.18, 0.2, 3, 8).translate(x, 1.5, z));
+              if (i < n) {
+                const mx = x + (x1 - x0) / n / 2;
+                const mz = z + (z1 - z0) / n / 2;
+                put(M.whiteWall, new THREE.TorusGeometry(len / n / 2, 0.14, 4, 10, Math.PI).rotateY(alongX ? 0 : Math.PI / 2).translate(mx, 3, mz));
+              }
+            }
+            put(M.whiteWall, boxGeo((x0 + x1) / 2, 3 + len / n / 2 + 0.25, (z0 + z1) / 2, alongX ? len : 0.6, 0.5, alongX ? 0.6 : len));
+          }
+        }
+      }
+      // Tower 7: aerials and dishes on the roof, a row of water tanks, the pigeon loft, a lit stairwell, balconies with washing.
+      if (b.name === 'Tower 7') {
+        const q = b.rects[0];
+        for (let i = 0; i < 4; i++) put(M.lamp, new THREE.CylinderGeometry(0.05, 0.07, 4 + i, 4).translate(q.x + 5 + i * 9, b.h + 2 + i / 2, q.y + 3));
+        for (let i = 0; i < 3; i++) put(M.dish, new THREE.CylinderGeometry(0.7, 0.18, 0.3, 10, 1, true).rotateX(-0.9).rotateY(i * 0.7).translate(q.x + 8 + i * 12, b.h + 1.2, q.y + q.h - 3));
+        for (let i = 0; i < 5; i++) put(M.tank, new THREE.CylinderGeometry(0.8, 0.8, 1.4, 12).translate(q.x + 6 + i * 7.5, b.h + 1.3, q.y + q.h / 2));
+        put(M.wood, boxGeo(q.x + q.w - 5, b.h + 1, q.y + 5, 3.4, 2, 2.4));
+        put(this.lightMat, boxGeo(q.x + q.w / 2, b.h / 2, q.y + q.h + 0.06, 1.4, b.h - 1, 0.1));
+        const cloths = [M.clothA, M.clothB, M.clothC];
+        for (let f = 1; f < b.floors; f++)
+          for (const u of [0.18, 0.82]) {
+            const x = q.x + q.w * u;
+            put(M.whiteWall, boxGeo(x, f * 3.1, q.y + q.h + 0.6, 3.4, 0.18, 1.2));
+            put(M.rail, boxGeo(x, f * 3.1 + 0.5, q.y + q.h + 1.18, 3.4, 0.9, 0.05));
+            if ((f + (u > 0.5 ? 1 : 0)) % 3 === 0) put(cloths[f % 3], boxGeo(x, f * 3.1 + 0.55, q.y + q.h + 1.24, 2.6, 0.6, 0.02));
+          }
       }
       for (const k of b.roof) {
         if (k.kind === 'tank') {
@@ -941,7 +1008,9 @@ export class Model3D {
         } else if (k.kind === 'box') put(wallOf[p === 'tin' ? 'grey' : p], boxGeo(k.x + 1.1, b.h + 1, k.y + 0.8, 2.2, 2, 1.6));
       }
       // Lived-in roofs: a satellite dish on some homes and flats, washing on a line on others.
-      if ((b.kind === 'home' || b.kind === 'apartment') && b.rects[0].w > 7 && b.rects[0].h > 7) {
+      // Around Warehouse 14 and the school, where the story starts, the roofs are busier: more washing, more tables and chairs.
+      const nearScene = Math.hypot(b.cx - 250, b.cy - 500) < 110;
+      if ((b.kind === 'home' || b.kind === 'apartment' || (nearScene && b.kind === 'shop')) && b.rects[0].w > 7 && b.rects[0].h > 7) {
         const q = b.rects[0];
         // A front door in its own colour, on one side.
         const side = Math.floor(r() * 4);
@@ -974,7 +1043,7 @@ export class Model3D {
           }
         }
         // A table and a couple of chairs on a few flat roofs, for evenings up there.
-        if (b.kind === 'home' && p !== 'terracotta' && r() < 0.14) {
+        if ((b.kind === 'home' || nearScene) && p !== 'terracotta' && r() < (nearScene ? 0.55 : 0.14)) {
           const tx = q.x + 2 + r() * (q.w - 4);
           const tz = q.y + 2 + r() * (q.h - 4);
           r(); // (kept so the rest of the roofs stay as they were)
@@ -996,7 +1065,7 @@ export class Model3D {
           put(M.dish, new THREE.CylinderGeometry(0.55, 0.15, 0.25, 10, 1, true).rotateX(-0.9).rotateY(r() * 6).translate(dx, b.h + 1.1, dz));
           put(M.line, new THREE.CylinderGeometry(0.04, 0.04, 1, 4).translate(dx, b.h + 0.5, dz));
         }
-        if (r() < 0.14) {
+        if (r() < (nearScene ? 0.55 : 0.14)) {
           const z = q.y + q.h * (0.3 + r() * 0.4);
           const len = Math.min(q.w - 2, 4 + r() * 1.5);
           const x0 = q.x + 1 + r() * (q.w - 2 - len);

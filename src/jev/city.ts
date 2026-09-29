@@ -836,7 +836,6 @@ export function buildCity(seed = 7): World {
     ex.hoops.push({ x: yd.x + 1.2, y: yd.y + 9 });
     ex.swings.push({ x: yd.x + yd.w - 17, y: yd.y + yd.h - 7, w: 7, h: 2.4 });
     ex.slides.push({ x: yd.x + yd.w - 16, y: yd.y + 2.6, w: 1.8, h: 6 });
-    for (let x = 178, i = 0; x < 330; x += 24, i++) ex.lamps.push({ x, y: i % 2 ? 471.6 : 458.4 });
     ex.words.push({ x: 290, y: 466.2, text: 'SCHOOL' });
     // The fuel depot: Karim's tanker filling at the pump island, pipes between the tanks.
     ex.tankers.push({ x: 146, y: 648.4, w: 13, h: 3.4 });

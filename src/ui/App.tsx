@@ -715,6 +715,7 @@ export default function App() {
   // The guide doesn't run Jev live: it replays one recorded search (the warehouse, every plan) into the chart,
   // with no workers and no sound, so it loads fast and the narrator isn't competing with anything.
   const demoTimer = useRef(0);
+  const demoDone = useRef<((all: Scored[]) => void) | null>(null); // what the guide does when the recorded search finishes
   const stopDemo = () => window.clearInterval(demoTimer.current);
   const startDemo = async () => {
     stopDemo();
@@ -732,13 +733,18 @@ export default function App() {
     const all: Scored[] = rows.map(([weapon, fuze, heading, aim, hour, pk, mean, p90]) => ({ c: { weapon, fuze, heading, aim, hour }, pk, mean, p90 }));
     pushLog(`A recorded search of ${target.name}: ${all.length.toLocaleString()} plans, each replayed 120 times.`, 'step');
     let n = 0;
-    const per = Math.ceil(all.length / 80); // about eight seconds
+    const per = Math.ceil(all.length / 30); // about three seconds: quick, so the guide can move on
     demoTimer.current = window.setInterval(() => {
       n = Math.min(all.length, n + per);
       setResults(all.slice(0, n));
       setSimulated(n * 120);
       setStatus({ running: n < all.length, done: n, total: all.length, busy: n < all.length ? 4 : 0, workers: 4, rate: per * 10 });
-      if (n >= all.length) stopDemo();
+      if (n >= all.length) {
+        stopDemo();
+        const done = demoDone.current;
+        demoDone.current = null;
+        done?.(all);
+      }
     }, 100);
   };
   const runJev = () => {
@@ -1003,9 +1009,31 @@ export default function App() {
     const briefed = world.targets.find((t) => t.buildingId === bid);
     chooseTarget(briefed ? briefed.id : `b:${bid}`);
   };
+  // Two fingers on the map: pinch to zoom around the point between them, and move them to pan.
+  const fingers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d: number; zoom: number; wx: number; wy: number } | null>(null);
+  const pinchState = () => {
+    const [a, b] = [...fingers.current.values()];
+    return { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  };
   const onDown = (e: React.PointerEvent) => {
     const m = mapRef.current;
     if (!m || striking) return;
+    if (e.pointerType === 'touch') fingers.current.set(e.pointerId, localXY(e));
+    if (fingers.current.size === 2) {
+      // A second finger: stop whatever the first was doing, and start pinching.
+      drag.current = null;
+      setAimDrag(false);
+      setHeadingDrag(false);
+      setRetarget(null);
+      const s = pinchState();
+      const w = m.toWorld(s.mx, s.my);
+      pinch.current = { d: s.d, zoom: m.view.zoom, wx: w.x, wy: w.y };
+      focusRef.current = null;
+      (e.target as Element).setPointerCapture(e.pointerId);
+      return;
+    }
+    if (fingers.current.size > 2) return;
     stopTour(); // touching the map ends the guide's little tour
     const p = localXY(e);
     const w = m.toWorld(p.x, p.y);
@@ -1031,6 +1059,19 @@ export default function App() {
   const onMove = (e: React.PointerEvent) => {
     const m = mapRef.current;
     if (!m) return;
+    if (fingers.current.has(e.pointerId)) fingers.current.set(e.pointerId, localXY(e));
+    if (pinch.current && fingers.current.size >= 2) {
+      const pc = pinch.current;
+      const s = pinchState();
+      m.view.zoom = pc.zoom * (s.d / pc.d);
+      m.clampView();
+      // Keep the spot that was between the fingers under them.
+      const now = m.toWorld(s.mx, s.my);
+      m.view.cx += pc.wx - now.x;
+      m.view.cy += pc.wy - now.y;
+      m.clampView();
+      return;
+    }
     const p = localXY(e);
     const w = m.toWorld(p.x, p.y);
     const d = drag.current;
@@ -1084,6 +1125,13 @@ export default function App() {
     el.style.transform = `translate(${px + 14}px, ${py + 14}px)`;
   };
   const onUp = (e: React.PointerEvent) => {
+    fingers.current.delete(e.pointerId);
+    if (pinch.current) {
+      // Lifting a finger ends the pinch; nothing counts as a tap.
+      if (fingers.current.size < 2) pinch.current = null;
+      drag.current = null;
+      return;
+    }
     const d = drag.current;
     drag.current = null;
     setAimDrag(false);
@@ -1180,20 +1228,20 @@ export default function App() {
     setGuide(i);
     mobileTimers.current.forEach(clearTimeout);
     mobileTimers.current = [];
+    demoDone.current = null;
     if (phone && i != null && GUIDE[i].tab) {
       // On a phone the panels sit under the map: glide down to the one this step is about, then back up.
       const down = () => document.querySelector('.mobile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       const up = () => window.scrollTo({ top: 0, behavior: 'smooth' });
       const demo = !!GUIDE[i].demo;
-      mobileTimers.current = [
-        window.setTimeout(down, 2500),
-        // At Jev's step, once the search has run, try its pick, as if you'd tapped it, and go back to see it on the map.
-        ...(demo ? [window.setTimeout(() => {
-          const b = best(resultsRef.current, minPk);
+      mobileTimers.current = [window.setTimeout(down, demo ? 1200 : 2500), ...(demo ? [] : [window.setTimeout(up, 8000)])];
+      // At Jev's step: the moment the search finishes, try its pick, as if you'd tapped it, and go back up to see it on the map.
+      if (demo)
+        demoDone.current = (all) => {
+          const b = best(all, minPk);
           if (b) applyCandidate(b.c);
-        }, 12500)] : []),
-        window.setTimeout(up, demo ? 14500 : 8000),
-      ];
+          mobileTimers.current.push(window.setTimeout(up, 900));
+        };
     }
     stopDemo();
     stopTour();
