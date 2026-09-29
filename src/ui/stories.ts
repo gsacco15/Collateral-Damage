@@ -74,7 +74,7 @@ function districtAt(w: World, x: number, y: number): string {
 }
 
 /** The four briefed targets, told as the people around them. Narrated when you pick one from the top bar. */
-export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge', { title: string; text: string }> = {
+export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station', { title: string; text: string }> = {
   warehouse: {
     title: 'Warehouse 14',
     text: "Intelligence says rockets are stored inside, moved in over three nights last month, and that they could be fired from here within days. Across the street, Mrs Haddad's class of seven-year-olds is learning to count to a hundred. Round the corner, Karim is filling the fuel tanker he drives out to the villages every morning. Whatever is decided here, they are the ones who will live with it.",
@@ -86,6 +86,22 @@ export const TARGET_STORIES: Record<'warehouse' | 'tower' | 'yard' | 'bridge', {
   yard: {
     title: 'The vehicle yard',
     text: "The trucks that carry weapons to the front are said to leave from here, at night. Destroy the trucks, the reasoning goes, and fewer weapons arrive. By day it's where Yusuf's father fixes engines, and where the boys from the Workshops play football between the lorries at lunchtime. The tea seller parks his cart by the gate at eleven, every single day. At three in the morning the yard is nearly empty. At noon it isn't. The same place, two very different numbers.",
+  },
+  house: {
+    title: 'A house on Tin Hill',
+    text: "A commander is said to sleep here most nights, with his wife and three children. Next door, Fatima runs a sewing school from her front room; eight girls come every afternoon. The walls between the houses are tin. They stop nothing. He is the target. Everyone else on this lane is simply home.",
+  },
+  depot: {
+    title: 'The fuel depot',
+    text: "The report says it fuels the trucks that move weapons. It also fuels the ambulances, the bakery ovens, and the generators that keep Tin Hill's lights on. Karim fills his tanker here every morning. Four tanks of fuel: if they go up, the fire won't care who they were meant for.",
+  },
+  office: {
+    title: 'The District Office',
+    text: "On its roof, a radio mast said to relay orders to fighters in the east. Downstairs, every weekday, a queue: birth certificates, land deeds, pensions. Hana has worked the front desk for twenty-two years and knows half the city by name. Strike at night and the building is empty. Strike at ten, and the queue is out of the door.",
+  },
+  station: {
+    title: 'The bus station',
+    text: "A minibus is reported to be carrying weapons, one of the forty that leave from here every day. Students going home for the weekend. A grandmother with a crate of chickens. Drivers calling out the names of their towns. Which minibus? Nobody knows for sure. And nothing here stops a fragment.",
   },
   bridge: {
     title: 'The Boulevard Bridge',

@@ -96,7 +96,7 @@ export interface District {
 }
 
 /** The four briefed targets, or any building by id (`b:123`). */
-export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | `b:${number}` | `g:${number}_${number}`;
+export type TargetId = 'warehouse' | 'tower' | 'yard' | 'bridge' | 'house' | 'depot' | 'office' | 'station' | `b:${number}` | `g:${number}_${number}`;
 /** In the list of ruins, the boulevard bridge (which isn't a building) once it has been dropped. */
 export const BRIDGE_RUIN = -1;
 export interface Target {
@@ -709,6 +709,11 @@ export function buildCity(seed = 7): World {
 
   // ---- The targets.
   const bridge = roads.find((q) => q.kind === 'bridge' && Math.abs(q.rect.y + q.rect.h / 2 - BLVD) < 1)!;
+  // Four more, each a different kind of dilemma: a man at home, fuel everyone needs, a mast above a public office, a bus among forty.
+  const house = buildings.filter((b) => (b.kind === 'shack' || b.kind === 'home') && b.district === 'tinhill' && b.capacity > 0).sort((a, b) => Math.hypot(a.cx - 880, a.cy - 560) - Math.hypot(b.cx - 880, b.cy - 560))[0];
+  const depot = buildings.find((b) => b.name === 'Fuel Depot' && b.landmark) ?? buildings.find((b) => b.name === 'Fuel Depot')!;
+  const office = buildings.find((b) => b.name === 'District Office')!;
+  const station = spaces.find((s) => s.kind === 'busstation')!;
   const targets: Target[] = [
     {
       id: 'warehouse',
@@ -751,6 +756,50 @@ export function buildCity(seed = 7): World {
       rect: bridge.rect,
       buildingId: null,
       hardness: 19,
+      stored: false,
+      aimHeight: 0,
+    },
+    {
+      id: 'house',
+      name: 'A house on Tin Hill',
+      short: 'House',
+      note: 'A commander is said to sleep here most nights, with his family. The houses around it are tin.',
+      rect: house.rects[0],
+      buildingId: house.id,
+      hardness: 4,
+      stored: false,
+      aimHeight: house.h,
+    },
+    {
+      id: 'depot',
+      name: 'Fuel depot',
+      short: 'Fuel depot',
+      note: 'Said to fuel the trucks that move weapons. It also fuels the ambulances, the bakeries and the generators.',
+      rect: depot.rects[0],
+      buildingId: depot.id,
+      hardness: 8,
+      stored: false,
+      aimHeight: depot.h,
+    },
+    {
+      id: 'office',
+      name: 'District Office mast',
+      short: 'Office mast',
+      note: 'A radio mast on the roof is said to relay orders. Downstairs is the office everyone queues at.',
+      rect: office.rects[0],
+      buildingId: office.id,
+      hardness: 9,
+      stored: false,
+      aimHeight: office.h,
+    },
+    {
+      id: 'station',
+      name: 'Bus station',
+      short: 'Bus station',
+      note: 'A minibus is reported to carry weapons, among the forty that leave here every day.',
+      rect: station.rect,
+      buildingId: null,
+      hardness: 5,
       stored: false,
       aimHeight: 0,
     },

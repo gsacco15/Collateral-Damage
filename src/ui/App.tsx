@@ -1149,13 +1149,13 @@ export default function App() {
     const mid = (bs: { cx: number; cy: number }[]) => ({ x: bs.reduce((a, b) => a + b.cx, 0) / bs.length, y: bs.reduce((a, b) => a + b.cy, 0) / bs.length });
     const whB = wh.buildingId != null ? world.buildings[wh.buildingId] : null;
     const stops: [number, () => void][] = [];
-    if (whB) stops.push([1400, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
-    if (school) stops.push([4600, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
+    if (whB) stops.push([2800, () => (setSpotlight({ ids: [whB.id], name: 'Warehouse 14', tone: 'target' }), flyTo(whB.cx, whB.cy, 5.2))]);
+    if (school) stops.push([9200, () => (setSpotlight({ ids: [school.id], name: 'Cotton Street School', tone: 'protect' }), flyTo(school.cx, school.cy, 5.2))]);
     if (depot.length) {
       const c = mid(depot);
-      stops.push([7800, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
+      stops.push([15600, () => (setSpotlight({ ids: depot.map((b) => b.id), name: 'Fuel Depot', tone: 'hazard' }), flyTo(c.x, c.y, 4))]);
     }
-    stops.push([11000, () => (setSpotlight(null), home && flyTo(home.cx, home.cy, home.zoom))]);
+    stops.push([22000, () => (setSpotlight(null), home && flyTo(home.cx, home.cy, home.zoom))]);
     tourTimers.current = stops.map(([t, f]) => window.setTimeout(f, t));
   }
   // On the map, pan and zoom; in 3D, glide the camera there too.
