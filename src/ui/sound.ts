@@ -37,6 +37,7 @@ export type Cue =
   | 'jev-done'
   | 'hold-charge'
   | 'aircraft-approach'
+  | 'aircraft-cargo'
   | 'bomb-whistle'
   | 'impact'
   | 'impact-mega'
@@ -85,8 +86,9 @@ const VOLUME: Partial<Record<Cue, number>> = {
   'jev-read': 0.28,
   'jev-done': 0.3,
   'hold-charge': 0.5,
-  'aircraft-approach': 0.8,
-  'bomb-whistle': 0.25,
+  'aircraft-approach': 0.24,
+  'aircraft-cargo': 0.55,
+  'bomb-whistle': 0.3,
   impact: 1,
   'impact-mega': 0.75,
   aftermath: 0.6,

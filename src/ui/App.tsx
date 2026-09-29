@@ -279,7 +279,7 @@ export default function App() {
   const [strikeOpen, setStrikeOpen] = useState(false);
   // Ready the strike's sounds while the decision is still open, so they land with the plane, not after it.
   useEffect(() => {
-    if (strikeOpen) sound.preload(['aircraft-approach', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
+    if (strikeOpen) sound.preload(['aircraft-approach', 'aircraft-cargo', 'bomb-whistle', 'impact', 'impact-mega', 'stamp', 'after-0', 'after-few', 'after-some', 'after-many', 'after-mass', 'radio-04-away', 'radio-06-destroyed', 'radio-07-intact', 'radio-08-bda']);
   }, [strikeOpen]);
   // A briefed target's story, shown (and narrated) when you pick it from the top bar.
   const [story, setStory] = useState<keyof typeof TARGET_STORIES | null>(null);
@@ -1522,10 +1522,12 @@ export default function App() {
     const before = outcome && strikeRef.current ? strikeRef.current.before : ruins;
     setRuins(before);
     // The sound of it: the aircraft, the call, the impact, the stamp, then what the radio says.
-    // Timed to the plane: the aircraft is loudest as it passes over the target (~1.9 s), the whistle falls into the impact (2.6 s).
-    sound.play('aircraft-approach', 0.35);
+    // Timed to the plane: the jet is loudest as it passes over the target (~1.9 s); the falling bomb's scream peaks just
+    // before it lands (2.6 s), and the blast covers its tail. The biggest bomb comes from a slow, droning cargo plane.
+    if (mega) sound.play('aircraft-cargo', 0);
+    else sound.play('aircraft-approach', 0.65);
     sound.radio('radio-04-away', 0.9);
-    sound.play('bomb-whistle', 1.5);
+    sound.play('bomb-whistle', 1.85);
     m.onImpact = (o) => {
       setOutcome(o);
       setRuins([...new Set([...before, ...o.damaged])]);
