@@ -1900,7 +1900,6 @@ export default function App() {
                 </button>
               </div>
             )}
-            {mapMode === 'target' && view === 'map' && !striking && !outcome && <div className="hud-hint fleeting">Click anywhere to put the target there, or drag it.</div>}
 
             {!striking && !outcome && !confirm && !(phone && guide != null) && (
               <div className={`strike-dock ${strikeOpen ? 'open' : ''}`} role="group" aria-label="Decide">
