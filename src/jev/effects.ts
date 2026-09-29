@@ -23,8 +23,8 @@ export interface Weapon {
 // In order of harm: the least first, the biggest last.
 export const WEAPONS: Weapon[] = [
   // Two with no explosive at all. Illustrative numbers, like the rest; their three settings stand in for the fuzes.
-  { id: 'blades', name: 'Blade munition (R9X class)', short: 'Blades', blast: 1.5, frag: 3, cep: 1.2, kinetic: true, note: 'No explosive: just before it lands, six sword-like blades swing out. Meant to kill the one person it hits and spare the people standing near. It will not bring a building down.' },
-  { id: 'spear', name: 'Kinetic spear (tungsten rod)', short: 'Spear', blast: 5, frag: 30, cep: 2.5, kinetic: true, note: 'No explosive: a dense tungsten rod dropped from very high, faster than sound. It punches straight down; what it hits is shattered, and splinters fly out low.' },
+  { id: 'blades', name: 'Blade munition (R9X class)', short: 'Blades', blast: 1.5, frag: 3, cep: 1.2, kinetic: true, special: true, note: 'No explosive: just before it lands, six sword-like blades swing out. Meant to kill the one person it hits and spare the people standing near. It will not bring a building down.' },
+  { id: 'spear', name: 'Kinetic spear (tungsten rod)', short: 'Spear', blast: 5, frag: 30, cep: 2.5, kinetic: true, special: true, note: 'No explosive: a dense tungsten rod dropped from very high, faster than sound. It punches straight down; what it hits is shattered, and splinters fly out low.' },
   { id: 'focused', name: 'Low-collateral, dense case', short: 'Low-collateral', blast: 7, frag: 14, cep: 4, note: 'A casing that crumbles into dust, not fragments.' },
   { id: 'small', name: '250-lb small-diameter', short: '250 lb', blast: 8, frag: 45, cep: 5, note: 'Narrow body, less explosive, smaller footprint.' },
   { id: 'medium', name: '500-lb class', short: '500 lb', blast: 13, frag: 75, cep: 6, note: 'The workhorse. Enough for most buildings.' },
@@ -34,7 +34,7 @@ export const WEAPONS: Weapon[] = [
   // An 11-tonne air blast bomb. Illustrative radii: roughly where the pressure wave flattens buildings, and how far debris flies.
   { id: 'moab', name: 'Massive air blast (MOAB class)', short: 'MOAB', blast: 280, frag: 500, cep: 9, special: true, mega: true, note: 'An 11-tonne bomb pushed out of a cargo plane. Used once, on a remote tunnel complex. Never in a city: this is why.' },
 ];
-/** The weapons Jev may choose from. The biggest is only ever picked by hand. */
+/** The weapons Jev may choose from. The special ones (blades, spear, MOAB) are only ever picked by hand. */
 export const SEARCH_WEAPONS = WEAPONS.filter((w) => !w.special);
 export const weapon = (id: WeaponId) => WEAPONS.find((w) => w.id === id)!;
 

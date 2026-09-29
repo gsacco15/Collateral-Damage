@@ -976,3 +976,14 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .log-fold { margin-top: 8px; }
 .log-fold summary { font-size: 11px; color: var(--text-3); cursor: pointer; }
 .log-fold .log { max-height: 180px; }
+
+/* The special weapons: one slot at the bottom of the list, cycled with arrows. */
+.special-slot { margin-top: 6px; padding: 6px 4px 4px; border-top: 1px dashed rgba(140, 47, 34, 0.35); }
+.special-slot .k { display: block; font: 500 9.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: #8c2f22; padding: 0 4px 4px; }
+.special-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; gap: 4px; align-items: stretch; }
+.special-row .cyc { border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel-2); color: var(--text-2); font-size: 16px; cursor: pointer; padding: 0; }
+.special-row .cyc:hover { color: var(--text-1); background: var(--hi); }
+.options .special-row button.special { margin-top: 0; }
+.options .special-row .cyc { padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-2); border-radius: 8px; font: 500 16px var(--sans); color: var(--text-2); }
+.options .special-row .cyc::before { display: none; }
+.options .special-row button.special { border: 1px solid rgba(140, 47, 34, 0.3); border-radius: 9px; }

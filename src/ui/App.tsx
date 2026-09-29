@@ -182,6 +182,7 @@ export default function App() {
     setMissionState(s);
   };
   const [talk, setTalk] = useState<Talk | null>(null);
+  const [specialIdx, setSpecialIdx] = useState(0); // which special weapon the bottom slot shows
   // Dark mode: a switch at the foot of the page, remembered in this browser.
   const [dark, setDark] = useState(() => {
     try {
@@ -2012,11 +2013,10 @@ export default function App() {
           </div>
         </div>
         <div className="options">
-          {WEAPONS.map((wp) => (
+          {WEAPONS.filter((wp) => !wp.special).map((wp) => (
             <button
               key={wp.id}
-              className={`${plan.weapon === wp.id ? 'on' : ''} ${wp.special ? 'special' : ''}`}
-              title={wp.special ? 'Only by hand: Jev never considers it' : undefined}
+              className={plan.weapon === wp.id ? 'on' : ''}
               onClick={() => {
                 setPlan({ weapon: wp.id });
                 sound.play('ui-weapon');
@@ -2031,6 +2031,49 @@ export default function App() {
               </span>
             </button>
           ))}
+          {/* The special weapons share one slot at the bottom: cycle through them, click to use. Jev never picks these. */}
+          {(() => {
+            const specials = WEAPONS.filter((x) => x.special);
+            const cur = specials.find((x) => x.id === plan.weapon) ?? specials[specialIdx % specials.length];
+            const i = specials.indexOf(cur);
+            const step = (d: number) => {
+              const n = (i + d + specials.length) % specials.length;
+              setSpecialIdx(n);
+              if (plan.weapon === cur.id) setPlan({ weapon: specials[n].id });
+              sound.play('ui-weapon');
+            };
+            return (
+              <div className={`special-slot ${plan.weapon === cur.id ? 'on' : ''}`}>
+                <span className="k">
+                  Special weapons · {i + 1}/{specials.length} · only by hand
+                </span>
+                <div className="special-row">
+                  <button className="cyc" aria-label="Previous special weapon" onClick={() => step(-1)}>
+                    ‹
+                  </button>
+                  <button
+                    className={`special ${plan.weapon === cur.id ? 'on' : ''}`}
+                    title="Only by hand: Jev never considers it"
+                    onClick={() => {
+                      setPlan({ weapon: cur.id });
+                      sound.play('ui-weapon');
+                    }}
+                  >
+                    <span className="mini-origami" aria-hidden>
+                      <Origami id={cur.id} size={0.26} />
+                    </span>
+                    <b>{cur.name}</b>
+                    <span>
+                      blast {cur.blast} m · fragments {cur.frag} m · ±{cur.cep} m
+                    </span>
+                  </button>
+                  <button className="cyc" aria-label="Next special weapon" onClick={() => step(1)}>
+                    ›
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         <Seg value={plan.fuze} onChange={(f) => setPlan({ fuze: f })} options={FUZES.map((f) => [f.id, modeOf(plan.weapon, f.id).name] as [typeof f.id, string])} />
         <p className="hint">{modeOf(plan.weapon, plan.fuze).note}</p>
