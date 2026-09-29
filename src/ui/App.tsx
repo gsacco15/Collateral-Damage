@@ -131,7 +131,7 @@ function glide(y: number, ms: number) {
 }
 
 /** Seconds after impact before the verdict stamp: long enough to watch the blast, and anything it sets off, go up. */
-const stampDelay = (o: { blasts: { at: number }[] }) => (o.blasts.length ? Math.max(...o.blasts.map((b) => b.at)) + 1.5 : 1.5);
+const stampDelay = (o: { blasts: { at: number }[] }) => (o.blasts.length ? Math.max(...o.blasts.map((b) => b.at)) : 0) + 3;
 
 const loadDiscovered = () => {
   try {
@@ -2346,7 +2346,7 @@ export default function App() {
               </div>
             )}
             {outcome && (
-              <div className="outcome" style={{ animationDelay: `${stampDelay(outcome) + 1.9}s` }}>
+              <div className="outcome" style={{ animationDelay: `${stampDelay(outcome) + 2.4}s` }}>
                 <span className="k">One outcome</span>
                 <div className="big">
                   <b>{outcome.count}</b>
@@ -2361,7 +2361,7 @@ export default function App() {
                   Target {outcome.destroyed ? 'destroyed' : 'not destroyed'}. Landed {Math.round(Math.hypot(outcome.ix - plan.aimX, outcome.iy - plan.aimY))} m from the aim.
                   {outcome.secondary.length > 0 && ` Also went off: ${outcome.secondary.join(', ')}.`}
                 </p>
-                <p className="muted">Every red ring is a person in the model.</p>
+                <p className="muted rings">Every red ring on the map is a person killed or badly hurt.</p>
                 <p>The ruins stay{ruins.length > 1 ? ` (${ruins.length} buildings so far)` : ''}. Pick another target above, or click any building on the map.</p>
                 <div className="row">
                   <button className="btn primary small" onClick={endStrike} disabled={striking}>
