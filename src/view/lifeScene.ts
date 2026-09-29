@@ -32,6 +32,8 @@ export type Ent =
   | { t: 'smoke'; x: number; y: number; z: number; seed: number; strength: number; dark: number; size: number; d3?: boolean } // d3: only the 3D model draws it (the map has its own)
   | { t: 'truck'; x: number; y: number; a: number; col: string; lorry: boolean; load: string; door: string; lean: number; smoke: number } // janky: odd door, a lean, a puff of exhaust
   | { t: 'fountain'; x: number; y: number; r: number }
+  | { t: 'tarp'; x: number; y: number; a: number; col: string; size: number; mat: boolean }
+  | { t: 'beast'; kind: 'goat' | 'chicken' | 'pigeon' | 'donkey'; x: number; y: number; a: number; col: string; moving: boolean; lying: boolean; cart?: boolean }
   | { t: 'junk'; x: number; y: number; size: number; seed: number }
   | { t: 'dump'; x: number; y: number; w: number; h: number }
   | { t: 'clutter'; kind: Clutter; x: number; y: number; a: number; col: string }
@@ -72,6 +74,11 @@ interface Fixed {
   beacons: { x: number; y: number; z: number; b: Building; big: boolean }[];
   parked: { x: number; y: number; h: boolean; d: 1 | -1; col: string }[];
   scooters: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1 }[];
+  tarps: { x: number; y: number; a: number; col: string; size: number; mat: boolean; fire: boolean }[];
+  goats: { cx: number; cy: number; n: number; seed: number }[];
+  chickens: { x: number; y: number; n: number; seed: number }[];
+  pigeons: { x: number; y: number; w: number; h: number; seed: number }[];
+  donkeys: { r: Rect; h: boolean; speed: number; phase: number; dir: 1 | -1 }[];
   junk: { x: number; y: number; size: number; seed: number; smoulder: boolean }[];
   clutter: { kind: Clutter; x: number; y: number; a: number; col: string }[];
   trucks: { r: Rect; h: boolean; lane: number; speed: number; phase: number; col: string; dir: 1 | -1; lorry: boolean; load: string; door: string; lean: number }[];
@@ -366,7 +373,75 @@ function makeFixed(w: World): Fixed {
   for (const [x, y] of [[1020, 300], [1030, 480], [1015, 820], [60, 880], [480, 885], [300, 868]]) {
     if (!buildingAt(w, x, y) && !onRoad(x, y)) junk.push({ x, y, size: 2.2 + r() * 1.6, seed: r() * 1000, smoulder: r() < 0.4 });
   }
+  // Makeshift shelters of blue tarp over a pole, a mat or flattened cardboard under them: on the canal banks under
+  // the bridges, along the edge of the landfill, on waste ground at the edges of Tin Hill and the camp.
+  const tarps: Fixed['tarps'] = [];
+  const free = (x: number, y: number) => !buildingAt(w, x, y) && !onRoad(x, y) && !w.spaces.some((sp) => inRect(sp.rect, x, y));
+  const tarpCol = () => (r() < 0.7 ? ['#2f6fb0', '#3a82c4', '#255a93'][Math.floor(r() * 3)] : ['#6f7a5a', '#8a7a5c', '#9aa0a3'][Math.floor(r() * 3)]);
+  const halfW = w.river.width / 2;
+  for (const by of [115, 350, 580]) {
+    for (const side of [-1, 1]) {
+      const x = riverX(by) + side * (halfW + 2.5);
+      for (const dy of [-9, 9]) tarps.push({ x, y: by + dy, a: Math.PI / 2, col: tarpCol(), size: 0.9 + r() * 0.3, mat: true, fire: r() < 0.5 });
+    }
+  }
+  for (let i = 0; i < 9; i++) {
+    const a = r() * Math.PI * 2;
+    const x = 1110 + Math.cos(a) * 68;
+    const y = 610 + Math.sin(a) * 58;
+    if (free(x, y)) tarps.push({ x, y, a: a + Math.PI / 2, col: tarpCol(), size: 1 + r() * 0.4, mat: r() < 0.6, fire: r() < 0.4 });
+  }
+  const edge = w.buildings.filter((b) => b.district === 'tinhill' || b.district === 'camp');
+  for (let i = 0; i < 60 && tarps.length < 40; i++) {
+    const b = edge[Math.floor(r() * edge.length)];
+    const a = r() * Math.PI * 2;
+    const x = b.cx + Math.cos(a) * 9;
+    const y = b.cy + Math.sin(a) * 9;
+    if (free(x, y) && free(x + 2, y) && free(x - 2, y)) tarps.push({ x, y, a: r() * Math.PI, col: tarpCol(), size: 0.8 + r() * 0.4, mat: r() < 0.5, fire: r() < 0.2 });
+  }
+  // Strays and the animals people keep: goats wandering the waste ground, hens scratching by the Tin Hill and camp
+  // homes, pigeons on the squares, a few donkeys pulling carts through the older streets; and more dogs, in packs.
+  const goats: Fixed['goats'] = [
+    { cx: 960, cy: 600, n: 6, seed: 1 },
+    { cx: 1090, cy: 680, n: 5, seed: 2 },
+    { cx: 930, cy: 830, n: 7, seed: 3 },
+    { cx: 1030, cy: 470, n: 4, seed: 4 },
+  ];
+  const chickens: Fixed['chickens'] = [];
+  for (let i = 0; i < 40 && chickens.length < 14; i++) {
+    const b = edge[Math.floor(r() * edge.length)];
+    const x = b.rects[0].x + b.rects[0].w + 2;
+    const y = b.cy;
+    if (free(x, y)) chickens.push({ x, y, n: 3 + Math.floor(r() * 4), seed: r() * 100 });
+  }
+  const pigeons: Fixed['pigeons'] = w.spaces.filter((sp) => sp.kind === 'plaza' || sp.kind === 'market' || sp.kind === 'courtyard').map((sp) => ({ ...sp.rect, seed: sp.id }));
+  const old = w.roads.filter((rd) => rd.kind === 'street' && rd.rect.x > 470 && rd.rect.x < 1006 && Math.max(rd.rect.w, rd.rect.h) > 60);
+  const donkeys: Fixed['donkeys'] = pickN(old, 4).map((rd) => ({ r: rd.rect, h: rd.rect.w > rd.rect.h, speed: 1 + r() * 0.5, phase: r() * 1000, dir: (r() < 0.5 ? 1 : -1) as 1 | -1 }));
+  // More dogs: packs of two or three sharing a route, a little apart.
+  for (const rd of pickN(streets, 7)) {
+    const s2 = rd.rect;
+    const along = s2.w > s2.h;
+    const len = 40 + r() * 50;
+    const x0 = along ? s2.x + r() * Math.max(1, s2.w - len) : s2.x + s2.w * 0.5;
+    const y0 = along ? s2.y + s2.h * 0.5 : s2.y + r() * Math.max(1, s2.h - len);
+    const speed = 0.9 + r() * 0.6;
+    const phase = r() * 100;
+    for (let k = 0; k < 2 + Math.floor(r() * 2); k++) dogs.push({ x0: x0 + (along ? -k * 1.6 : k * 0.8), y0: y0 + (along ? k * 0.8 : -k * 1.6), x1: (along ? x0 + len : x0) + (along ? -k * 1.6 : k * 0.8), y1: (along ? y0 : y0 + len) + (along ? k * 0.8 : -k * 1.6), col: ['#b89a6a', '#6b5a48', '#d8c8a8', '#2f2a26', '#a07a4a'][Math.floor(r() * 5)], speed, phase });
+  }
+  // And cats down at street level: round the skips and the junk, by the souk.
+  for (let i = 0; i < 18; i++) {
+    const b = w.buildings[Math.floor(r() * w.buildings.length)];
+    if (!(b.district === 'market' || b.district === 'oldtown' || b.district === 'quarter' || b.district === 'tinhill')) continue;
+    const x = b.rects[0].x - 0.8;
+    const y = b.cy + (r() - 0.5) * 4;
+    if (free(x, y)) cats.push({ x, y, a: r() * 6, col: ['#e3d6c0', '#2c2a2a', '#c07a3a', '#8d8d8a', '#f4f2ec'][i % 5], z: 0 });
+  }
   return {
+    tarps,
+    goats,
+    chickens,
+    pigeons,
+    donkeys,
     junk,
     clutter,
     trucks,
@@ -690,6 +765,51 @@ export function lifeScene(c: SceneCtx): Ent[] {
     if (!far(x, y) || onBroken(x, y)) return;
     out.push({ t: 'truck', x, y, a: s.h ? (s.dir > 0 ? 0 : Math.PI) : s.dir > 0 ? Math.PI / 2 : -Math.PI / 2, col: s.col, lorry: s.lorry, load: s.load, door: s.door, lean: s.lean + Math.sin(t * 5 + i) * 0.012, smoke: (t * 1.3 + i * 0.37) % 1 });
   });
+  // Shelters, and the people living in them: sitting out by day, a small fire by some at night.
+  F.tarps.forEach((tp, i) => {
+    if (!far(tp.x, tp.y)) return;
+    out.push({ t: 'tarp', x: tp.x, y: tp.y, a: tp.a, col: tp.col, size: tp.size, mat: tp.mat });
+    const ox = Math.cos(tp.a) * 2.2;
+    const oy = Math.sin(tp.a) * 2.2;
+    if (i % 2 === 0) out.push({ t: 'person', x: tp.x + ox, y: tp.y + oy, face: tp.a + Math.PI, id: 400 + i, sit: true, smoke: !day && i % 4 === 0 });
+    if (tp.fire && !day) out.push({ t: 'fire', x: tp.x + ox * 1.6, y: tp.y + oy * 1.6, size: 0.5, flicker: Math.sin(t * 9 + i) * 0.5 + Math.sin(t * 13 + i * 3) * 0.5 });
+  });
+  // The animals.
+  for (const gh of F.goats)
+    for (let k = 0; k < gh.n; k++) {
+      const a = t * 0.012 * (k % 2 ? 1 : -1) + k * 1.3 + gh.seed;
+      const rr = 3 + ((k * 7 + gh.seed) % 6);
+      const x = gh.cx + Math.cos(a) * rr + Math.sin(t * 0.05 + k) * 1.5;
+      const y = gh.cy + Math.sin(a) * rr * 0.7;
+      if (far(x, y)) out.push({ t: 'beast', kind: 'goat', x, y, a: a + Math.PI / 2, col: ['#f4f2ec', '#3a3430', '#8a6a4a', '#d8c8a8'][(k + gh.seed) % 4], moving: day && k % 3 !== 0, lying: !day });
+    }
+  if (h >= 5.5 && h < 19.5)
+    for (const ch of F.chickens)
+      for (let k = 0; k < ch.n; k++) {
+        const x = ch.x + Math.sin(t * 0.7 + k * 2.1 + ch.seed) * 1.6 + k * 0.4;
+        const y = ch.y + Math.cos(t * 0.5 + k * 1.7 + ch.seed) * 1.4;
+        if (far(x, y)) out.push({ t: 'beast', kind: 'chicken', x, y, a: t * 2 + k, col: k === 0 ? '#c0703a' : ['#f4f2ec', '#a0643a', '#e8dcc0'][k % 3], moving: true, lying: false });
+      }
+  if (day)
+    for (const pg of F.pigeons) {
+      const n = Math.min(16, Math.round((pg.w * pg.h) / 180));
+      for (let k = 0; k < n; k++) {
+        const x = pg.x + (((k * 37 + pg.seed * 13) % 100) / 100) * pg.w + Math.sin(t * 0.9 + k) * 0.5;
+        const y = pg.y + (((k * 61 + pg.seed * 7) % 100) / 100) * pg.h + Math.cos(t * 0.8 + k) * 0.5;
+        if (far(x, y)) out.push({ t: 'beast', kind: 'pigeon', x, y, a: t + k, col: k % 5 ? '#8a8a92' : '#d8d4cc', moving: true, lying: false });
+      }
+    }
+  if (h >= 6 && h < 19)
+    F.donkeys.forEach((dk) => {
+      const len = dk.h ? dk.r.w : dk.r.h;
+      const u = (((t * dk.speed + dk.phase) % len) + len) % len;
+      const along = dk.dir > 0 ? u : len - u;
+      const x = dk.h ? dk.r.x + along : dk.r.x + dk.r.w / 2 + 2 * dk.dir;
+      const y = dk.h ? dk.r.y + dk.r.h / 2 - 2 * dk.dir : dk.r.y + along;
+      if (!far(x, y) || onBroken(x, y)) return;
+      const a = dk.h ? (dk.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dk.dir > 0 ? Math.PI : 0;
+      out.push({ t: 'beast', kind: 'donkey', x, y, a, col: '#8a8078', moving: true, lying: false, cart: true });
+    });
   // The landfill: its trodden ground, the heaps, smoke from the ones burning, people picking it over by day, dogs.
   out.push({ t: 'dump', x: 1050, y: 560, w: 120, h: 100 });
   F.junk.forEach((j, i) => {

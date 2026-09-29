@@ -562,6 +562,72 @@ function junk2d(g: CanvasRenderingContext2D, x: number, y: number, s: number, se
   }
 }
 
+/** Goats, hens, pigeons and a donkey with its cart, from above, a little larger than life like everything alive. */
+function beast2d(g: CanvasRenderingContext2D, e: Extract<Ent, { t: 'beast' }>, t: number) {
+  g.save();
+  g.translate(e.x, e.y);
+  g.rotate(e.a);
+  const k = e.kind === 'donkey' ? 1.7 : e.kind === 'goat' ? 1.6 : 1.8;
+  g.scale(k, k);
+  g.fillStyle = 'rgba(40,30,20,0.2)';
+  if (e.kind === 'goat') {
+    g.beginPath();
+    g.ellipse(0.2, 0.2, e.lying ? 0.3 : 0.24, 0.45, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = e.col;
+    g.beginPath();
+    g.ellipse(0, 0, e.lying ? 0.3 : 0.22, 0.42, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(0, -0.5, 0.12, 0.18, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#5a5048';
+    g.lineWidth = 0.05;
+    g.beginPath();
+    g.moveTo(-0.07, -0.6);
+    g.lineTo(-0.14, -0.72);
+    g.moveTo(0.07, -0.6);
+    g.lineTo(0.14, -0.72);
+    g.stroke();
+  } else if (e.kind === 'chicken') {
+    g.fillStyle = e.col;
+    g.beginPath();
+    g.ellipse(0, 0.04 + Math.sin(t * 8 + e.x) * 0.02, 0.12, 0.17, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#c23b2e';
+    g.fillRect(-0.03, -0.18, 0.06, 0.06);
+  } else if (e.kind === 'pigeon') {
+    g.fillStyle = e.col;
+    g.beginPath();
+    g.ellipse(0, 0, 0.08, 0.13, 0, 0, Math.PI * 2);
+    g.fill();
+  } else {
+    // A donkey and the cart behind it, loaded with gas bottles or greens, and whoever is walking beside it.
+    g.fillStyle = '#8a6a48';
+    g.fillRect(-0.55, 0.55, 1.1, 1.2);
+    g.fillStyle = '#6f8f4a';
+    g.fillRect(-0.45, 0.65, 0.9, 1);
+    g.strokeStyle = '#3a2e28';
+    g.lineWidth = 0.05;
+    g.beginPath();
+    g.moveTo(-0.2, 0.55);
+    g.lineTo(-0.15, 0.1);
+    g.moveTo(0.2, 0.55);
+    g.lineTo(0.15, 0.1);
+    g.stroke();
+    g.fillStyle = e.col;
+    g.beginPath();
+    g.ellipse(0, -0.05, 0.18, 0.38, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(0, -0.5, 0.1, 0.16, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillRect(-0.08, -0.68, 0.04, 0.12);
+    g.fillRect(0.04, -0.68, 0.04, 0.12);
+  }
+  g.restore();
+}
+
 const turn = (h: boolean, dir: 1 | -1) => (h ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** Small flames over a fire pit or an oil drum, with their glow. */
@@ -623,6 +689,33 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
       g.moveTo(1004, 614);
       g.quadraticCurveTo(1030, 608, e.x + 10, e.y + e.h / 2 + 4);
       g.stroke();
+    } else if (e.t === 'tarp') {
+      // A blue tarp over a ridge pole, seen from above: two faces, one catching the light, a sag along the middle.
+      g.save();
+      g.translate(e.x, e.y);
+      g.rotate(e.a);
+      g.scale(e.size, e.size);
+      if (e.mat) {
+        g.fillStyle = '#b89a6a';
+        g.fillRect(-1.6, -1.2, 3.4, 2.6);
+      }
+      g.fillStyle = 'rgba(40,30,20,0.25)';
+      g.fillRect(-1.3 + 0.5, -1 + 0.5, 2.6, 2.2);
+      g.fillStyle = e.col;
+      g.fillRect(-1.3, -1, 2.6, 1.05);
+      g.fillStyle = 'rgba(0,0,0,0.18)';
+      g.fillRect(-1.3, 0.05, 2.6, 1.05);
+      g.fillStyle = e.col;
+      g.globalAlpha = 0.82;
+      g.fillRect(-1.3, 0.05, 2.6, 1.05);
+      g.globalAlpha = 1;
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.lineWidth = 0.08;
+      g.beginPath();
+      g.moveTo(-1.3, 0.02);
+      g.quadraticCurveTo(0, 0.18, 1.3, 0.02);
+      g.stroke();
+      g.restore();
     } else if (e.t === 'junk') junk2d(g, e.x, e.y, e.size, e.seed);
     else if (e.t === 'car' && d.traffic) d.car(e.x, e.y, e.h, e.dir, e.col);
     else if (e.t === 'clutter' && d.traffic) clutter2d(g, e);
@@ -881,6 +974,9 @@ export function drawLife2D(g: CanvasRenderingContext2D, ents: Ent[], d: Draw2D) 
         break;
       case 'swan':
         if (d.animals) swan(g, e.x, e.y, e.a, t);
+        break;
+      case 'beast':
+        if (d.animals) beast2d(g, e, t);
         break;
       case 'dog':
         if (d.animals) dog(g, e.x, e.y, e.a, e.col, t + e.x, e.moving, e.lying);

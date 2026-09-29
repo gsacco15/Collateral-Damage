@@ -131,6 +131,26 @@ export class Life3D {
     add('c_bougain', mergeGeometries([new THREE.IcosahedronGeometry(1, 1).scale(1.7, 1.1, 0.55).translate(0, 1.9, 0).toNonIndexed(), new THREE.IcosahedronGeometry(0.7, 0).scale(1.2, 0.9, 0.5).translate(0.9, 1.1, 0).toNonIndexed()])!, std(), 120);
     add('t_door', box(1.6, 1.0, 1.06, 0.95, 0.9, 0.04), std({ roughness: 0.7 }), 16, false);
     add('t_load', mergeGeometries([box(-1.6, 1.6, -0.5, 1.1, 1.0, 1.1), box(-0.5, 1.7, 0.45, 1.1, 1.2, 1.1), box(-1.5, 2.4, 0.3, 1.0, 0.6, 1.4), box(-0.4, 1.5, -0.6, 1.0, 0.8, 1.0)])!, std(), 16);
+    // Tarp shelters: an A-frame of blue sheet over a ridge, with a mat under it.
+    {
+      const p: number[] = [];
+      const L = 1.4;
+      const W = 1.15;
+      const H = 1.15;
+      const tri = (a: number[], b: number[], c: number[]) => p.push(...a, ...b, ...c);
+      tri([-L, 0, -W], [L, 0, -W], [L, H, 0]), tri([-L, 0, -W], [L, H, 0], [-L, H - 0.15, 0]);
+      tri([-L, 0, W], [L, H, 0], [L, 0, W]), tri([-L, 0, W], [-L, H - 0.15, 0], [L, H, 0]);
+      const tg = new THREE.BufferGeometry();
+      tg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+      tg.computeVertexNormals();
+      add('tarp', tg, std({ side: THREE.DoubleSide, roughness: 0.6 }), 60);
+      add('tarpmat', box(0, 0.03, 0, 3.4, 0.05, 2.6), std({ color: '#b89a6a' }), 60, false);
+    }
+    add('goat', mergeGeometries([box(0, 0.55, 0, 0.34, 0.36, 0.8), box(0, 0.8, -0.5, 0.2, 0.26, 0.3), box(-0.1, 0.25, -0.28, 0.08, 0.5, 0.08), box(0.1, 0.25, -0.28, 0.08, 0.5, 0.08), box(-0.1, 0.25, 0.28, 0.08, 0.5, 0.08), box(0.1, 0.25, 0.28, 0.08, 0.5, 0.08), box(-0.06, 1.0, -0.48, 0.04, 0.2, 0.04), box(0.06, 1.0, -0.48, 0.04, 0.2, 0.04)])!, std(), 40);
+    add('chicken', mergeGeometries([new THREE.SphereGeometry(0.16, 6, 5).scale(1, 0.9, 1.3).translate(0, 0.22, 0).toNonIndexed(), new THREE.SphereGeometry(0.08, 5, 4).translate(0, 0.38, -0.15).toNonIndexed()])!, std(), 90, false);
+    add('pigeon', new THREE.SphereGeometry(0.09, 5, 4).scale(1, 0.8, 1.5).translate(0, 0.09, 0), std(), 200, false);
+    add('donkey', mergeGeometries([box(0, 0.9, 0, 0.42, 0.5, 1.1), box(0, 1.25, -0.7, 0.26, 0.34, 0.46), box(-0.14, 0.4, -0.4, 0.1, 0.8, 0.1), box(0.14, 0.4, -0.4, 0.1, 0.8, 0.1), box(-0.14, 0.4, 0.4, 0.1, 0.8, 0.1), box(0.14, 0.4, 0.4, 0.1, 0.8, 0.1), box(-0.08, 1.55, -0.62, 0.05, 0.25, 0.05), box(0.08, 1.55, -0.62, 0.05, 0.25, 0.05)])!, std(), 8);
+    add('cart', mergeGeometries([box(0, 0.75, 1.6, 1.3, 0.12, 1.6), box(0, 0.95, 1.6, 1.2, 0.3, 1.5), new THREE.CylinderGeometry(0.45, 0.45, 0.1, 10).rotateZ(Math.PI / 2).translate(0.7, 0.45, 1.6).toNonIndexed(), new THREE.CylinderGeometry(0.45, 0.45, 0.1, 10).rotateZ(Math.PI / 2).translate(-0.7, 0.45, 1.6).toNonIndexed(), box(-0.25, 0.8, 0.5, 0.05, 0.05, 1), box(0.25, 0.8, 0.5, 0.05, 0.05, 1)])!, std({ color: '#8a6a48' }), 8);
     // Junk heaps: a lumpy mound, and bits sticking out of it (sheets, a tyre, a crate, a bottle).
     add('j_mound', new THREE.IcosahedronGeometry(1, 1).scale(1, 0.45, 0.85).translate(0, 0.2, 0), std(), 80);
     add('j_bit', box(0, 0, 0, 0.9, 0.12, 0.6), std({ roughness: 0.7 }), 1800, false);
@@ -346,6 +366,21 @@ export class Life3D {
               this.put('drop', e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, 2.8 + Math.sin(u * Math.PI) * 3.2 - u * 2, 0, 1, 1, 1);
             }
           if (night > 0.3) this.put('dpool', e.x, e.y, 0.95, 0, 7, 1, 7, '#cfe6ff');
+          break;
+        }
+        case 'tarp':
+          if (e.mat) this.put('tarpmat', e.x, e.y, 0, -e.a, e.size, 1, e.size);
+          this.put('tarp', e.x, e.y, 0, -e.a, e.size, e.size, e.size, e.col);
+          break;
+        case 'beast': {
+          const yaw = -e.a;
+          if (e.kind === 'goat') this.put('goat', e.x, e.y, 0, yaw, 1.5, e.lying ? 0.55 : 1.5, 1.5, e.col);
+          else if (e.kind === 'chicken') this.put('chicken', e.x, e.y, 0, yaw, 1.6, 1.6, 1.6, e.col);
+          else if (e.kind === 'pigeon') this.put('pigeon', e.x, e.y, 0, yaw, 1.6, 1.6, 1.6, e.col);
+          else {
+            this.put('donkey', e.x, e.y, 0, yaw, 1.5, 1.5, 1.5, e.col);
+            this.put('cart', e.x, e.y, 0, yaw, 1.5, 1.5, 1.5);
+          }
           break;
         }
         case 'dump':
