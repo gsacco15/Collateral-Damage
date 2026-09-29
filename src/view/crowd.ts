@@ -3,26 +3,25 @@ import { rng, shownCount, type Building, type Population, type Rect, type World 
 import { CLOTH, SKIN } from './paper';
 
 // What people wear, seen from above, very simply. Head: bare, a white prayer cap, a red-checked keffiyeh, a plain
-// white ghutra, a turban, a hijab, a patterned shawl, a black abaya and niqab, a straw hat, a baseball cap.
-export type Wear = 'bare' | 'cap' | 'keffiyeh' | 'ghutra' | 'turban' | 'hijab' | 'shawl' | 'abaya' | 'straw' | 'ballcap';
+// white ghutra, a turban, a hijab, a patterned shawl, a black abaya and niqab, a burqa covering head to foot.
+export type Wear = 'bare' | 'cap' | 'keffiyeh' | 'ghutra' | 'turban' | 'hijab' | 'shawl' | 'abaya' | 'burqa';
 const WEARS: [Wear, number][] = [
-  ['bare', 0.2],
-  ['cap', 0.09],
+  ['bare', 0.13],
+  ['cap', 0.08],
   ['keffiyeh', 0.1],
-  ['ghutra', 0.07],
-  ['turban', 0.08],
-  ['hijab', 0.17],
-  ['shawl', 0.07],
-  ['abaya', 0.12],
-  ['straw', 0.04],
-  ['ballcap', 0.06],
+  ['ghutra', 0.08],
+  ['turban', 0.15],
+  ['hijab', 0.2],
+  ['shawl', 0.08],
+  ['abaya', 0.1],
+  ['burqa', 0.08],
 ];
 // Thobes and dishdashas: white, cream, grey, brown. Dresses: deeper colours. Turbans, hijabs and caps: their own.
 const THOBE = ['#f1ede4', '#e6dfd1', '#cfc8ba', '#9a958c', '#6f5e4b'];
 const DRESS = ['#7a2e3a', '#2e5e63', '#3a4a6b', '#6b6a3a', '#a8742c', '#5a3a5e', '#2f2c29', '#8a5a44'];
 const TURBAN = ['#f1ede4', '#1f1d22', '#3c4f8a', '#c9832a', '#7a1f2a', '#e7e1d4'];
 const SCARF = ['#5b6d80', '#8b3a2e', '#2e5e63', '#d6c3a0', '#6b4a6e', '#c98a6a', '#1f1d22', '#9aa37a'];
-const CAPS = ['#1f3b6b', '#8b2a2a', '#2f2c29', '#e7e1d4', '#3f6b3a'];
+const BURQA = ['#3f6fa8', '#5b86b8', '#2f2c33', '#6a6a70', '#4a5d3f'];
 const pickWear = (u: number): Wear => {
   for (const [w, p] of WEARS) {
     if (u < p) return w;
@@ -99,8 +98,9 @@ export class Crowd {
     const wear = pickWear(r());
     const any = (xs: string[]) => xs[Math.floor(r() * xs.length)];
     const robe = wear === 'keffiyeh' || wear === 'ghutra' || wear === 'cap' || (wear === 'turban' && r() < 0.6);
-    const cloth = wear === 'abaya' ? '#1c1a1d' : robe && r() < 0.8 ? any(THOBE) : wear === 'hijab' || wear === 'shawl' ? any(DRESS) : any(CLOTH);
-    const tint = wear === 'turban' ? any(TURBAN) : wear === 'hijab' || wear === 'shawl' ? any(SCARF) : wear === 'ballcap' ? any(CAPS) : '#f2eee6';
+    const burqa = any(BURQA);
+    const cloth = wear === 'abaya' ? '#1c1a1d' : wear === 'burqa' ? burqa : robe && r() < 0.8 ? any(THOBE) : wear === 'hijab' || wear === 'shawl' ? any(DRESS) : any(CLOTH);
+    const tint = wear === 'turban' ? any(TURBAN) : wear === 'hijab' || wear === 'shawl' ? any(SCARF) : wear === 'burqa' ? burqa : '#f2eee6';
     return {
       id: this.nextId++,
       x,

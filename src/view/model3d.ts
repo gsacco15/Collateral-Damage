@@ -252,7 +252,6 @@ export class Model3D {
   private people: THREE.InstancedMesh;
   private heads: THREE.InstancedMesh;
   private wraps: THREE.InstancedMesh; // scarves, turbans, keffiyehs, caps: what's on their heads
-  private brims: THREE.InstancedMesh; // straw hats and cap peaks
   private rings: THREE.InstancedMesh;
   private carBodies: THREE.InstancedMesh;
   private litMats: THREE.MeshStandardMaterial[] = [];
@@ -306,11 +305,9 @@ export class Model3D {
     this.heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ roughness: 0.8 }), 1600);
     const wrapGeo = new THREE.SphereGeometry(0.3, 8, 6);
     this.wraps = new THREE.InstancedMesh(wrapGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), 1600);
-    const brimGeo = new THREE.CylinderGeometry(1, 1, 0.04, 12);
-    this.brims = new THREE.InstancedMesh(brimGeo, new THREE.MeshStandardMaterial({ roughness: 0.95 }), 800);
     const carGeo = mergeGeometries([boxGeo(0, 0.55, 0, 4.2, 1.1, 1.9), boxGeo(-0.3, 1.35, 0, 2.2, 0.6, 1.7)])!;
     this.carBodies = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ roughness: 0.6 }), 400);
-    for (const m of [this.people, this.heads, this.wraps, this.brims, this.carBodies]) {
+    for (const m of [this.people, this.heads, this.wraps, this.carBodies]) {
       m.castShadow = true;
       m.count = 0;
       m.frustumCulled = false;
@@ -476,6 +473,12 @@ export class Model3D {
       fuel: new THREE.MeshStandardMaterial({ color: '#f3f1ec', roughness: 0.5, metalness: 0.1 }),
       wall: new THREE.MeshStandardMaterial({ color: '#ece6da', roughness: 1 }),
       stand: new THREE.MeshStandardMaterial({ color: '#c9c4bb', roughness: 1, flatShading: true }),
+      dish: new THREE.MeshStandardMaterial({ color: '#ecebe6', roughness: 0.6, side: THREE.DoubleSide }),
+      line: new THREE.MeshStandardMaterial({ color: '#6a6258', roughness: 1 }),
+      clothA: new THREE.MeshStandardMaterial({ color: '#b8574a', roughness: 1, side: THREE.DoubleSide }),
+      clothB: new THREE.MeshStandardMaterial({ color: '#e9e4d8', roughness: 1, side: THREE.DoubleSide }),
+      clothC: new THREE.MeshStandardMaterial({ color: '#4f7291', roughness: 1, side: THREE.DoubleSide }),
+      lamp: new THREE.MeshStandardMaterial({ color: '#4d4a46', roughness: 0.6, metalness: 0.3 }),
     };
     this.litMats = [this.mats.whiteWall, this.mats.greyWall, this.mats.kraftWall, this.mats.terracottaWall] as THREE.MeshStandardMaterial[];
     this.buildBuildings(new Set());
@@ -485,6 +488,25 @@ export class Model3D {
     const wm = new THREE.Mesh(walls, this.mats.wall);
     wm.castShadow = wm.receiveShadow = true;
     s.add(wm);
+
+    // Street lamps down the boulevard's median.
+    const lamps: THREE.BufferGeometry[] = [];
+    for (const rd of w.roads) {
+      if (rd.kind !== 'boulevard') continue;
+      const q = rd.rect;
+      const z = q.y + q.h / 2;
+      for (let x = q.x + 12; x < q.x + q.w - 6; x += 26) {
+        lamps.push(new THREE.CylinderGeometry(0.1, 0.14, 6, 5).translate(x, 3, z));
+        lamps.push(boxGeo(x, 6, z, 0.12, 0.12, 2.4));
+        lamps.push(boxGeo(x, 5.9, z - 1.2, 0.35, 0.18, 0.5));
+        lamps.push(boxGeo(x, 5.9, z + 1.2, 0.35, 0.18, 0.5));
+      }
+    }
+    if (lamps.length) {
+      const lm = new THREE.Mesh(mergeGeometries(lamps.map((g) => (g.index ? g.toNonIndexed() : g)))!, this.mats.lamp);
+      lm.castShadow = true;
+      s.add(lm);
+    }
 
     // Trees: crumpled paper balls, palms, cypresses.
     const crowns: THREE.BufferGeometry[] = [];
@@ -647,6 +669,26 @@ export class Model3D {
           put(M.tank, new THREE.CylinderGeometry(0.9, 0.9, 1.5, 12).translate(k.x, b.h + 1.5, k.y));
           put(M.tank, boxGeo(k.x, b.h + 0.4, k.y, 1.2, 0.8, 1.2));
         } else if (k.kind === 'box') put(wallOf[p === 'tin' ? 'grey' : p], boxGeo(k.x + 1.1, b.h + 1, k.y + 0.8, 2.2, 2, 1.6));
+      }
+      // Lived-in roofs: a satellite dish on some homes and flats, washing on a line on others.
+      if ((b.kind === 'home' || b.kind === 'apartment') && b.rects[0].w > 7 && b.rects[0].h > 7) {
+        const q = b.rects[0];
+        if (r() < 0.3) {
+          const dx = q.x + 1.5 + r() * (q.w - 3);
+          const dz = q.y + 1.5 + r() * (q.h - 3);
+          put(M.dish, new THREE.CylinderGeometry(0.55, 0.15, 0.25, 10, 1, true).rotateX(-0.9).rotateY(r() * 6).translate(dx, b.h + 1.1, dz));
+          put(M.line, new THREE.CylinderGeometry(0.04, 0.04, 1, 4).translate(dx, b.h + 0.5, dz));
+        }
+        if (r() < 0.22) {
+          const z = q.y + q.h * (0.3 + r() * 0.4);
+          const x0 = q.x + 1;
+          const x1 = q.x + q.w - 1;
+          put(M.line, boxGeo((x0 + x1) / 2, b.h + 1.6, z, x1 - x0, 0.03, 0.03));
+          put(M.line, boxGeo(x0, b.h + 0.8, z, 0.06, 1.6, 0.06));
+          put(M.line, boxGeo(x1, b.h + 0.8, z, 0.06, 1.6, 0.06));
+          const cloths = [M.clothA, M.clothB, M.clothC];
+          for (let x = x0 + 0.8; x < x1 - 0.6; x += 1 + r() * 0.6) put(cloths[Math.floor(r() * 3)], boxGeo(x, b.h + 1.2, z, 0.7, 0.75, 0.02));
+        }
       }
     }
     for (const [mat, geos] of bins) {
@@ -857,7 +899,6 @@ export class Model3D {
     const v = new THREE.Vector3();
     let n = 0;
     let nw = 0;
-    let nb = 0;
     let rings = 0;
     const now = performance.now() / 1000;
     const hm = new THREE.Matrix4();
@@ -889,12 +930,6 @@ export class Model3D {
         this.wraps.setMatrixAt(nw, hm);
         this.wraps.setColorAt(nw++, c.set(col));
       };
-      const brim = (y: number, r: number, fwd: number, col: string) => {
-        if (nb >= 800) return;
-        hm.compose(v.set(w.x + fx * fwd, bob + y, w.y + fz * fwd), hq, hs.set(r * 1.3, 1.3, r * 1.3));
-        this.brims.setMatrixAt(nb, hm);
-        this.brims.setColorAt(nb++, c.set(col));
-      };
       switch (w.wear) {
         case 'hijab':
         case 'shawl':
@@ -915,19 +950,13 @@ export class Model3D {
         case 'cap':
           wrap(1.62, 0.95, 0.45, 0, '#f2eee6');
           break;
-        case 'straw':
-          brim(1.68, 0.62, 0, '#d8b878');
-          wrap(1.7, 0.85, 0.55, 0, '#cfae6c');
-          break;
-        case 'ballcap':
-          wrap(1.62, 0.98, 0.5, 0, w.tint);
-          brim(1.62, 0.22, 0.28, w.tint);
+        case 'burqa':
+          wrap(1.44, 1.18, 1.3, 0.02, w.tint);
           break;
       }
     }
     this.people.count = this.heads.count = n;
     this.wraps.count = nw;
-    this.brims.count = nb;
     let k = 0;
     for (const car of f.cars) {
       if (k >= 400) break;
@@ -940,7 +969,7 @@ export class Model3D {
     }
     this.carBodies.count = k;
     this.rings.count = rings;
-    for (const im of [this.people, this.heads, this.wraps, this.brims, this.rings, this.carBodies]) {
+    for (const im of [this.people, this.heads, this.wraps, this.rings, this.carBodies]) {
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }

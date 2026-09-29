@@ -30,7 +30,7 @@ import {
 } from '../jev';
 import { Crowd, type Car, type Walker } from './crowd';
 import { drawCity, drawCityTop, finishCity, type CityOpts } from './drawCity';
-import { C, hexA, mix, nightness, shade, sun, type Sun } from './paper';
+import { C, hexA, mix, nightness, sun, type Sun } from './paper';
 
 export interface ViewState {
   cx: number;
@@ -1343,26 +1343,17 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
         g.stroke();
       }
       break;
-    case 'straw': // a wide straw hat with a band
-      g.fillStyle = '#d8b878';
-      g.beginPath();
-      g.arc(hx, hy, hr * 1.9, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = 'rgba(90,60,25,0.55)';
-      g.lineWidth = hr * 0.16;
-      g.beginPath();
-      g.arc(hx, hy, hr * 0.95, 0, Math.PI * 2);
-      g.stroke();
-      break;
-    case 'ballcap': // a baseball cap, the peak pointing the way they face
+    case 'burqa': // one colour from head to foot, a mesh window at the front
       g.fillStyle = w.tint;
       g.beginPath();
-      g.arc(hx, hy, hr, 0, Math.PI * 2);
+      g.arc(hx, hy, hr * 1.15, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = shade(w.tint, -0.2);
-      g.beginPath();
-      g.ellipse(hx + fx * hr * 0.95, hy + fy * hr * 0.95, hr * 0.45, hr * 0.75, a, 0, Math.PI * 2);
-      g.fill();
+      if (near) {
+        g.fillStyle = 'rgba(255,255,255,0.28)';
+        g.beginPath();
+        g.ellipse(hx + fx * hr * 0.7, hy + fy * hr * 0.7, hr * 0.18, hr * 0.42, a, 0, Math.PI * 2);
+        g.fill();
+      }
       break;
     case 'cap': // a small white cap on dark hair
       g.fillStyle = '#231b16';
@@ -1385,7 +1376,7 @@ function drawFigure(g: CanvasRenderingContext2D, w: Walker, time: number, sh: Su
       g.fill();
   }
   // Two dots for eyes, on the side they're facing (not under a hat brim).
-  if (near && w.wear !== 'straw' && w.wear !== 'ballcap') {
+  if (near && w.wear !== 'burqa') {
     const ex = hx + fx * hr * (w.wear === 'hijab' ? 0.72 : 0.78);
     const ey = hy + fy * hr * (w.wear === 'hijab' ? 0.72 : 0.78);
     const sx = -fy * hr * 0.3;
