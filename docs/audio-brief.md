@@ -2,7 +2,10 @@
 
 ## Status
 
-- **Generated with ElevenLabs and in `public/audio/`:** all 21 sound effects and ambience beds, all 11 guide narrations (voice: *Artaius, Calm British Narrator*) and all 8 radio lines (Cell: *Daniel*, Overwatch: *Brian*). They live on the ElevenLabs canvas *Collateral Damage — sounds and voices*.
+- **Made with ElevenLabs and in `public/audio/`** (the canvas *Collateral Damage — sounds and voices* holds every node):
+  - the sound effects and ambience beds, including the places in the city: park, canal, pitch, school, boulevard traffic, and the wind high above;
+  - the guide, told as a story (voice: *Artaius*, ElevenLabs v3, spoken softly); the app shortens any pause longer than 0.8 s;
+  - the radio: twelve calls between Cell (*Daniel*) and Overwatch (*Brian*), including Jev starting and finishing, an abort when the release button is let go early, and calling the strike off.
 - **Still to make (optional):** `music-bed`.
 
 Hand this whole file to the AI or tools you use to make the sounds and voices. It has the context, the tone, every file needed with its specs, and the scripts.
@@ -119,47 +122,13 @@ Two voices on a military radio net, speaking calmly and professionally. They're 
 
 ## 6. Guide voice
 
-One narrator: calm, warm, clear, documentary. Think of a thoughtful explainer narrator, not a movie trailer. Mid-pace with room to breathe. Neutral international English. No music under the voice (the app mixes it).
+One narrator, telling the story as the guide goes: calm, warm, unhurried, about the people in the city as much as the method. The narration doesn't read the on-screen text word for word. The current scripts are on the ElevenLabs canvas (the `voice/guide-00` to `guide-10` nodes, model `eleven_v3`, with `[softly]` and `[pause]` tags). The opening:
 
-Files: `public/audio/voice/guide-00.mp3` to `guide-10.mp3`. Keep each to the text below. These are the on-screen texts, lightly adapted for speaking.
+> Somewhere in this city, a man is pouring his first coffee of the day. A girl is late for school... again. An old woman walks her dog along the canal, the way she has every morning for eleven years. Forty thousand people live here. They're made of paper. But lives like theirs are real, in cities like this one, all over the world. …
 
-**guide-00 (the opening)**
-> Collateral damage is the harm a strike does to people and places around its target. Before a strike, planners estimate it, and the higher the number, the more senior the person who has to sign for it.
-> This is a city of forty thousand people, made of paper. Intelligence says one of its buildings holds weapons. Across the street is a school.
-> Whether to strike is a legal judgment made by people. Your job is to estimate what it would cost in civilian lives, and who has to sign for that number.
-> Jev is on your desk. It reads the intelligence, replays the strike thousands of times with different luck, and searches every other way to do it.
+## 7. Places in the city (ambience, looped)
 
-**guide-01 (The briefing)**
-> Warehouse fourteen is said to hold weapons. Across Cotton Street is a school; round the corner, a fuel depot. Whether the warehouse may be struck at all is a legal judgment made by people. Everything after that is about the harm to everyone else.
-
-**guide-02 (What's within reach?)**
-> The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Planners start by asking what's in here.
-
-**guide-03 (Who's inside right now?)**
-> Nobody knows exactly. Overhead images only see people outside. Not everyone carries a phone. The census is years old. Jev reads these reports and says how likely each head count is.
-
-**guide-04 (Where it would hurt)**
-> The red wash is the chance that someone standing in the open would be killed or badly hurt, over hundreds of replays of the strike. Walls stop fragments, so buildings cast shadows in it.
-
-**guide-05 (A smaller bomb)**
-> A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most of the fragments. The red shrinks and the numbers fall. Go too small, and the target survives.
-
-**guide-06 (Change the direction)**
-> Fragments lean the way the bomb travels. Turn the approach so they fly west, away from the school.
-
-**guide-07 (Change the hour)**
-> Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. Every hour has a different cost.
-
-**guide-08 (Who signs off)**
-> Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.
-
-**guide-09 (Let Jev search)**
-> Jev tries every way to do it: every weapon, fuze, direction, aim point and hour. Three thousand eight hundred and forty plans, each replayed a hundred and twenty times. Across all those possible outcomes, it looks for the plan that still destroys the target and keeps the harm to civilians as low as it can be.
-
-**guide-10 (Your decision)**
-> The final decision shows the numbers, who signs, and the protected places in reach. Hold the button to release. Afterwards, the ruins stay. Pick another building and plan again, or rebuild the city.
-
----
+`amb-park`, `amb-water`, `amb-pitch`, `amb-school`, `amb-traffic`, `amb-wind`. The app fades each in by how close the map's centre is to that place and how far you're zoomed in; high above the city, the places fade into one hum and a soft wind.
 
 ## Checklist to send back
 

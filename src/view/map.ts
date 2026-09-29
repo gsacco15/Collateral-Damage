@@ -464,7 +464,7 @@ export class MapView {
       for (const q of b.rects) g.strokeRect(q.x - 0.6, q.y - 0.6, q.w + 1.2, q.h + 1.2);
     }
     // Target mode: the building under the pointer lights up red, ready to be picked.
-    if (pick != null && pick !== targetOf(this.world, plan.target).buildingId && this.world.buildings[pick]?.capacity && !f.ruins.includes(pick)) {
+    if (pick != null && pick !== targetOf(this.world, plan.target).buildingId && this.world.buildings[pick] && !f.ruins.includes(pick)) {
       const b = this.world.buildings[pick];
       const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
       g.fillStyle = `rgba(200,40,30,${0.1 + 0.08 * pulse})`;

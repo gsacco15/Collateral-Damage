@@ -25,6 +25,9 @@ import {
   targetCentre,
   targetOf,
   BRIDGE_RUIN,
+  riverX,
+  buildingDist,
+  type Rect,
   WEAPONS,
   weapon,
   type Candidate,
@@ -171,7 +174,16 @@ export default function App() {
   const [drawerTab, setDrawerTab] = useState<'day' | 'jev'>('day');
   const [layersOpen, setLayersOpen] = useState(false);
   const [soundOn, setSoundOn] = useState(sound.enabled);
-  useEffect(() => sound.onChange(setSoundOn), []);
+  const [mix, setMixState] = useState(sound.mix);
+  const [mixOpen, setMixOpen] = useState(false);
+  useEffect(
+    () =>
+      sound.onChange((on) => {
+        setSoundOn(on);
+        setMixState(sound.mix);
+      }),
+    [],
+  );
   // Browsers only start audio after a tap: if sound was left on, wake it on the first ones.
   // iOS only counts a finished tap (touchend / click), so keep listening until audio is actually running.
   useEffect(() => {
@@ -278,21 +290,54 @@ export default function App() {
     return { ...intelRef.current, ...add };
   };
 
-  // Ambience: day or night by the hour, the operations room under it, the market when you look at the souk.
-  const souk = useMemo(() => world.places.find((pl) => /souk/i.test(pl.name)), [world]);
+  // Ambience. Day or night by the hour, the operations room underneath. Where you look, and how close you are,
+  // brings in the place itself: the park, the canal, the pitch, the school, the souk, the boulevard. High above
+  // the city the places fade into one hum and a little wind; close to the roofs, the nearest place comes forward.
+  const zones = useMemo(() => {
+    const rects = (f: (x: { kind: string }) => boolean, from: { kind: string; rect?: Rect; rects?: Rect[] }[]) => from.filter(f).flatMap((x) => x.rects ?? (x.rect ? [x.rect] : []));
+    const souk = world.places.find((pl) => /souk/i.test(pl.name));
+    return {
+      park: rects((x) => x.kind === 'park', world.spaces),
+      pitch: rects((x) => x.kind === 'pitch', world.spaces),
+      school: [...rects((x) => x.kind === 'school', world.buildings), ...rects((x) => x.kind === 'playground', world.spaces)],
+      traffic: rects((x) => x.kind === 'boulevard', world.roads),
+      market: souk ? [{ x: souk.x - 30, y: souk.y - 30, w: 60, h: 60 }] : [],
+    };
+  }, [world]);
   useEffect(() => {
     if (!soundOn) return;
     const h = plan.hour;
     const day = h < 5 || h > 20.5 ? 0 : h < 7 ? (h - 5) / 2 : h > 18.5 ? (20.5 - h) / 2 : 1;
+    const busy = h >= 7 && h < 20 ? 1 : 0.35;
     const tick = () => {
       const v = mapRef.current?.view;
-      const near = souk && v ? Math.hypot(v.cx - souk.x, v.cy - souk.y) < 160 && v.zoom > 2 : false;
-      void sound.ambience({ 'amb-city-day': day * (striking ? 0.3 : 1), 'amb-city-night': (1 - day) * (striking ? 0.3 : 1), 'amb-cell-room': 0.45, 'amb-market': near ? day * 0.9 : 0 });
+      if (!v) return;
+      const close = Math.max(0, Math.min(1, (v.zoom - 1.3) / 4)); // 0 high above, 1 down at the roofs
+      const reach = 70 + (1 - close) * 130; // how far a place carries, in metres
+      const near = (qs: Rect[]) => {
+        let d = Infinity;
+        for (const q of qs) d = Math.min(d, Math.hypot(Math.max(q.x - v.cx, 0, v.cx - q.x - q.w), Math.max(q.y - v.cy, 0, v.cy - q.y - q.h)));
+        return Math.max(0, 1 - d / reach) * (0.35 + 0.65 * close);
+      };
+      const hush = striking ? 0.3 : 1;
+      const water = Math.max(0, 1 - Math.abs(v.cx - riverX(v.cy)) / reach) * (0.35 + 0.65 * close);
+      void sound.ambience({
+        'amb-city-day': day * hush * (0.55 + 0.45 * (1 - close)),
+        'amb-city-night': (1 - day) * hush * (0.55 + 0.45 * (1 - close)),
+        'amb-cell-room': 0.4,
+        'amb-wind': (1 - close) ** 2 * 0.45 * hush,
+        'amb-market': near(zones.market) * day * 0.8 * hush,
+        'amb-park': near(zones.park) * (0.3 + 0.7 * day) * 0.7 * hush,
+        'amb-pitch': near(zones.pitch) * day * 0.6 * hush,
+        'amb-school': near(zones.school) * (plan.day === 'friday' ? 0 : h >= 7.5 && h < 14 ? 0.7 : 0) * hush,
+        'amb-traffic': near(zones.traffic) * busy * 0.55 * hush,
+        'amb-water': water * 0.6 * hush,
+      });
     };
     tick();
-    const id = window.setInterval(tick, 1500);
+    const id = window.setInterval(tick, 700);
     return () => clearInterval(id);
-  }, [soundOn, plan.hour, striking, souk]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [soundOn, plan.hour, plan.day, striking, zones]); // eslint-disable-line react-hooks/exhaustive-deps
   // The call to prayer at dawn, and before Friday noon prayers.
   const prayerKey = useRef('');
   useEffect(() => {
@@ -370,6 +415,7 @@ export default function App() {
         setPlacesOpen(false);
         setLayersOpen(false);
         setIntro(false);
+        setMixOpen(false);
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
@@ -484,6 +530,7 @@ export default function App() {
     if (phase === 'search' && !status.running && status.done >= status.total && status.total > 0) {
       setPhase('done');
       sound.play('jev-done');
+      sound.radio('radio-10-jev-done', 0.5);
       const b = best(results, minPk);
       if (b) pushLog(`Done: ${status.done} plans. Best: ${describe(b.c)} → planning figure ${b.p90}. Sign-off: ${approver(b.p90, rules, circle.protectedSites.length > 0).who}.`, 'best');
       else pushLog(`Done: ${status.done} plans. None destroys the target ${pct(minPk)} of the time.`, 'best');
@@ -519,10 +566,11 @@ export default function App() {
         if (!lawful) return setPhase('idle');
         pushLog(`Asking Jev to read the intelligence for ${sp.hours.length} hours…`, 'step');
         sound.play('jev-start');
+        sound.radio('radio-09-jev-run', 0.3);
         readHours(sp.hours).then((got) => {
           const n = sp.hours.filter((h) => got[Math.floor(h) % 24]).length;
           sound.play('jev-read');
-          if (n) sound.radio('radio-01-pol', 0.7);
+          if (n) sound.radio('radio-01-pol', 2.4);
           pushLog(n ? `Jev read the intelligence for ${n} of ${sp.hours.length} hours. Every replay draws who is inside from its answers.` : 'Jev could not read the intelligence here, so replays use the built-in guess of who is inside.', 'step');
           setPhase('search');
           pool.start(plan, obs, sp, SEED, false, got, ruinsRef.current);
@@ -707,10 +755,27 @@ export default function App() {
   const openPeople = (wx: number, wy: number, px: number, py: number) => {
     const b = mapRef.current?.buildingAt(wx, wy);
     if (!b || b.id === target.buildingId || !b.capacity) return setPop(null);
+    sound.play('ui-building');
     setPop({ bid: b.id, x: px, y: py, n: obs[b.id] ?? shownCount(popNow, b) });
   };
   // Can this building be made the target? Not a ruin, not the current target, and someone must use it.
-  const targetable = (b: ReturnType<MapView['buildingAt']>) => !!b && b.capacity > 0 && !ruins.includes(b.id) && b.id !== target.buildingId;
+  const targetable = (b: ReturnType<MapView['buildingAt']>) => !!b && !ruins.includes(b.id) && b.id !== target.buildingId;
+  // Target mode is forgiving: the building under the pointer, or failing that the nearest one within 40 m.
+  const pickAt = (x: number, y: number) => {
+    const under = mapRef.current?.buildingAt(x, y) ?? null;
+    if (targetable(under)) return under;
+    let bestB: (typeof world.buildings)[number] | null = null;
+    let bestD = 40;
+    for (const b of world.buildings) {
+      if (Math.abs(b.cx - x) > 80 || Math.abs(b.cy - y) > 80 || !targetable(b)) continue;
+      const d = buildingDist(b, x, y);
+      if (d < bestD) {
+        bestD = d;
+        bestB = b;
+      }
+    }
+    return bestB;
+  };
   // The bridge isn't a building, so Target mode checks for it by position.
   const onBridge = (x: number, y: number) => {
     const q = targetOf(world, 'bridge').rect;
@@ -755,8 +820,7 @@ export default function App() {
       const deg = (Math.atan2(plan.aimX - w.x, -(plan.aimY - w.y)) * 180) / Math.PI;
       setPlan({ heading: ((Math.round(deg / 5) * 5) % 360 + 360) % 360 });
     } else if (d?.mode === 'retarget') {
-      const b = m.buildingAt(w.x, w.y);
-      setRetarget({ x: w.x, y: w.y, bid: targetable(b) ? b!.id : null });
+      setRetarget({ x: w.x, y: w.y, bid: onBridge(w.x, w.y) ? null : (pickAt(w.x, w.y)?.id ?? null) });
     } else if (d?.mode === 'aim') moveAim(w.x, w.y);
     else if (d?.mode === 'pan') {
       const { s } = m.cam();
@@ -764,7 +828,7 @@ export default function App() {
       m.view.cy = d.cy - (p.y - d.y) / s;
       m.clampView();
     } else {
-      const b = m.buildingAt(w.x, w.y);
+      const b = mapMode === 'target' && !onBridge(w.x, w.y) ? (pickAt(w.x, w.y) ?? m.buildingAt(w.x, w.y)) : m.buildingAt(w.x, w.y);
       if ((b?.id ?? null) !== hover) setHover(b ? b.id : null);
       showTip(p.x, p.y, w.x, w.y, b);
     }
@@ -778,7 +842,7 @@ export default function App() {
     if (!el || view !== 'map' || striking) return;
     let text = '';
     if (b && mapMode === 'target') {
-      const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : !b.capacity ? 'Nobody uses it: not a target' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
+      const why = b.id === target.buildingId ? 'The target. Drag it onto another building' : ruins.includes(b.id) ? 'Already destroyed' : `Click to make this the target${b.protected ? ' · protected site' : ''}`;
       text = `<b>${placeName(b)}</b><span>${why}</span>`;
     } else if (!b && mapMode === 'target' && onBridge(wx, wy)) {
       text = '<b>Boulevard bridge</b><span>Click to make this the target</span>';
@@ -808,18 +872,22 @@ export default function App() {
     if (d?.mode === 'retarget' && m && e.type === 'pointerup') {
       const p = localXY(e);
       const w = m.toWorld(p.x, p.y);
-      const b = m.buildingAt(w.x, w.y);
-      if (targetable(b)) retargetTo(b!.id);
-      else if (!b && onBridge(w.x, w.y)) chooseTarget('bridge');
+      if (onBridge(w.x, w.y)) chooseTarget('bridge');
+      else {
+        const b = pickAt(w.x, w.y);
+        if (b) retargetTo(b.id);
+      }
       return;
     }
     if (d?.mode === 'pan' && m && e.type === 'pointerup' && mapMode === 'target') {
       const p = localXY(e);
       if (Math.hypot(p.x - d.x, p.y - d.y) < 5) {
         const w = m.toWorld(p.x, p.y);
-        const b = m.buildingAt(w.x, w.y);
-        if (targetable(b)) retargetTo(b!.id);
-        else if (!b && onBridge(w.x, w.y)) chooseTarget('bridge');
+        if (onBridge(w.x, w.y)) chooseTarget('bridge');
+        else {
+          const b = pickAt(w.x, w.y);
+          if (b) retargetTo(b.id);
+        }
       }
       return;
     }
@@ -949,9 +1017,9 @@ export default function App() {
       sound.play('impact');
       sound.play('aftermath', 1.1);
       sound.play('stamp', 0.55);
-      sound.radio('radio-05-splash', 1.3);
-      sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', 2.6);
-      sound.radio('radio-08-bda', 4.8);
+      // After the blast has settled: one call with the result, then a quiet "stand by".
+      sound.radio(o.destroyed ? 'radio-06-destroyed' : 'radio-07-intact', 2.4);
+      sound.radio('radio-08-bda', 3.2);
     };
     m.onSettled = () => setStriking(false);
     const o = m.strike(plan, population(world, plan.hour, plan.day, plan.watched, obs, intel[Math.floor(plan.hour) % 24], before), Math.floor(Math.random() * 1e9));
@@ -968,6 +1036,9 @@ export default function App() {
     endStrike();
     setRuins([]);
   }
+  // Hold for the best hour: the day line (worked out for this plan at every hour, no search needed) says which
+  // hour hurts the fewest. The clock then runs forward to it over a second or two, so you see the day pass.
+  const holdTimer = useRef(0);
   const holdForHour = () => {
     if (!profile) return;
     let h = 0;
@@ -975,8 +1046,17 @@ export default function App() {
       if (v.p90 < profile[h].p90 || (v.p90 === profile[h].p90 && v.mean < profile[h].mean)) h = i;
     });
     setDayPlay(false);
-    setPlan({ hour: h + 0.5 });
-    flash(`Holding until ${fmtHour(h + 0.5)}, the hour that would hurt the fewest people: ${profile[h].p90} at most, nine times in ten.`);
+    window.clearInterval(holdTimer.current);
+    const goal = h + 0.5;
+    const steps = Math.round((((goal - plan.hour) % 24) + 24) % 24 * 2); // half-hours forward
+    let left = steps;
+    const dt = Math.max(40, Math.min(120, 2200 / Math.max(1, steps)));
+    holdTimer.current = window.setInterval(() => {
+      if (left-- <= 0) return window.clearInterval(holdTimer.current);
+      setPlanState((p) => ({ ...p, hour: left <= 0 ? goal : (Math.round(p.hour * 2) / 2 + 0.5) % 24 }));
+      setOutcome(null);
+    }, dt);
+    flash(`Holding until ${fmtHour(goal)}: for this plan, the hour that would hurt the fewest people (${profile[h].p90} at most, nine times in ten). Jev's search also tries other weapons and approaches.`);
   };
   // Call it off: nothing is released. The plan and any earlier ruins stay as they are.
   const callOff = () => {
@@ -985,7 +1065,7 @@ export default function App() {
     setDayPlay(false);
     endStrike();
     flash('Called off. Nothing was released.');
-    sound.play('ui-toggle');
+    sound.radio('radio-12-calloff', 0.1);
   };
   const authorise = () => {
     setConfirm(true);
@@ -1363,10 +1443,40 @@ export default function App() {
           <button className="explored" onClick={() => setPlacesOpen(!placesOpen)} title="Places you've found by exploring the map">
             Explored {explored}/{world.places.length} ▾
           </button>
-          <button className={`sound-btn ${soundOn ? 'on' : ''}`} aria-label="Sound" onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound is on (M)' : 'Sound is off (M)'}>
+<div className="sound-wrap">
+                      <button className={`sound-btn ${soundOn ? 'on' : ''}`} aria-label="Sound" onClick={() => sound.setEnabled(!soundOn)} aria-pressed={soundOn} title={soundOn ? 'Sound is on (M)' : 'Sound is off (M)'}>
             <span aria-hidden>{soundOn ? '🔊' : '🔇'}</span>
             <span className="lbl">{soundOn ? 'Sound on' : 'Sound off'}</span>
           </button>
+            <button className={`sound-more ${mixOpen ? 'on' : ''}`} onClick={() => setMixOpen(!mixOpen)} aria-expanded={mixOpen} aria-label="Sound settings" title="Sound settings">
+              ▾
+            </button>
+            {mixOpen && (
+              <div className="mix-pop" role="group" aria-label="Sound settings">
+                {(
+                  [
+                    ['master', 'Everything'],
+                    ['ambience', 'The city', 'Day and night, parks, the canal, traffic'],
+                    ['effects', 'Effects', 'Clicks, Jev, the strike'],
+                    ['voices', 'Voices', 'The narrator and the radio'],
+                  ] as [keyof typeof mix, string, string?][]
+                ).map(([k, name, hint]) => (
+                  <label key={k}>
+                    <span>
+                      {name}
+                      {hint && <small>{hint}</small>}
+                    </span>
+                    <input type="range" min={0} max={1} step={0.05} value={mix[k]} onChange={(e) => sound.setMix(k, Number(e.target.value))} />
+                  </label>
+                ))}
+                {!soundOn && (
+                  <button className="btn small" onClick={() => sound.setEnabled(true)}>
+                    Turn sound on
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <button className={`btn small ${guideHint && guide == null ? 'attention' : ''}`} onClick={() => (guide == null ? setIntro(true) : goGuide(null))}>
             {guide == null ? 'Guide' : 'End guide'}
           </button>
@@ -1625,7 +1735,11 @@ export default function App() {
                     <HoldButton
                       label="Hold to release"
                       onStart={() => sound.chargeStart()}
-                      onCancel={() => sound.chargeStop()}
+                      onCancel={() => {
+                        sound.chargeStop();
+                        sound.play('hold-abort');
+                        sound.radio('radio-11-abort', 0.25);
+                      }}
                       onDone={() => {
                         sound.chargeStop();
                         sound.radio('radio-03-cleared');

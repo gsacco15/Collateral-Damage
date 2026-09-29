@@ -88,7 +88,7 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 
 - **Step in**: the opening scene sets up the story; the guide walks through it in ten steps, pulsing the ring when it asks what's within reach.
 - **Explore or Target**: the switch on the map (or `X`). In *Explore*, click a building to see who's inside. In *Target*, the building under the pointer lights up red: click it, or drag the current target onto it, and it becomes the target.
-- **Decide from the map**: *Authorise strike* (red), *Hold for best hour* and *Call off* sit at the bottom of the map. Calling off releases nothing and keeps the plan and any ruins.
+- **Decide from the map**: the red *Strike* tab at the bottom-left opens *Authorise strike*, *Hold for best hour* and *Call off*. Holding runs the clock forward to the hour that would hurt the fewest people for this plan (read off the day line, no search needed). Calling off releases nothing and keeps the plan and any ruins.
 - **Any building can be the target**: click it and choose *Make this the target*, or use Target mode. The four briefed targets keep their briefings and quirks; any other building follows the general rules, its toughness coming from its material, floors and size. A picked building starts *not* confirmed as lawful: that's a judgment for people.
 - **The ruins stay**: after a strike, *Next target* keeps the rubble. Nobody is inside a ruin any more, in the estimate and in Jev's search. *Roll again* replaces the last strike; *Rebuild the city* clears everything.
 
@@ -100,13 +100,13 @@ A planning HUD around the paper city. The map stays clear: every panel sits besi
 
 ### Sound (`src/ui/sound.ts`, `public/audio/`)
 
-Off until you turn it on: the *Sound* button in the top bar (on every screen size), `M`, or *Listen* on the opening card. On iPhone it plays even with the silent switch on.
-- **Ambience:** day or night beds follow the hour; the operations room hums underneath; the market is heard when you look at the souk; the call to prayer plays at dawn and before Friday noon.
-- **The interface:** soft paper clicks, a fold when you pick a weapon, a chime when you find a place, and Jev's spin-up, ticks and finish.
-- **The strike:** the hold tone; the aircraft; the impact, the stamp and the aftermath. Radio lines play through a band-pass "radio" filter with squelch.
-- **The guide:** narrated.
+Off until you turn it on: the *Sound* button in the top bar (on every screen size), `M`, or *Listen* on the opening card. On iPhone it plays even with the silent switch on. The ▾ beside it opens the mixer: everything, the city, effects and voices, remembered on this device.
+- **The city:** day or night beds follow the hour; the operations room hums underneath. Where the map is looking brings in the place: the park, the canal, the football pitch, the school at break, the souk, traffic on the boulevard. Zoomed far out, the places blend into one hum and a little wind; close to the roofs, the nearest place comes forward. The call to prayer plays at dawn and before Friday noon.
+- **The interface:** soft paper clicks, a knock when you open a building, a fold when you pick a weapon, a chime when you find a place, and Jev's spin-up, ticks and finish.
+- **The radio:** Cell and Overwatch, through a band-pass "radio" filter with squelch: Jev starting and finishing, the estimate going up, cleared, weapon away, splash, the result, and "abort" if you let go of the release early, or when the strike is called off.
+- **The guide:** narrated as a story, not read word for word.
 
-Sounds and voices were generated with ElevenLabs; see `docs/audio-brief.md` for the list and the scripts. Missing files are simply skipped.
+Sounds and voices were made with ElevenLabs; see `docs/audio-brief.md`. Missing files are simply skipped.
 
 ### The paper look (`src/view/textures.ts`, `drawCity.ts`)
 
