@@ -579,36 +579,7 @@ export class MapView {
         g.fillText(text, d.x, d.y + 1 * px);
         g.restore();
       }
-    // Streets: small capitals along the road, once you're close enough to read them.
-    if (z >= 2.4) {
-      g.save();
-      g.font = `600 ${9.5 * px}px "IBM Plex Sans", system-ui, sans-serif`;
-      g.fillStyle = 'rgba(251,248,241,0.92)';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      // Fixed spots along each street, every 180 m, like a printed map: they don't slide as you pan.
-      for (const rd of this.world.roads) {
-        if (!this.discovered.has(`r:${rd.name}`)) continue;
-        const q = rd.rect;
-        const len = rd.horizontal ? q.w : q.h;
-        const text = rd.name.toUpperCase().split('').join(' ');
-        const half = (g.measureText(text).width / 2) * 1.05;
-        if (len < half * 2 + 10) continue;
-        const n = Math.max(1, Math.round(len / 180));
-        for (let k = 0; k < n; k++) {
-          const t = (k + 0.5) / n;
-          const x = rd.horizontal ? q.x + q.w * t : q.x + q.w / 2;
-          const y = rd.horizontal ? q.y + q.h / 2 : q.y + q.h * t;
-          if (!inView(view, x, y, 0)) continue;
-          g.save();
-          g.translate(x, y);
-          if (!rd.horizontal) g.rotate(-Math.PI / 2);
-          g.fillText(text, 0, 0.3 * px);
-          g.restore();
-        }
-      }
-      g.restore();
-    }
+    // Streets aren't labelled on the map (too many labels); click a street to see its name in a place card.
     // Landmarks: named once discovered, a question mark before.
     if (z >= 1.6)
       for (const p of this.world.places) {
