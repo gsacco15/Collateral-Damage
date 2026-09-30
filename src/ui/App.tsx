@@ -51,7 +51,6 @@ import {
   cityId,
   districtAt,
   markKey,
-  moodNote,
   recentEvents,
   sevBucket,
   type Scored,
@@ -814,18 +813,13 @@ export default function App() {
   // Jev's behaviour readings (Living): the city this hour, given what it's still reacting to; each strike's area.
   const cityKey = useMemo(() => ({ hour: ((Math.floor(plan.hour) % 24) + 24) % 24, day: plan.day, events: recentEvents(world, plan.hour, plan.day, marks) }), [world, plan.hour, plan.day, marks]);
   const cityKeyId = cityId(cityKey);
-  const moodNoted = useRef('');
   useEffect(() => {
     if (!alive) return;
     const id = window.setTimeout(() => {
+      // Jev's read of the hour steers the districts quietly; no note on the map.
       void readCityMood(cityKey).then((r) => {
         if (!r.ok) return;
         setCityMood({ id: cityKeyId, districts: r.districts });
-        const note = moodNote(world, r.districts);
-        if (note.length && moodNoted.current !== cityKeyId) {
-          moodNoted.current = cityKeyId;
-          flash(`Jev's read of this hour: ${note.join('; ')}. The people on the map and the estimate follow it.`);
-        }
       });
     }, 400);
     return () => window.clearTimeout(id);
