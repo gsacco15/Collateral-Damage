@@ -114,11 +114,18 @@ export class JevTheater {
 
   // ---------------------------------------------------------------- layout
 
+  // Narrow screens (a phone): a slimmer queue, a chart about a third of the width, the lanes in between.
+  private compact() {
+    return this.w < 560;
+  }
+  private queueW() {
+    return this.compact() ? 22 : 52;
+  }
   private laneLeft() {
-    return 100;
+    return this.compact() ? 62 : 100;
   }
   private laneRight() {
-    return this.w - 190;
+    return this.scatter().x - 18;
   }
   private laneH() {
     return Math.min(30, (this.h - 34) / Math.max(1, this.lanes.length) - 4);
@@ -127,7 +134,8 @@ export class JevTheater {
     return 24 + i * (this.laneH() + 4);
   }
   private scatter() {
-    return { x: this.w - 172, y: 22, w: 160, h: this.h - 44 };
+    const w = this.compact() ? Math.max(96, Math.min(160, this.w * 0.34)) : 160;
+    return { x: this.w - w - 12, y: 22, w, h: this.h - 44 };
   }
   private dotXY(s: Scored, maxX: number) {
     const b = this.scatter();
@@ -141,7 +149,7 @@ export class JevTheater {
     const now = performance.now();
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     g.clearRect(0, 0, this.w, this.h);
-    g.font = '500 10px "IBM Plex Mono", monospace';
+    g.font = `500 ${this.compact() ? 9 : 10}px "IBM Plex Mono", monospace`;
     g.textBaseline = 'middle';
 
     // The queue: a column of ticks, draining.
@@ -153,7 +161,7 @@ export class JevTheater {
     for (let i = 0; i < ticks; i++) {
       const on = i / ticks < left;
       g.fillStyle = on ? BLUE : LINE;
-      g.fillRect(10, 24 + qh - (i + 1) * (qh / ticks) + 1, 52, qh / ticks - 1.5);
+      g.fillRect(10, 24 + qh - (i + 1) * (qh / ticks) + 1, this.queueW(), qh / ticks - 1.5);
     }
     g.fillStyle = INK;
     g.fillText(this.queued.toLocaleString(), 10, this.h - 8);
@@ -170,9 +178,15 @@ export class JevTheater {
       g.fillRect(L, y, R - L, lh);
       g.fillStyle = INK3;
       g.fillText(`W${i + 1}`, L - 26, y + lh / 2);
+      // Everything in the lane stays inside it (on a phone the lane is narrow).
+      g.save();
+      g.beginPath();
+      g.rect(L, y, R - L, lh);
+      g.clip();
       if (booting) {
         g.fillStyle = INK2;
         g.fillText('spinning up…', L + 8, y + lh / 2);
+        g.restore();
         return;
       }
       if (l.busy && !this.paused) {
@@ -194,8 +208,8 @@ export class JevTheater {
         const n = l.grid.length;
         const rows = Math.max(2, Math.min(5, Math.floor(lh / 5)));
         const cols = Math.ceil(n / rows);
-        const gx = L + (l.busy ? 150 : 8);
-        const cw = Math.max(1.5, Math.min(4, (R - gx - 60) / cols));
+        const gx = L + (l.busy ? Math.min(150, (R - L) * 0.5) : 8);
+        const cw = Math.max(1, Math.min(4, (R - gx - (this.compact() ? 40 : 60)) / cols));
         const chh = (lh - 4) / rows;
         g.globalAlpha = a;
         for (let k = 0; k < n; k++) {
@@ -209,6 +223,7 @@ export class JevTheater {
         g.fillText(`${Math.round(l.lastMs)} ms`, R - 6, y + lh / 2);
         g.textAlign = 'left';
       }
+      g.restore();
     });
 
     // The trade-off chart: every result lands here.
@@ -227,7 +242,7 @@ export class JevTheater {
     g.stroke();
     g.setLineDash([]);
     g.fillStyle = INK3;
-    g.fillText('TARGET DESTROYED ↑', b.x, 12);
+    g.fillText(this.compact() ? 'DESTROYED ↑' : 'TARGET DESTROYED ↑', b.x, 12);
     g.textAlign = 'right';
     g.fillText('HARM →', b.x + b.w, this.h - 8);
     g.textAlign = 'left';

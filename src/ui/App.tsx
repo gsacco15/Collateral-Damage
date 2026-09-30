@@ -183,7 +183,7 @@ export default function App() {
   const [lawful, setLawful] = useState(true);
   const [rulesId, setRulesId] = useState('iraq2003');
   const [runs, setRuns] = useState(100);
-  const [layers, setLayers] = useState<Layers>({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true });
+  const [layers, setLayers] = useState<Layers>({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true, jev: true });
   const [est, setEst] = useState<Estimate | null>(null);
   const [field, setField] = useState<DangerField | null>(null);
   const [computing, setComputing] = useState(false);
@@ -1801,7 +1801,7 @@ export default function App() {
     if (i == null) {
       guideSeq.current++;
       // Leaving the guide: back to the standard view, every layer on.
-      setLayers({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true });
+      setLayers({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true, jev: true });
       return sound.stopVoice();
     }
     const g = GUIDE[i];
@@ -3063,6 +3063,7 @@ export default function App() {
                       ['impacts', 'Landings', 'Where each simulated bomb landed'],
                       ['protect', 'Protected', 'Hospitals, schools, places of worship'],
                       ['labels', 'Labels', 'Places you have found'],
+                      ['jev', "Jev's search", 'In blue: the plans Jev is trying, and its best so far'],
                     ] as [keyof Layers, string, string][]
                   ).map(([k, name, note]) => (
                     <button key={k} className={layers[k] ? 'on' : ''} onClick={() => setLayers({ ...layers, [k]: !layers[k] })} aria-pressed={layers[k]}>
