@@ -193,10 +193,10 @@ a { color: var(--text-1); }
 .timebar .timeline { flex: 1; min-width: 0; }
 .drawer { min-width: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--line); }
 .drawer.jev { height: 240px; }
-.drawer-tabs { display: flex; align-items: center; gap: 4px; padding: 6px 12px 0; border-bottom: 1px solid var(--line); }
-.drawer-tabs button[role='tab'] { font-size: 12.5px; font-weight: 500; padding: 6px 4px 8px; margin-right: 12px; border: 0; background: none; color: var(--text-3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 6px; }
-.drawer-tabs button[role='tab'].on { color: var(--text-1); border-bottom-color: var(--ink); }
-.drawer-tabs .dock-x { margin-left: auto; margin-bottom: 4px; }
+.drawer-tabs { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+/* The day / Jev at work: the same switch as Map / 3D. */
+.drawer-tabs .seg button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 14px; }
+.drawer-tabs .dock-x { margin-left: auto; }
 .drawer .timebar { border-top: 0; }
 .drawer-empty { flex: 1; display: flex; align-items: center; gap: 16px; padding: 12px 16px; color: var(--text-2); font-size: 13px; }
 .drawer-empty p { margin: 0; max-width: 560px; line-height: 1.5; }
@@ -574,6 +574,9 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .mobile-tabs { display: flex; position: sticky; top: 0; z-index: 9; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
   .mobile-tabs .seg { flex: 1; }
   .mobile-tabs .seg button { padding: 9px 10px; font-size: 14px; }
+  .drawer-tabs { padding: 8px 12px; }
+  .drawer-tabs .seg { flex: 1; }
+  .drawer-tabs .seg button { flex: 1; padding: 8px 10px; font-size: 14px; }
   .mobile-panel { display: block; background: var(--panel); }
   .mobile-panel .dock-scroll { overflow: visible; padding: 12px 12px 40px; }
   .app .mobile-panel .secret-foot.desk { display: none; }

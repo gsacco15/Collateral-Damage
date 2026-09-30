@@ -3517,13 +3517,15 @@ export default function App() {
 
           {panels.drawer ? (
             <div className={`drawer ${drawerTab}`}>
-              <div className="drawer-tabs" role="tablist">
-                <button role="tab" aria-selected={drawerTab === 'day'} className={drawerTab === 'day' ? 'on' : ''} onClick={() => setDrawerTab('day')}>
-                  The day
-                </button>
-                <button role="tab" aria-selected={drawerTab === 'jev'} className={drawerTab === 'jev' ? 'on' : ''} onClick={() => setDrawerTab('jev')}>
-                  Jev at work {phase === 'search' && status.running && <i className="live" />}
-                </button>
+              <div className="drawer-tabs">
+                <div className="seg small" role="tablist">
+                  <button role="tab" aria-selected={drawerTab === 'day'} className={drawerTab === 'day' ? 'on' : ''} onClick={() => setDrawerTab('day')}>
+                    The day
+                  </button>
+                  <button role="tab" aria-selected={drawerTab === 'jev'} className={drawerTab === 'jev' ? 'on' : ''} onClick={() => setDrawerTab('jev')}>
+                    Jev at work {phase === 'search' && status.running && <i className="live" />}
+                  </button>
+                </div>
                 <button className="dock-x" onClick={() => setPanels((p) => ({ ...p, drawer: false }))} aria-label="Hide the timeline" title="Hide (T)">
                   ▾
                 </button>
