@@ -3519,7 +3519,7 @@ export default function App() {
           {panels.drawer ? (
             <div className={`drawer ${drawerTab}`}>
               <div className="drawer-tabs">
-                <div className="seg small" role="tablist">
+                <div className="seg" role="tablist">
                   <button role="tab" aria-selected={drawerTab === 'day'} className={drawerTab === 'day' ? 'on' : ''} onClick={() => setDrawerTab('day')}>
                     The day
                   </button>
@@ -3587,12 +3587,14 @@ export default function App() {
 
         <aside className="dock right" aria-label="Estimate and Jev" hidden={!panels.side}>
           <div className="tabs">
-            <button className={tab === 'estimate' ? 'on' : ''} onClick={() => setTab('estimate')}>
-              Estimate {computing && <i className="spin" />}
-            </button>
-            <button className={tab === 'jev' ? 'on' : ''} onClick={() => setTab('jev')}>
-              Jev {phase === 'search' && status.running && <i className="live" />}
-            </button>
+            <div className="seg" role="tablist">
+              <button role="tab" aria-selected={tab === 'estimate'} className={tab === 'estimate' ? 'on' : ''} onClick={() => setTab('estimate')}>
+                Estimate {computing && <i className="spin" />}
+              </button>
+              <button role="tab" aria-selected={tab === 'jev'} className={tab === 'jev' ? 'on' : ''} onClick={() => setTab('jev')}>
+                Jev {phase === 'search' && status.running && <i className="live" />}
+              </button>
+            </div>
             <button className="dock-x" onClick={() => setPanels((p) => ({ ...p, side: false }))} aria-label="Hide the estimate panel" title="Hide (E)">
               ›
             </button>

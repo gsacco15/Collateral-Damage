@@ -306,6 +306,11 @@ a { color: var(--text-1); }
 .tabs button:not(.dock-x) { flex: 0 0 auto; margin-right: 6px; }
 .tabs .dock-x { margin: 0 0 0 auto; padding: 0; align-self: center; width: 26px; height: 24px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text-2); }
 .tabs button.on { color: var(--text-1); border-bottom-color: var(--ink); }
+.tabs { align-items: center; gap: 10px; padding: 10px 12px; }
+.tabs .seg { flex: 1; }
+.tabs .seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin: 0; padding: 7px 12px; font-size: 13px; border-bottom: 0; }
+.drawer-tabs .seg { min-width: 260px; }
+.drawer-tabs .seg button { flex: 1; padding: 6px 14px; font-size: 13px; }
 .spin { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text-3); border-right-color: transparent; animation: spin 0.7s linear infinite; }
 .live { width: 7px; height: 7px; border-radius: 50%; background: var(--dot); animation: blink 1s infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
