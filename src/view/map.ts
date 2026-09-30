@@ -186,6 +186,8 @@ export class MapView {
   // A change of bomb: the old danger picture fades out as the new one comes in, and the reach ring eases to its new size.
   private fieldOld: { img: HTMLCanvasElement; field: DangerField; t0: number } | null = null;
   private fieldR = 0;
+  private raysShown: { full: Float32Array; clear: Float32Array } | null = null;
+  private rayMorph: { full: Float32Array; clear: Float32Array; t0: number } | null = null;
   private ringR = 0;
 
   constructor(
@@ -417,15 +419,33 @@ export class MapView {
     if (f.layers.protect && !shown) this.drawProtected(g, px, view);
     if (f.layers.danger && f.field && !shown) this.drawField(g, f.field, px, f.circleR);
     if (f.layers.pattern && !shown) {
+      const was = this.rays;
       this.rays = rayCache(this.rays, this.world, plan);
-      drawPattern(g, plan, this.rays, C.red, 1, px, this.time);
+      // A change of weapon or fuze: the fragment pattern morphs, ray by ray, from its old reach to the new one
+      // (turning the plane or moving the aim still follows at once).
+      const kind = (k: string) => k.split('|').slice(0, 2).join('|');
+      if (was && was !== this.rays && kind(was.key) !== kind(this.rays.key)) {
+        const from = this.raysShown ?? was;
+        this.rayMorph = { full: Float32Array.from(from.full), clear: Float32Array.from(from.clear), t0: this.time };
+      }
+      const m = this.rayMorph;
+      const u = m ? Math.min(1, (this.time - m.t0) / 2.5) : 1;
+      if (m && u < 1) {
+        const e = u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2;
+        const mix = (a: Float32Array, b: Float32Array) => a.map((v, i) => v + (b[i] - v) * e);
+        this.raysShown = { full: mix(m.full, this.rays.full), clear: mix(m.clear, this.rays.clear) };
+      } else {
+        this.rayMorph = null;
+        this.raysShown = this.rays;
+      }
+      drawPattern(g, plan, this.raysShown, C.red, 1, px, this.time);
     }
     if (f.ghost) {
       this.ghostRays = rayCache(this.ghostRays, this.world, f.ghost);
       drawPattern(g, f.ghost, this.ghostRays, C.jev, 0.9, px, this.time);
     }
     // The ring eases to a new size (a smaller bomb shrinks it) rather than jumping.
-    this.ringR = this.ringR ? this.ringR + (f.circleR - this.ringR) * Math.min(1, dt * 3.2) : f.circleR;
+    this.ringR = this.ringR ? this.ringR + (f.circleR - this.ringR) * Math.min(1, dt * 1.6) : f.circleR;
     if (Math.abs(this.ringR - f.circleR) < 0.05) this.ringR = f.circleR;
     if (f.layers.circle && !shown) {
       const R = this.ringR;
@@ -818,7 +838,7 @@ export class MapView {
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
     const old = this.fieldOld;
-    const u = old ? Math.min(1, (this.time - old.t0) / 1.4) : 1;
+    const u = old ? Math.min(1, (this.time - old.t0) / 2.4) : 1;
     const e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
     if (old && u < 1) {
       g.globalAlpha = 1 - e;
