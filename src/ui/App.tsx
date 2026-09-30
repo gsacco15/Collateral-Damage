@@ -114,6 +114,7 @@ interface GuideStep {
   plan?: Partial<Plan>;
   from?: Partial<Plan>; // set straight away when the card opens (every time, Back included), before `plan` changes it
   planDelay?: number; // seconds to wait after the card appears before changing the plan, so the change can be watched
+  steps?: { at: number; plan: Partial<Plan> }[]; // a sequence of plan changes, at these seconds after the card appears
   swing?: boolean; // turn the heading round gradually to the step's heading, so you see the plane swing
   layers?: Partial<Layers>;
   focus?: { cx: number; cy: number; zoom: number; dur?: number };
@@ -134,7 +135,7 @@ const GUIDE: GuideStep[] = [
   { title: "What's within reach?", text: "The ring is everything this bomb could hurt. Inside it: the school, the fuel depot, homes and shops. Protected places are outlined in blue, things that can burn in amber. Planners start by asking what's in here.", layers: { circle: true, protect: true }, focus: { cx: 240, cy: 520, zoom: 2.8 }, pulse: true },
   { title: "Who's inside right now?", text: "Nobody knows exactly who is inside. Overhead images only see people outdoors, not everyone carries a phone, and the census is years old. So the number is always a careful guess, and behind every guess are real people: at home, at work, asleep. Jev's reading of the reports is the first card on the right.", layers: { circle: false }, focus: { cx: 250, cy: 500, zoom: 4, dur: 2.8 }, open: 'intel', tab: 'estimate', glow: 'jev-card' },
   { title: 'Where it would hurt', text: "No bomb lands exactly where it's aimed: each replay comes down a little short or wide. The blast is deadly close in and fades within a few dozen metres. Fragments go much further, in straight lines down open streets, until they hit a wall, so one side of a street can be spared and the other not. Put together, over hundreds of replays: the chance someone standing here is killed or badly hurt.", layers: { danger: false, pattern: false, impacts: false }, cues: [{ at: 0.07, layers: { impacts: true } }, { at: 0.43, layers: { pattern: true } }, { at: 0.76, layers: { danger: true } }], focus: { cx: 240, cy: 505, zoom: 5 }, open: 'weapon' },
-  { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', from: { weapon: 'large', fuze: 'instant' }, plan: { weapon: 'small', fuze: 'delay' }, planDelay: 2.5, tab: 'estimate', focus: { cx: 240, cy: 505, zoom: 5 } },
+  { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', from: { weapon: 'large', fuze: 'airburst' }, steps: [{ at: 3.5, plan: { weapon: 'medium', fuze: 'instant' } }, { at: 7.5, plan: { weapon: 'small', fuze: 'delay' } }], tab: 'estimate', focus: { cx: 240, cy: 505, zoom: 5 } },
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', from: { heading: 90 }, plan: { heading: 270 }, planDelay: 2, swing: true, open: 'approach', focus: { cx: 240, cy: 505, zoom: 5 } },
   { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true, focus: { cx: 240, cy: 505, zoom: 3.6, dur: 0.7 } },
   { title: 'Who signs off', text: 'Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.', open: 'rules' },
@@ -1834,6 +1835,8 @@ export default function App() {
       if (g.planDelay) mobileTimers.current.push(window.setTimeout(() => seq === guideSeq.current && apply(), g.planDelay * 1000));
       else apply();
     }
+    // Step down through the bombs, one at a time, so each change can be watched.
+    g.steps?.forEach((st) => mobileTimers.current.push(window.setTimeout(() => seq === guideSeq.current && setPlan(st.plan), st.at * 1000)));
     // Leaving a step that builds its picture up: finish it, so the next step starts from the whole picture.
     const was = guide != null ? GUIDE[guide].cues : undefined;
     if (was) setLayers((l) => Object.assign({ ...l }, ...was.map((x) => x.layers)));

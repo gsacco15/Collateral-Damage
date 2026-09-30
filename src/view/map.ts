@@ -183,12 +183,6 @@ export class MapView {
   private rays: { key: string; full: Float32Array; clear: Float32Array } | null = null;
   private ghostRays: { key: string; full: Float32Array; clear: Float32Array } | null = null;
   private fieldImg: { f: DangerField; img: HTMLCanvasElement; lines: [number, Float32Array][] } | null = null;
-  // A change of bomb: the old danger picture fades out as the new one comes in, and the reach ring eases to its new size.
-  private fieldOld: { img: HTMLCanvasElement; field: DangerField; t0: number } | null = null;
-  private fieldR = 0;
-  private raysShown: { full: Float32Array; clear: Float32Array } | null = null;
-  private rayMorph: { full: Float32Array; clear: Float32Array; t0: number } | null = null;
-  private ringR = 0;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -417,50 +411,28 @@ export class MapView {
     for (const car of this.crowd.cars) if (inView(view, car.x, car.y)) drawCar(g, car, night, sh, damaged.size > 0 && car.hurt);
 
     if (f.layers.protect && !shown) this.drawProtected(g, px, view);
-    if (f.layers.danger && f.field && !shown) this.drawField(g, f.field, px, f.circleR);
+    if (f.layers.danger && f.field && !shown) this.drawField(g, f.field, px);
     if (f.layers.pattern && !shown) {
-      const was = this.rays;
       this.rays = rayCache(this.rays, this.world, plan);
-      // A change of weapon or fuze: the fragment pattern morphs, ray by ray, from its old reach to the new one
-      // (turning the plane or moving the aim still follows at once).
-      const kind = (k: string) => k.split('|').slice(0, 2).join('|');
-      if (was && was !== this.rays && kind(was.key) !== kind(this.rays.key)) {
-        const from = this.raysShown ?? was;
-        this.rayMorph = { full: Float32Array.from(from.full), clear: Float32Array.from(from.clear), t0: this.time };
-      }
-      const m = this.rayMorph;
-      const u = m ? Math.min(1, (this.time - m.t0) / 2.5) : 1;
-      if (m && u < 1) {
-        const e = u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2;
-        const mix = (a: Float32Array, b: Float32Array) => a.map((v, i) => v + (b[i] - v) * e);
-        this.raysShown = { full: mix(m.full, this.rays.full), clear: mix(m.clear, this.rays.clear) };
-      } else {
-        this.rayMorph = null;
-        this.raysShown = this.rays;
-      }
-      drawPattern(g, plan, this.raysShown, C.red, 1, px, this.time);
+      drawPattern(g, plan, this.rays, C.red, 1, px, this.time);
     }
     if (f.ghost) {
       this.ghostRays = rayCache(this.ghostRays, this.world, f.ghost);
       drawPattern(g, f.ghost, this.ghostRays, C.jev, 0.9, px, this.time);
     }
-    // The ring eases to a new size (a smaller bomb shrinks it) rather than jumping.
-    this.ringR = this.ringR ? this.ringR + (f.circleR - this.ringR) * Math.min(1, dt * 1.6) : f.circleR;
-    if (Math.abs(this.ringR - f.circleR) < 0.05) this.ringR = f.circleR;
     if (f.layers.circle && !shown) {
-      const R = this.ringR;
       g.save();
       if (f.pulseCircle) {
         // Breathe, so the eye finds it: a soft wash and a ring that swells and fades.
         const k = (this.time * 0.8) % 1;
         g.fillStyle = 'rgba(29,27,24,0.06)';
         g.beginPath();
-        g.arc(plan.aimX, plan.aimY, R, 0, Math.PI * 2);
+        g.arc(plan.aimX, plan.aimY, f.circleR, 0, Math.PI * 2);
         g.fill();
         g.strokeStyle = `rgba(228,73,47,${0.55 * (1 - k)})`;
         g.lineWidth = (2 + 6 * k) * px;
         g.beginPath();
-        g.arc(plan.aimX, plan.aimY, R * (1 + 0.04 * k), 0, Math.PI * 2);
+        g.arc(plan.aimX, plan.aimY, f.circleR * (1 + 0.04 * k), 0, Math.PI * 2);
         g.stroke();
       }
       g.strokeStyle = 'rgba(29,27,24,0.7)';
@@ -468,11 +440,11 @@ export class MapView {
       g.setLineDash([5 * px, 4 * px]);
       g.lineDashOffset = -this.time * 6 * px;
       g.beginPath();
-      g.arc(plan.aimX, plan.aimY, R, 0, Math.PI * 2);
+      g.arc(plan.aimX, plan.aimY, f.circleR, 0, Math.PI * 2);
       g.stroke();
       g.setLineDash([]);
       const a = -Math.PI * 0.78;
-      label(g, plan.aimX + Math.cos(a) * R, plan.aimY + Math.sin(a) * R, `within reach · ${f.circleR} m`, px, { small: true, plain: true });
+      label(g, plan.aimX + Math.cos(a) * f.circleR, plan.aimY + Math.sin(a) * f.circleR, `within reach · ${f.circleR} m`, px, { small: true, plain: true });
       g.restore();
     }
     if (f.layers.impacts && f.est && !shown) {
@@ -811,11 +783,8 @@ export class MapView {
   }
 
   /** The danger field: one red hue, stronger where standing in the open is more likely to be fatal. */
-  private drawField(g: CanvasRenderingContext2D, field: DangerField, px: number, r: number) {
+  private drawField(g: CanvasRenderingContext2D, field: DangerField, px: number) {
     if (this.fieldImg?.f !== field) {
-      // A new picture for a different bomb (not just a new hour or heading): keep the old one to fade out.
-      if (this.fieldImg && this.fieldR && this.fieldR !== r) this.fieldOld = { img: this.fieldImg.img, field: this.fieldImg.f, t0: this.time };
-      this.fieldR = r;
       const img = document.createElement('canvas');
       img.width = field.cols;
       img.height = field.rows;
@@ -837,14 +806,6 @@ export class MapView {
     g.save();
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
-    const old = this.fieldOld;
-    const u = old ? Math.min(1, (this.time - old.t0) / 2.4) : 1;
-    const e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
-    if (old && u < 1) {
-      g.globalAlpha = 1 - e;
-      g.drawImage(old.img, old.field.x0, old.field.y0, old.field.cols * old.field.cell, old.field.rows * old.field.cell);
-      g.globalAlpha = e;
-    } else this.fieldOld = null;
     g.drawImage(img, field.x0, field.y0, field.cols * field.cell, field.rows * field.cell);
     for (const [level, segs] of lines) {
       g.strokeStyle = level >= 0.5 ? 'rgba(120,20,10,0.9)' : 'rgba(150,50,25,0.75)';
@@ -860,7 +821,6 @@ export class MapView {
       for (let i = 0; i < segs.length; i += 4) if (best < 0 || segs[i + 1] < segs[best + 1]) best = i;
       if (best >= 0) label(g, segs[best], segs[best + 1], level >= 0.5 ? '1 in 2' : '1 in 10', px, { small: true, plain: true });
     }
-    g.globalAlpha = 1;
     g.restore();
   }
 
