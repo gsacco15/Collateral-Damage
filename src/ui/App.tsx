@@ -3631,11 +3631,14 @@ export default function App() {
       )}
 
       <nav className="mobile-tabs" aria-label="Panels">
-        {(['plan', 'estimate', 'jev'] as const).map((t) => (
-          <button key={t} className={mobileTab === t ? 'on' : ''} onClick={() => setMobileTab(t)}>
-            {t === 'plan' ? 'Plan' : t === 'estimate' ? 'Estimate' : 'Jev'}
-          </button>
-        ))}
+        {/* The same switch as Map / 3D and Weekday / Friday, so it reads as something to tap. */}
+        <div className="seg" role="tablist">
+          {(['plan', 'estimate', 'jev'] as const).map((t) => (
+            <button key={t} role="tab" aria-selected={mobileTab === t} className={mobileTab === t ? 'on' : ''} onClick={() => setMobileTab(t)}>
+              {t === 'plan' ? 'Plan' : t === 'estimate' ? 'Estimate' : 'Jev'}
+            </button>
+          ))}
+        </div>
       </nav>
       <div className="mobile-panel">{mobileTab === 'plan' ? planDock : mobileTab === 'estimate' ? estimateDock : jevDock}</div>
       {secretBtn('phone')}

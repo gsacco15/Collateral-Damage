@@ -571,9 +571,9 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .timebar { flex-direction: column; gap: 6px; align-items: stretch; }
   .timebar .timeline { width: 100%; }
   .time-controls { flex-direction: row; width: auto; padding: 0; }
-  .mobile-tabs { display: flex; position: sticky; top: 0; z-index: 9; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .mobile-tabs button { flex: 1; padding: 13px; border: 0; background: none; font-weight: 600; color: var(--text-3); border-bottom: 2px solid transparent; }
-  .mobile-tabs button.on { color: var(--text-1); border-bottom-color: var(--ink); }
+  .mobile-tabs { display: flex; position: sticky; top: 0; z-index: 9; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .mobile-tabs .seg { flex: 1; }
+  .mobile-tabs .seg button { padding: 9px 10px; font-size: 14px; }
   .mobile-panel { display: block; background: var(--panel); }
   .mobile-panel .dock-scroll { overflow: visible; padding: 12px 12px 40px; }
   .app .mobile-panel .secret-foot.desk { display: none; }
