@@ -62,7 +62,6 @@ export interface Layers {
   labels: boolean;
   protect: boolean;
   danger: boolean;
-  jev: boolean; // Jev's search on the map: the plans it is trying, and its best so far (blue)
 }
 
 export interface MapFrame {
@@ -417,7 +416,7 @@ export class MapView {
       this.rays = rayCache(this.rays, this.world, plan);
       drawPattern(g, plan, this.rays, C.red, 1, px, this.time);
     }
-    if (f.ghost && f.layers.jev) {
+    if (f.ghost) {
       this.ghostRays = rayCache(this.ghostRays, this.world, f.ghost);
       drawPattern(g, f.ghost, this.ghostRays, C.jev, 0.9, px, this.time);
     }
@@ -587,7 +586,7 @@ export class MapView {
     }
 
     // Jev's trail: the last plans it tried, fading.
-    if (f.layers.jev) f.trail.forEach((tp, i) => {
+    f.trail.forEach((tp, i) => {
       const a = ((i + 1) / f.trail.length) * 0.6;
       const h = (tp.heading * Math.PI) / 180;
       g.strokeStyle = hexA(C.jev, a);
@@ -622,7 +621,7 @@ export class MapView {
       paperPlane(g, hp.x + lift * 0.7 * px, hp.y + lift * px, h, 13 * px, true);
       paperPlane(g, hp.x, hp.y, h, 13 * px, false);
     }
-    if (f.ghost && f.layers.jev) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
+    if (f.ghost) drawAim(g, f.ghost.aimX, f.ghost.aimY, px, 0.85, C.jev);
     if (!shown && f.layers.pattern) drawTrack(g, plan, px, this.world, this.time, false);
     // Life on the water and in the streets (see lifeScene): the same scene the 3D model builds.
     let ents: Ent[] = [];
