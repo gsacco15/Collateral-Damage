@@ -2960,7 +2960,8 @@ export default function App() {
                 </button>
               </div>
             )}
-            {following && barUp && (
+            {/* Only once you've picked one of Jev's plans to look at; while Jev is still running the map just follows its best. */}
+            {!!peek && following && barUp && (
               <div
                 className="preview-bar"
                 role="status"
