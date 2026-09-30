@@ -785,6 +785,7 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   0%, 100% { box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), 0 0 0 0 rgba(200, 40, 30, 0); }
   50% { box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), 0 0 0 7px rgba(200, 40, 30, 0.2); }
 }
+@keyframes softpulse { 50% { box-shadow: 0 1px 4px rgba(200, 40, 30, 0.25), 0 0 0 4px rgba(200, 40, 30, 0.12); } }
 /* The guide's last step: the next move is this button, so it keeps breathing until pressed. */
 .act.strike.pulse.next { animation: strikepulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .act.strike.pulse { animation: none; } }
@@ -813,6 +814,12 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   .strike-dock.open { right: auto; gap: 4px; padding: 4px; background: rgba(var(--glass), 0.5); }
   .strike-dock.open .act { flex: 0 0 auto; padding: 7px 12px; font-size: 12px; }
   .act.strike.tab { padding: 7px 12px; font-size: 12.5px; }
+  /* During the guide on a phone: small and quiet, above the guide's own bar rather than on top of it. */
+  .strike-dock.in-guide { bottom: 54px; }
+  .strike-dock.in-guide.open { padding: 3px; background: rgba(var(--glass), 0.35); box-shadow: none; border-color: transparent; }
+  .strike-dock.in-guide .act.off { display: none; }
+  .strike-dock.in-guide .act.strike { padding: 5px 11px; font-size: 11.5px; opacity: 0.88; box-shadow: 0 1px 4px rgba(200, 40, 30, 0.25); }
+  .strike-dock.in-guide .act.strike.pulse.next { animation: softpulse 2.2s ease-in-out infinite; }
   .sheet { background: rgba(40, 30, 22, 0.25); backdrop-filter: none; align-items: end; padding-bottom: 12px; }
   .sheet-card { width: calc(100% - 20px); padding: 12px 14px; gap: 8px; border-radius: 14px; background: rgba(var(--glass), 0.8); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   .sheet-card h2 { font-size: 17px; }

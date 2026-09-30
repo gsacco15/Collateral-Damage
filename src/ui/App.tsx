@@ -1246,10 +1246,12 @@ export default function App() {
     const canvas = canvasRef.current!;
     const map = new MapView(canvas, world);
     map.discovered = loadDiscovered();
-    setExplored(map.discovered.size);
+    // The set also remembers districts and streets ("d:…", "r:…"); the count is of places only.
+    const found = () => world.places.filter((p) => map.discovered.has(p.id)).length;
+    setExplored(found());
     map.onDiscover = (p) => {
       if (p.kind !== 'street') sound.play('ui-discover');
-      setExplored(map.discovered.size);
+      setExplored(found());
       if (p.kind !== 'street') {
         setToast(p);
         window.setTimeout(() => setToast((t) => (t === p ? null : t)), 3000);
@@ -2915,7 +2917,7 @@ export default function App() {
             )}
 
             {!striking && !outcome && !confirm && !(phone && guide != null && guide !== GUIDE.length - 1) && (
-              <div className={`strike-dock ${strikeOpen ? 'open' : ''}`} role="group" aria-label="Decide">
+              <div className={`strike-dock ${strikeOpen ? 'open' : ''} ${guide != null ? 'in-guide' : ''}`} role="group" aria-label="Decide">
                 {strikeOpen ? (
                   <>
                     <button className={`act strike pulse ${guide === GUIDE.length - 1 ? 'next' : ''} ${!lawful || !est ? 'blocked' : ''}`} onClick={authorise} aria-disabled={!lawful || !est} title={!lawful ? 'No lawful target: confirm it in the Target step first' : 'Opens the final decision'}>
