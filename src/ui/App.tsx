@@ -1074,6 +1074,8 @@ export default function App() {
     if (!rows.length) return setPhase('idle');
     const all: Scored[] = rows.map(([weapon, fuze, heading, aim, hour, pk, mean, p90]) => ({ c: { weapon, fuze, heading, aim, hour }, pk, mean, p90 }));
     pushLog(`A recorded search of ${target.name}: ${all.length.toLocaleString()} plans, each replayed 120 times.`, 'step');
+    // Jev's own sounds, softly under the narration: the start, the ticks of results coming in, and the finish.
+    sound.play('jev-start', 0, 0.16, true);
     let n = 0;
     const per = Math.ceil(all.length / 30); // about three seconds: quick, so the guide can move on
     demoTimer.current = window.setInterval(() => {
@@ -1081,7 +1083,9 @@ export default function App() {
       setResults(all.slice(0, n));
       setSimulated(n * 120);
       setStatus({ running: n < all.length, done: n, total: all.length, busy: n < all.length ? 4 : 0, workers: 4, rate: per * 10 });
+      if (n < all.length) sound.play('jev-tick', 0, 0.032, true);
       if (n >= all.length) {
+        sound.play('jev-done', 0, 0.18, true);
         stopDemo();
         const done = demoDone.current;
         demoDone.current = null;

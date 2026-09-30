@@ -308,8 +308,9 @@ class SoundEngine {
     for (const n of names) void this.load(n);
   }
 
-  play(cue: Cue, delay = 0, volume = VOLUME[cue] ?? 0.5) {
-    if (this.quiet && cue.startsWith('jev-')) return;
+  /** `soft`: play even while the guide keeps Jev's sounds quiet (its recorded search), at a lower level. */
+  play(cue: Cue, delay = 0, volume = VOLUME[cue] ?? 0.5, soft = false) {
+    if (this.quiet && !soft && cue.startsWith('jev-')) return;
     if (cue === 'jev-tick') {
       const now = performance.now();
       if (now - this.lastTick < 110) return;
