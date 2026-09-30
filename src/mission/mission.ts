@@ -58,7 +58,7 @@ export const FIGURES: Figure[] = [
     from: 6,
     to: 17,
     voice: 'voice/mission-tea',
-    line: 'Tea? Sit, sit, habibi. The red motorbike… yes, yes. Every morning, before shops open. He drink standing, like he late for his own wedding. Pay with new money, always new. And the bike, it cough, like my uncle. Go see Yusuf, in the workshops, near vehicle yard. Yusuf fix everything that cough.',
+    line: 'Tea? Sit, sit. The red motorbike… yes. Every morning, before the shutters go up. He drinks standing, like he is late for his own wedding. Pays with new notes, always new. And the bike coughs, like my uncle. Go and see Yusuf, at the workshops by the vehicle yard. Yusuf fixes everything that coughs.',
     clue: 'Red motorbike, every morning at the souk. Pays in new notes. The bike is failing: Yusuf the mechanic, by the vehicle yard.',
     where: 'The souk',
     when: 'in the day, 6 am to 5 pm',
@@ -76,7 +76,7 @@ export const FIGURES: Figure[] = [
     from: 8,
     to: 18,
     voice: 'voice/mission-mech',
-    line: 'His name, I don’t know. His bike, I know. Red, old, brakes finish, I tell him two time. He say he have no time. One time he forget helmet here. Smell like river… like fish. Go to the quay, after dark. Old men who fish there, they never sleep.',
+    line: 'I don’t know his name. I know his bike. Red, old, the brakes are finished, I told him twice. He said he has no time. Once he left his helmet here. It smelled of the river… of fish. Go to the quay, after dark. The old men who fish there, they never sleep.',
     clue: 'He left his helmet at the yard: it smelled of the river. The old men who fish the quay at night.',
     where: 'The vehicle yard',
     when: 'in the day, 8 am to 6 pm',
@@ -93,7 +93,7 @@ export const FIGURES: Figure[] = [
     from: 20,
     to: 5,
     voice: 'voice/mission-fish',
-    line: 'At night, water is honest, my son. He cross camp footbridge after midnight, no light on bike. And before sun come, he go to bakery in Old Town. Umm Rami. She give him bread… and he give her something. Not money.',
+    line: 'At night the water is honest, my son. He crosses the camp footbridge after midnight, no light on the bike. And before dawn he goes to the bakery in the Old Town. Umm Rami’s. She gives him bread… and he gives her something that is not money.',
     clue: 'Crosses the camp footbridge after midnight, no lights. Before dawn: Umm Rami’s bakery in the Old Town.',
     where: 'The east quay',
     when: 'at night, 8 pm to 5 am',
@@ -124,14 +124,14 @@ export const SAMIR = {
   name: 'Samir',
   role: 'The courier',
   voice: 'voice/mission-samir',
-  line: 'You ask about me. Everybody talk, in this city. I only carry letters. Never I open one. You think this matter to them? For you also, it does not matter.',
+  line: 'You have been asking about me. Everyone talks, in this city. I only carry letters. I have never opened one. You think that matters to them? It does not matter to you either.',
 };
 
 export function bakerLine(m: Meet) {
-  const at = m.key === 'a' ? 'Today, noon, bus station. The far side.' : m.key === 'b' ? 'Tomorrow, before sun come, pump house in the groves.' : 'Tonight, late, old camp in the desert. Where herders stay.';
+  const at = m.key === 'a' ? 'Today it is noon, at the bus station, the far bays.' : m.key === 'b' ? 'Tomorrow, before the sun, at the pump house in the groves.' : 'Tonight, late, at the old camp in the desert, where the herders are.';
   return {
     voice: `voice/mission-baker-${m.key}`,
-    line: `Not here. Quiet, quiet. Samir. His name, Samir. He take letters from the bread, then he go meet next man. ${at} Please… I have children. Wallah, I did not tell you this.`,
+    line: `Not here. Keep your voice down. Samir. His name is Samir. He takes the letters from the bread, and he goes to meet the next man. ${at} Please… I have children. I did not tell you this.`,
     clue: `The courier is Samir. He meets the next man at ${m.place}, ${m.when}.`,
   };
 }
