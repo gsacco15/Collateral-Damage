@@ -154,5 +154,8 @@ export function personCycling(i: number): Person {
   return named(r, r() < 0.12, between(r, 12, 60), pick(r, ['cycling to work', 'cycling home', 'delivering bread by bike', 'riding to the market', 'cycling to school']));
 }
 
-/** The tooltip's two lines. */
+/** Just who they are (the living, out in the city): a name and an age. */
+export const personName = (p: Person) => `<b>${p.name}, ${p.age === 0 ? 'a baby' : p.age}</b>`;
+
+/** The tooltip's two lines (the people a strike hurt). */
 export const personLine = (p: Person, where?: string) => `<b>${p.name}, ${p.age === 0 ? 'a baby' : p.age}</b><span>${p.doing[0].toUpperCase()}${p.doing.slice(1)}${where ? ` · ${where}` : ''}</span>`;

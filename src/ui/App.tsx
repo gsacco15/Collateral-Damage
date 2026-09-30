@@ -67,7 +67,7 @@ import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater, setTheaterDark } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
-import { personCycling, personIn, personInCar, personLine, personOut, personScene } from './people';
+import { personCycling, personIn, personInCar, personLine, personName, personOut, personScene } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
@@ -1633,14 +1633,11 @@ export default function App() {
     const r = Math.abs(m.toWorld(px + (phone ? 14 : 7), py).x - wx);
     const h = m.whoAt(wx, wy, r);
     if (!h) return '';
-    if (h.kind === 'car') return personLine(personInCar(h.c), 'in a car');
-    const x = h.kind === 'walker' ? h.w.x : h.kind === 'scene' ? h.e.x : wx;
-    const y = h.kind === 'walker' ? h.w.y : h.kind === 'scene' ? h.e.y : wy;
-    const here = placeAt(world, x, y);
-    const where = here.named ? here.title : undefined;
-    if (h.kind === 'cycle') return personLine(personCycling(h.i), where);
-    if (h.kind === 'scene') return personLine(personScene(h.e, nightness(plan.hour) > 0.5), where);
-    return personLine(personOut(h.w, plan.hour, where), where);
+    // Only a name and an age: the full story is kept for the people a strike hurts.
+    if (h.kind === 'car') return personName(personInCar(h.c));
+    if (h.kind === 'cycle') return personName(personCycling(h.i));
+    if (h.kind === 'scene') return personName(personScene(h.e, nightness(plan.hour) > 0.5));
+    return personName(personOut(h.w, plan.hour));
   };
   const onUp = (e: React.PointerEvent) => {
     fingers.current.delete(e.pointerId);
