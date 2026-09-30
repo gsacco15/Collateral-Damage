@@ -183,7 +183,7 @@ export default function App() {
   const [obs, setObs] = useState<Observations>({});
   const [lawful, setLawful] = useState(true);
   const [rulesId, setRulesId] = useState('iraq2003');
-  const [runs, setRuns] = useState(400);
+  const [runs, setRuns] = useState(100);
   const [layers, setLayers] = useState<Layers>({ people: true, circle: true, pattern: true, impacts: true, labels: true, protect: true, danger: true });
   const [est, setEst] = useState<Estimate | null>(null);
   const [field, setField] = useState<DangerField | null>(null);
