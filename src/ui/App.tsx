@@ -227,9 +227,9 @@ export default function App() {
   // from home to places nearby, households differ, districts keep their own hours). A switch at the foot of the page.
   const [alive, setAlive] = useState(() => {
     try {
-      return localStorage.getItem('cd-people') === 'living';
+      return localStorage.getItem('cd-people') !== 'classic'; // Living by default; Classic only if chosen
     } catch {
-      return false;
+      return true;
     }
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
