@@ -223,6 +223,36 @@ function roofGeo(q: Rect, y: number, tile: number) {
   return g;
 }
 
+
+/** A crumpled sheet of paper laid over a roof: lumpy, a little ragged at the edges, and where it runs past the roof
+ * edge it droops down the wall. */
+function crumpleGeo(q: Rect, h: number, r: () => number) {
+  const w = q.w * (0.45 + r() * 0.4);
+  const d = q.h * (0.45 + r() * 0.35);
+  let cx = q.x + w / 2 + r() * (q.w - w);
+  let cz = q.y + d / 2 + r() * (q.h - d);
+  // Now and then it slides over an edge.
+  if (r() < 0.45) {
+    const side = Math.floor(r() * 4);
+    const over = 0.6 + r() * 0.9;
+    if (side === 0) cx = q.x + w / 2 - over;
+    else if (side === 1) cx = q.x + q.w - w / 2 + over;
+    else if (side === 2) cz = q.y + d / 2 - over;
+    else cz = q.y + q.h - d / 2 + over;
+  }
+  const g = new THREE.PlaneGeometry(w, d, 6, 5).rotateX(-Math.PI / 2);
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const edge = Math.abs(pos.getX(i)) > w / 2 - 0.01 || Math.abs(pos.getZ(i)) > d / 2 - 0.01;
+    const x = cx + pos.getX(i) + (edge ? (r() - 0.5) * 0.5 : (r() - 0.5) * 0.15);
+    const z = cz + pos.getZ(i) + (edge ? (r() - 0.5) * 0.5 : (r() - 0.5) * 0.15);
+    const out = Math.max(q.x - x, x - q.x - q.w, q.y - z, z - q.y - q.h, 0);
+    pos.setXYZ(i, x, h + 0.08 + r() * (edge ? 0.12 : 0.32) - out * 1.4, z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 function boxGeo(x: number, y: number, z: number, w: number, h: number, d: number) {
   const g = new THREE.BoxGeometry(w, h, d);
   g.translate(x, y, z);
@@ -770,6 +800,7 @@ export class Model3D {
       tinRoof: new THREE.MeshStandardMaterial({ map: metalTex('#b0b5b7', 9), roughness: 0.65, metalness: 0.25 }),
       terracottaRoof: new THREE.MeshStandardMaterial({ color: '#c47a5a', roughness: 0.9, flatShading: true }),
       fold: new THREE.MeshStandardMaterial({ color: '#f5f3ee', roughness: 0.9, flatShading: true, side: THREE.DoubleSide }),
+      cardEdge: new THREE.MeshStandardMaterial({ color: '#dcc195', roughness: 1 }), // the cut edge of the card, lighter than its face
       dome: new THREE.MeshStandardMaterial({ color: '#d9b77a', roughness: 0.55 }),
       tank: new THREE.MeshStandardMaterial({ color: '#8e8b85', roughness: 0.5, metalness: 0.3 }),
       fuel: new THREE.MeshStandardMaterial({ color: '#f3f1ec', roughness: 0.5, metalness: 0.1 }),
@@ -1058,7 +1089,7 @@ export class Model3D {
     const sand = (c: string) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true });
     s.add(new THREE.Mesh(mergeGeometries(dunes)!, sand('#dcc39c')));
     s.add(new THREE.Mesh(mergeGeometries(hills)!, sand('#cdb088')));
-    this.scene.fog = new THREE.Fog('#e6d8c0', 500, 2100);
+    this.scene.fog = new THREE.Fog('#e6d8c0', 430, 2100); // a little warm haze in the distance, like dust in low sun
   }
 
   /** All buildings, merged by material. Rebuilt without the damaged ones after a strike. */
@@ -1194,6 +1225,32 @@ export class Model3D {
               put(pm, boxGeo(horiz ? x0 + u : x0, b.h + 0.45, horiz ? z0 : z0 + u, horiz ? seg : 0.35, 0.9, horiz ? 0.35 : seg));
             }
           }
+        }
+      }
+      // Paper-model touches, on some ordinary buildings only (their own random numbers, so the rest of the roof stays as it was):
+      // a crumpled sheet of white paper laid over the roof, now and then hanging over an edge; the cut edge of the card
+      // along the top of a kraft wall; a small sheet of corrugated tin.
+      if ((b.kind === 'home' || b.kind === 'apartment' || b.kind === 'shop' || b.kind === 'workshop') && !b.name && (p === 'white' || p === 'grey' || p === 'kraft')) {
+        const r2 = rng(b.id * 131 + 17);
+        const q = b.rects[0];
+        if (q.w > 5 && q.h > 5 && r2() < 0.3) put(M.fold, crumpleGeo(q, b.h, r2));
+        if (p === 'kraft' && r2() < 0.5)
+          for (const [x, z, w, d] of [
+            [q.x + q.w / 2, q.y - 0.04, q.w + 0.1, 0.1],
+            [q.x + q.w / 2, q.y + q.h + 0.04, q.w + 0.1, 0.1],
+            [q.x - 0.04, q.y + q.h / 2, 0.1, q.h + 0.1],
+            [q.x + q.w + 0.04, q.y + q.h / 2, 0.1, q.h + 0.1],
+          ])
+            put(M.cardEdge, boxGeo(x, b.h - 0.1, z, w, 0.2, d));
+        if (q.w > 6 && q.h > 6 && r2() < 0.12) {
+          const sw = 2.6 + r2() * 1.6;
+          const sd = 2 + r2() * 1.2;
+          const cx = q.x + 1 + sw / 2 + r2() * (q.w - sw - 2);
+          const cz = q.y + 1 + sd / 2 + r2() * (q.h - sd - 2);
+          const tilt = 0.05 + r2() * 0.08;
+          // Ridges side by side: alternate high and low strips read as corrugation.
+          const n = Math.round(sw / 0.32);
+          for (let i = 0; i < n; i++) put(M.tinRoof, boxGeo(cx - sw / 2 + (i + 0.5) * (sw / n), b.h + 0.12 + (i % 2) * 0.06, cz, sw / n + 0.01, 0.06, sd).rotateX(tilt));
         }
       }
       if (b.kind === 'mosque') {
