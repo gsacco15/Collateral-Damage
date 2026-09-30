@@ -722,6 +722,8 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
 .hud-time, .hud-mode, .hud-layers > button, .hud-zoom button:not(.tgt-btn), .toast { background: rgba(var(--glass), 0.6) !important; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); box-shadow: 0 1px 6px rgba(40, 30, 20, 0.08) !important; }
 .hud-layers > button:not(.on):hover, .hud-zoom button:not(.tgt-btn):hover, .hud-mode:hover { background: rgba(var(--glass), 0.94) !important; }
 .hud-layers > button.layers-btn.on { background: var(--ink) !important; }
+/* In 3D the scene is busy (and its labels sit under these), so the glass goes nearly solid there. */
+.map:has(.canvas3d.on) :is(.hud-time, .hud-mode, .hud-layers > button:not(.on), .hud-zoom button:not(.tgt-btn)) { background: rgba(var(--glass), 0.93) !important; }
 .hud-zoom .tgt-btn { background: rgba(200, 40, 30, 0.82); }
 .strike-dock > .act.tab, .strike-dock:not(.open) > button { opacity: 0.9; }
 .strike-dock.open { background: rgba(var(--glass), 0.68); }
@@ -783,6 +785,8 @@ button.explored:hover { color: var(--text-1); border-color: var(--text-3); }
   0%, 100% { box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), 0 0 0 0 rgba(200, 40, 30, 0); }
   50% { box-shadow: 0 3px 10px rgba(200, 40, 30, 0.35), 0 0 0 7px rgba(200, 40, 30, 0.2); }
 }
+/* The guide's last step: the next move is this button, so it keeps breathing until pressed. */
+.act.strike.pulse.next { animation: strikepulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .act.strike.pulse { animation: none; } }
 
 /* Phones: the strike dock and the final decision, smaller and see-through so the city stays visible. */
