@@ -103,6 +103,9 @@ interface StrikeFx {
   fired: number; // how many of the outcome's secondary blasts have gone off
 }
 
+/** Someone you can point at, zoomed right in. */
+export type Who = { kind: 'walker'; w: Walker } | { kind: 'scene'; e: Extract<Ent, { t: 'person' }> } | { kind: 'cycle'; i: number } | { kind: 'car'; c: Car };
+
 export class MapView {
   /** The person behind the nearest red ring within r metres of (x, y), while the rings are showing. */
   hurtAt(x: number, y: number, r: number): Casualty['who'] | null {
@@ -129,15 +132,28 @@ export class MapView {
   }
   /** Close enough to tell one person from the next: only then can you point at someone to see who they are. */
   static readonly PEOPLE_ZOOM = 8;
-  /** The person on foot nearest (x, y), within r metres, when zoomed right in. */
-  walkerAt(x: number, y: number, r: number): Walker | null {
+  private lastEnts: Ent[] = [];
+  /**
+   * Whoever is nearest (x, y) within r metres, when zoomed right in: on foot, part of a scene, on a bicycle, at the wheel
+   * of a car. Not the people inside buildings: pointing at a building says who is in it. Runs only when the pointer
+   * moves, so it costs nothing.
+   */
+  whoAt(x: number, y: number, r: number): Who | null {
     if (this.view.zoom < MapView.PEOPLE_ZOOM) return null;
-    let best: Walker | null = null;
+    let best: Who | null = null;
     let bd = r;
-    for (const w of this.crowd.visible()) {
-      const d = Math.hypot(w.x - x, w.y - y);
-      if (d < bd) (bd = d), (best = w);
+    const near = (px: number, py: number, rr = r) => {
+      const d = Math.hypot(px - x, py - y);
+      return d < bd && d < rr ? ((bd = d), true) : false;
+    };
+    for (const w of this.crowd.visible()) if (!w.hurt && near(w.x, w.y)) best = { kind: 'walker', w };
+    let ci = 0;
+    for (const e of this.lastEnts) {
+      if (e.t === 'person' && near(e.x, e.y)) best = { kind: 'scene', e };
+      else if (e.t === 'cycle' && near(e.x, e.y, r * 1.3)) best = { kind: 'cycle', i: ci };
+      if (e.t === 'cycle') ci++;
     }
+    for (const c of this.crowd.cars) if (!c.hurt && near(c.x, c.y, r * 1.6)) best = { kind: 'car', c };
     return best;
   }
   view: ViewState = { cx: 225, cy: 470, zoom: 3 };
@@ -621,6 +637,7 @@ export class MapView {
         brokenBridge: f.ruins.includes(BRIDGE_RUIN) || (shown?.damaged.includes(BRIDGE_RUIN) ?? false) ? targetOf(this.world, 'bridge').rect : null,
         hush: f.pop.hush,
       });
+      this.lastEnts = ents;
       drawLife2D(g, ents, {
         time: this.time,
         night,

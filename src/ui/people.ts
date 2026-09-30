@@ -3,6 +3,7 @@
 // and stays the same person every time you look.
 import { rng, type Building } from '../jev';
 import type { Car, Walker } from '../view/crowd';
+import type { Ent } from '../view/lifeScene';
 
 export interface Person {
   name: string;
@@ -124,6 +125,33 @@ export function personOut(w: Walker, hour: number, place?: string): Person {
 export function personInCar(c: Car): Person {
   const r = rng(c.id * 4001 + 5);
   return named(r, r() < 0.3, between(r, 19, 70), pick(r, ['driving to work', 'driving a taxi', 'a passenger, going home', 'delivering bread']));
+}
+
+/** Someone drawn as part of a scene (a café, the canal bank, the warehouse yard, a strike's responders): who, by what they're doing. */
+export function personScene(e: Extract<Ent, { t: 'person' }>, night: boolean): Person {
+  const r = rng(e.id * 5003 + 11);
+  const female = r() < (e.role || e.smoke ? 0.08 : 0.35);
+  if (e.role === 'firefighter') return named(r, false, between(r, 22, 50), pick(r, ['a firefighter, putting out the fire', 'a firefighter, holding the hose']));
+  if (e.role === 'medic') return named(r, female, between(r, 22, 55), pick(r, ['a medic, treating the wounded', 'a paramedic, bringing a stretcher']));
+  if (e.role === 'security') return named(r, false, between(r, 20, 50), 'a police officer, keeping people back from the ruin');
+  const id = e.id;
+  const doing =
+    id >= 500 && id < 520 ? (night ? 'the night guard at the yard' : e.carry ? 'loading crates onto a truck' : pick(r, ['working in the yard', 'taking a break from loading'])) :
+    id >= 400 && id < 500 ? pick(r, ['living in a shelter, sitting out', 'sitting outside the family shelter']) :
+    id >= 300 && id < 400 ? 'picking over the landfill for scrap' :
+    id >= 200 && id < 300 ? 'warming up by the fire' :
+    id >= 140 && id < 200 ? 'out for a cigarette by the shop door' :
+    id >= 100 && id < 140 ? (e.smoke ? 'sharing a hookah at the café' : 'drinking tea at the café') :
+    id >= 80 && id < 100 ? 'fishing from the bank' :
+    id >= 60 && id < 80 ? 'sitting with friends by the water' :
+    e.sit ? pick(r, ['sitting by the canal', 'resting in the shade']) : pick(r, ['walking along the water', 'waiting for a friend']);
+  return named(r, female, between(r, id >= 100 && id < 200 ? 18 : 12, 70), doing);
+}
+
+/** Someone on a bicycle. */
+export function personCycling(i: number): Person {
+  const r = rng(i * 7717 + 19);
+  return named(r, r() < 0.12, between(r, 12, 60), pick(r, ['cycling to work', 'cycling home', 'delivering bread by bike', 'riding to the market', 'cycling to school']));
 }
 
 /** The tooltip's two lines. */

@@ -67,7 +67,7 @@ import type { Frame3D, Model3D } from '../view/model3d';
 import { JevTheater, setTheaterDark } from '../view/theater';
 import { ApprovalLadder, Breakdown, Distribution, Frontier, OptionsMatrix, pct, StatTiles, Timeline, type MatrixCell } from './charts';
 import { JevCard } from './jevCard';
-import { personIn, personInCar, personLine, personOut } from './people';
+import { personCycling, personIn, personInCar, personLine, personOut, personScene } from './people';
 import { placeAt, storyFor, TARGET_STORIES, type PlaceStory } from './stories';
 import { Origami } from './origami';
 import { readAfterMood, readCityMood } from './behaveLive';
@@ -1626,15 +1626,21 @@ export default function App() {
     const here = placeAt(world, h.w.x, h.w.y);
     return personLine(personOut(h.w, plan.hour, here.named ? here.title : undefined), here.named ? here.title : undefined);
   };
-  // Zoomed right in: someone walking by under the pointer, and who they are.
+  // Zoomed right in: whoever is out and about under the pointer (walking, sitting at a café, on a bike, driving), and who they are.
   const passerAt = (px: number, py: number, wx: number, wy: number) => {
     const m = mapRef.current;
     if (!m) return '';
     const r = Math.abs(m.toWorld(px + (phone ? 14 : 7), py).x - wx);
-    const w = m.walkerAt(wx, wy, r);
-    if (!w) return '';
-    const here = placeAt(world, w.x, w.y);
-    return personLine(personOut(w, plan.hour, here.named ? here.title : undefined), here.named ? here.title : undefined);
+    const h = m.whoAt(wx, wy, r);
+    if (!h) return '';
+    if (h.kind === 'car') return personLine(personInCar(h.c), 'in a car');
+    const x = h.kind === 'walker' ? h.w.x : h.kind === 'scene' ? h.e.x : wx;
+    const y = h.kind === 'walker' ? h.w.y : h.kind === 'scene' ? h.e.y : wy;
+    const here = placeAt(world, x, y);
+    const where = here.named ? here.title : undefined;
+    if (h.kind === 'cycle') return personLine(personCycling(h.i), where);
+    if (h.kind === 'scene') return personLine(personScene(h.e, nightness(plan.hour) > 0.5), where);
+    return personLine(personOut(h.w, plan.hour, where), where);
   };
   const onUp = (e: React.PointerEvent) => {
     fingers.current.delete(e.pointerId);
