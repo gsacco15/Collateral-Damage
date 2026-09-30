@@ -137,7 +137,7 @@ const GUIDE: GuideStep[] = [
   { title: 'Where it would hurt', text: "No bomb lands exactly where it's aimed: each replay comes down a little short or wide. The blast is deadly close in and fades within a few dozen metres. Fragments go much further, in straight lines down open streets, until they hit a wall, so one side of a street can be spared and the other not. Put together, over hundreds of replays: the chance someone standing here is killed or badly hurt.", layers: { danger: false, pattern: false, impacts: false }, cues: [{ at: 0.07, layers: { impacts: true } }, { at: 0.43, layers: { pattern: true } }, { at: 0.76, layers: { danger: true } }], focus: { cx: 240, cy: 505, zoom: 5 }, open: 'weapon' },
   { title: 'A smaller bomb', text: 'A smaller warhead with a delay fuze goes off inside, a floor down, and the walls catch most fragments. Watch the red shrink and the numbers fall. Go too small and the target survives.', from: { weapon: 'large', fuze: 'airburst' }, steps: [{ at: 3.5, plan: { weapon: 'medium', fuze: 'instant' } }, { at: 7.5, plan: { weapon: 'small', fuze: 'delay' } }], tab: 'estimate', focus: { cx: 240, cy: 505, zoom: 5 } },
   { title: 'Change the direction', text: 'Fragments lean the way the bomb travels. Drag the paper plane round, or turn the dial, so they fly west, away from the school.', from: { heading: 90 }, plan: { heading: 270 }, planDelay: 2, swing: true, open: 'approach', focus: { cx: 240, cy: 505, zoom: 5 } },
-  { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, play: true, focus: { cx: 240, cy: 505, zoom: 3.6, dur: 0.7 } },
+  { drawer: 'day', title: 'Change the hour', text: "Watch the day go by. The school fills in the morning and empties at night; homes do the opposite. The line below the map shows what each hour would cost. Drag it to stop on any hour.", plan: { hour: 2 }, planDelay: 1.1, play: true, focus: { cx: 240, cy: 505, zoom: 3.6, dur: 0.7 } },
   { title: 'Who signs off', text: 'Hundreds of replays are boiled down to one cautious number: nine in ten come in at or below it. The higher it is, or if a protected place is within reach, the more senior the person who must approve.', open: 'rules' },
   { title: 'Jev, the AI analyst', text: 'Jev is our AI analyst: a scenario engine built to keep collateral damage as low as it can be. Where a planner might test a handful of plans, Jev builds all of them: every weapon, fuze, direction, aim point and hour, 3,840 scenarios, each replayed 120 times with different luck, so it sees the whole range of what could happen. It keeps the plan that still destroys the target and hurts the fewest people. Click any dot to try that plan.', tab: 'jev', demo: true },
   { title: 'Your decision', text: "Authorise strike opens the final decision: the numbers, who signs, the protected places in reach. Hold the red button to release. Afterwards the ruins stay. Pick another building and plan again, or rebuild the city.", open: 'decide' },
@@ -1777,7 +1777,7 @@ export default function App() {
         demoDone.current = (all) => {
           const b = best(all, minPk);
           if (b) applyCandidate(b.c);
-          mobileTimers.current.push(window.setTimeout(up, 900));
+          mobileTimers.current.push(window.setTimeout(up, 4000)); // a few seconds to take in the search before going back up
         };
     }
     stopDemo();
@@ -1797,7 +1797,7 @@ export default function App() {
       setLog([]);
     }
     // "Change the hour" plays through the day; any other step (or leaving the guide) stops it.
-    setDayPlay(i != null && !!GUIDE[i].play);
+    setDayPlay(false); // a step that plays the day starts it once the camera has settled (below)
     if (i == null) {
       guideSeq.current++;
       // Leaving the guide: back to the standard view, every layer on.
@@ -1835,6 +1835,8 @@ export default function App() {
       if (g.planDelay) mobileTimers.current.push(window.setTimeout(() => seq === guideSeq.current && apply(), g.planDelay * 1000));
       else apply();
     }
+    // "Change the hour": let the camera finish pulling out before the day starts to move (both at once is heavy).
+    if (g.play) mobileTimers.current.push(window.setTimeout(() => seq === guideSeq.current && setDayPlay(true), ((g.focus?.dur ?? 0.8) + 0.4) * 1000));
     // Step down through the bombs, one at a time, so each change can be watched.
     g.steps?.forEach((st) => mobileTimers.current.push(window.setTimeout(() => seq === guideSeq.current && setPlan(st.plan), st.at * 1000)));
     // Leaving a step that builds its picture up: finish it, so the next step starts from the whole picture.
