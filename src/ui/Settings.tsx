@@ -272,6 +272,9 @@ export function SettingsPanel({ dark, setDark, alive, setAlive, onClose, census,
           {row('After a strike', after)}
           <p className="set-foot">Offline or without a key, the game still works: the built-in guess and rules stand in for Jev.</p>
         </div>
+        <button className="btn set-done" onClick={onClose}>
+          Done
+        </button>
       </div>
     </div>
   );
